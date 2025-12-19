@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-discord-members",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
