@@ -35,7 +35,7 @@ const bkkDateFmt = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 function bkkDateOf(date: Date) {
-  return bkkDateFmt.format(date); // YYYY-MM-DD
+  return bkkDateFmt.format(date); // YYYY-MM-DD (BKK)
 }
 
 const bkkDateTimeFmt = new Intl.DateTimeFormat("en-CA", {
@@ -60,12 +60,21 @@ function isSaturday(dateStr: string) {
   return d.getDay() === 6; // Sat
 }
 
-type LeaveMeta = {
-  hasErrand: boolean; // ลากิจ (ไม่ใช่เสาร์)
-  hasWar20: boolean; // เสาร์ 20:00
-  hasWar2030: boolean; // เสาร์ 20:30
-  warLabel: string | null; // ลาวอ 20:00 / ลาวอ 20:30 / ลาวอทั้งหมด
+type TodayLeaveMeta = {
+  hasErrandToday: boolean; // วันนี้ (ไม่ใช่เสาร์) มีลา => ลากิจ
+  war20Today: boolean; // วันนี้เป็นเสาร์ และลา 20:00
+  war2030Today: boolean; // วันนี้เป็นเสาร์ และลา 20:30
+  warLabelToday: string | null; // "ลา 20.00 น." | "ลา 20.30 น." | "ลาทั้งหมด" | "ลาวอ" | null
 };
+
+type TodayStatus = "special" | "errand" | "war" | "ready";
+
+function computeWarLabel(war20: boolean, war2030: boolean) {
+  if (war20 && war2030) return "ลาทั้งหมด";
+  if (war20) return "ลา 20.00 น.";
+  if (war2030) return "ลา 20.30 น.";
+  return "ลาวอ";
+}
 
 export default function Members({
   members,
@@ -92,16 +101,19 @@ export default function Members({
     is_special: false,
   });
 
-  const todayBkk = useMemo(() => bkkDateOf(new Date()), []);
+  // ✅ วันนี้ (เวลาไทย) — อัปเดตทุกนาทีให้ไม่ค้างข้ามวัน
+  const [todayBkk, setTodayBkk] = useState(() => bkkDateOf(new Date()));
+  useEffect(() => {
+    const t = setInterval(() => setTodayBkk(bkkDateOf(new Date())), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     classService
       .list()
       .then((rows) => {
         const hasZero = rows.some((r) => r.id === 0);
-        const normalized: DbClass[] = hasZero
-          ? rows
-          : [{ id: 0, name: "ยังไม่เลือกอาชีพ", icon_url: null }, ...rows];
+        const normalized: DbClass[] = hasZero ? rows : [{ id: 0, name: "ยังไม่เลือกอาชีพ", icon_url: null }, ...rows];
 
         normalized.sort((a, b) => {
           if (a.id === 0) return -1;
@@ -134,37 +146,33 @@ export default function Members({
     return map;
   }, [leaves]);
 
-  // ✅ สรุปสถานะการลา (นับเฉพาะ "วันนี้-อนาคต")
-  const leaveMetaByMemberId = useMemo(() => {
-    const map = new Map<number, LeaveMeta>();
+  // ✅ สถานะการลา “เฉพาะวันนี้” (เวลาไทย)
+  const todayMetaByMemberId = useMemo(() => {
+    const map = new Map<number, TodayLeaveMeta>();
 
     for (const l of leaves) {
-      const cur: LeaveMeta =
-        map.get(l.member_id) ?? { hasErrand: false, hasWar20: false, hasWar2030: false, warLabel: null };
-
       const dt = String(l.date_time ?? "");
       if (!dt) continue;
 
       const { date, time } = bkkDateTimeParts(dt);
       if (!date) continue;
 
-      // นับเฉพาะวันนี้-อนาคต
-      if (date < todayBkk) continue;
+      // ✅ นับเฉพาะ “วันนี้” เท่านั้น
+      if (date !== todayBkk) continue;
+
+      const cur =
+        map.get(l.member_id) ?? { hasErrandToday: false, war20Today: false, war2030Today: false, warLabelToday: null };
 
       if (isSaturday(date)) {
-        if (time === "20:00") cur.hasWar20 = true;
-        if (time === "20:30") cur.hasWar2030 = true;
-      } else {
-        cur.hasErrand = true;
-      }
+        if (time === "20:00") cur.war20Today = true;
+        if (time === "20:30") cur.war2030Today = true;
 
-      const hasWar = cur.hasWar20 || cur.hasWar2030;
-      if (hasWar) {
-        if (cur.hasWar20 && cur.hasWar2030) cur.warLabel = "ลาวอทั้งหมด";
-        else if (cur.hasWar20) cur.warLabel = "ลาวอ 20:00";
-        else cur.warLabel = "ลาวอ 20:30";
+        // ถ้าเป็นเสาร์ แต่เวลาไม่ใช่ 20:00/20:30 ก็ยังถือว่าเป็น “ลาวอ”
+        const hasAnyWar = cur.war20Today || cur.war2030Today || true;
+        cur.warLabelToday = hasAnyWar ? computeWarLabel(cur.war20Today, cur.war2030Today) : null;
       } else {
-        cur.warLabel = null;
+        cur.hasErrandToday = true;
+        cur.warLabelToday = null;
       }
 
       map.set(l.member_id, cur);
@@ -197,14 +205,15 @@ export default function Members({
       .filter((m) => {
         if (leaveTypeFilter === "all") return true;
 
-        const meta = leaveMetaByMemberId.get(m.id);
-        const hasWar = !!(meta?.hasWar20 || meta?.hasWar2030);
-        const hasErrand = !!meta?.hasErrand;
-        const isReady = !hasWar && !hasErrand;
+        const meta = todayMetaByMemberId.get(m.id);
+        const hasWarToday = !!(meta?.war20Today || meta?.war2030Today) || (!!meta?.warLabelToday && meta.warLabelToday !== null);
+        const hasErrandToday = !!meta?.hasErrandToday;
 
-        if (leaveTypeFilter === "ready") return isReady && !m.is_special;
-        if (leaveTypeFilter === "war") return hasWar;
-        if (leaveTypeFilter === "errand") return hasErrand;
+        const isReady = !m.is_special && !hasWarToday && !hasErrandToday;
+
+        if (leaveTypeFilter === "ready") return isReady;
+        if (leaveTypeFilter === "war") return hasWarToday;
+        if (leaveTypeFilter === "errand") return hasErrandToday;
         return true;
       });
   }, [
@@ -216,7 +225,7 @@ export default function Members({
     classById,
     specialFilter,
     leaveTypeFilter,
-    leaveMetaByMemberId,
+    todayMetaByMemberId,
   ]);
 
   const openEdit = (m: DbMember) => {
@@ -261,6 +270,20 @@ export default function Members({
         {label}
       </button>
     );
+  };
+
+  const getTodayStatus = (m: DbMember): { status: TodayStatus; label: string; variant: "outline" | "warning" | "success" } => {
+    // ✅ priority ตามที่คุณขอ: วันนี้แสดงอย่างใดอย่างหนึ่ง
+    if (m.is_special) return { status: "special", label: "ศิษย์เอก", variant: "outline" };
+
+    const meta = todayMetaByMemberId.get(m.id);
+    const hasErrandToday = !!meta?.hasErrandToday;
+    const hasWarToday = !!(meta?.war20Today || meta?.war2030Today) || (!!meta?.warLabelToday && meta.warLabelToday !== null);
+
+    if (hasErrandToday) return { status: "errand", label: "ลากิจ", variant: "warning" };
+    if (hasWarToday) return { status: "war", label: meta?.warLabelToday ?? "ลาวอ", variant: "warning" };
+
+    return { status: "ready", label: "พร้อม", variant: "success" };
   };
 
   return (
@@ -330,12 +353,16 @@ export default function Members({
                   setLeaveTypeFilter(e.target.value as LeaveTypeFilter)
                 }
               >
-                <option value="all">สถานะ: ทั้งหมด</option>
+                <option value="all">สถานะวันนี้: ทั้งหมด</option>
                 <option value="ready">พร้อม</option>
                 <option value="errand">ลากิจ</option>
                 <option value="war">ลาวอ</option>
               </Select>
             </div>
+          </div>
+
+          <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+            สถานะคำนวณจาก “วันนี้” เท่านั้น (เวลาไทย) • วันนี้: {todayBkk}
           </div>
         </div>
       </Card>
@@ -352,12 +379,8 @@ export default function Members({
           const className = c?.name ?? (m.class_id == null || m.class_id === 0 ? "ยังไม่เลือกอาชีพ" : "-");
           const iconUrl = c?.icon_url ?? null;
 
-          const meta = leaveMetaByMemberId.get(m.id);
-          const hasErrand = !!meta?.hasErrand;
-          const hasWar = !!(meta?.hasWar20 || meta?.hasWar2030);
-          const warLabel = meta?.warLabel ?? "ลาวอ";
-
-          const showReady = !m.is_special && !hasErrand && !hasWar;
+          // ✅ วันนี้เท่านั้น: แสดง badge อย่างเดียว
+          const todayStatus = getTodayStatus(m);
 
           const memberLeaves = leaveByMemberId.get(m.id) ?? [];
 
@@ -384,12 +407,7 @@ export default function Members({
                 </div>
 
                 <div className="flex flex-col items-end gap-2">
-                  {m.is_special ? <Badge variant="outline">ศิษย์เอก</Badge> : null}
-
-                  {hasErrand ? <Badge variant="warning">ลากิจ</Badge> : null}
-                  {hasWar ? <Badge variant="warning">{warLabel}</Badge> : null}
-
-                  {showReady ? <Badge variant="success">พร้อม</Badge> : null}
+                  <Badge variant={todayStatus.variant}>{todayStatus.label}</Badge>
                 </div>
               </div>
 
