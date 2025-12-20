@@ -1,29 +1,141 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, Moon, Sun, Trash2, LogOut } from "lucide-react";
+
 import { Button, Card, Input, Select } from "@/app/components/UI";
+import LeaveRequestButton, { type LeaveCreateRow } from "@/app/components/LeaveRequestButton";
+import { useTheme } from "@/app/theme/ThemeProvider";
 
 type MeRes = {
   ok: boolean;
-  user?: { discordUserId: string; displayName: string; avatarUrl: string; guild: number; isAdmin: boolean };
+  user?: {
+    discordUserId: string;
+    displayName: string;
+    avatarUrl: string;
+    guild: number;
+    isAdmin: boolean;
+    isHead: boolean;
+  };
+};
+
+type ClassRow = {
+  id: number;
+  name: string;
+  icon_url: string | null;
 };
 
 type MemberRow = {
   discord_user_id: string;
   name: string;
-  class: string;
   power: number;
-  color: string;
   is_special: boolean;
   guild: number;
+
+  // ✅ รองรับทั้งของเดิมและของใหม่ (กันพัง)
+  class?: string; // legacy
+  class_id?: number; // preferred
 };
 
+type DbLeave = {
+  id: number;
+  member_id: number;
+  date_time: string; // ISO
+  reason: string | null;
+};
+
+const BKK_TZ = "Asia/Bangkok";
+
+const bkkDateFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BKK_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+function bkkDateOf(date: Date) {
+  return bkkDateFmt.format(date); // YYYY-MM-DD
+}
+
+const bkkDateTimeFmt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BKK_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+function bkkDateTimeParts(dt: string) {
+  const parts = bkkDateTimeFmt.formatToParts(new Date(dt));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const date = `${get("year")}-${get("month")}-${get("day")}`;
+  const time = `${get("hour")}:${get("minute")}`;
+  return { date, time };
+}
+
+function isSaturday(dateStr: string) {
+  const d = new Date(`${dateStr}T00:00:00+07:00`);
+  return d.getDay() === 6;
+}
+
+function prettyDate(dateStr: string) {
+  const dt = new Date(`${dateStr}T00:00:00+07:00`);
+  return dt.toLocaleDateString("th-TH", {
+    timeZone: BKK_TZ,
+    weekday: "long",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+type LeaveMeRes = { ok: true; leaves: DbLeave[] } | { ok: false; error?: string };
+type ClassListRes = { ok: true; classes: ClassRow[] } | { ok: false; error?: string };
+
 export default function MePage() {
+  const { theme, toggleTheme } = useTheme();
+
   const [me, setMe] = useState<MeRes | null>(null);
   const [member, setMember] = useState<MemberRow | null>(null);
+
+  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [classId, setClassId] = useState<string>("0"); // controlled Select
+
+  const [myLeaves, setMyLeaves] = useState<DbLeave[]>([]);
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const [leaveErr, setLeaveErr] = useState<string | null>(null);
+  const [canceling, setCanceling] = useState<number | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const todayBkk = useMemo(() => bkkDateOf(new Date()), []);
+
+  async function reloadLeaves() {
+    const r = await fetch("/api/leave/me", { cache: "no-store" });
+    const j = (await r.json()) as LeaveMeRes;
+    if (!j.ok) throw new Error(j.error ?? "load_leave_failed");
+    setMyLeaves(j.leaves ?? []);
+  }
+
+  async function loadClassMaster() {
+    const r = await fetch("/api/class", { cache: "no-store" });
+    const j = (await r.json()) as ClassListRes;
+    if (!j.ok) throw new Error(j.error ?? "load_class_failed");
+
+    const normalized = Array.isArray(j.classes) ? j.classes : [];
+    // ✅ บังคับให้มี id=0 เสมอ
+    const hasZero = normalized.some((c) => c.id === 0);
+    const withZero = hasZero
+      ? normalized
+      : [{ id: 0, name: "ยังไม่เลือกอาชีพ", icon_url: null }, ...normalized];
+
+    withZero.sort((a, b) => a.id - b.id);
+    setClasses(withZero);
+  }
+
+  // โหลดข้อมูลทั้งหมด
   useEffect(() => {
     (async () => {
       const r1 = await fetch("/api/me", { cache: "no-store" });
@@ -32,33 +144,85 @@ export default function MePage() {
 
       if (!j1.ok) return;
 
-      const r2 = await fetch("/api/member/me", { cache: "no-store" });
-      const j2 = await r2.json();
-      if (j2.ok) setMember(j2.member as MemberRow);
+      // โหลดพร้อมกัน
+      await Promise.all([
+        (async () => {
+          const r2 = await fetch("/api/member/me", { cache: "no-store" });
+          const j2 = await r2.json();
+          if (j2.ok) setMember(j2.member as MemberRow);
+        })(),
+        loadClassMaster(),
+        reloadLeaves(),
+      ]);
     })().catch(() => setErr("โหลดข้อมูลไม่สำเร็จ"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const canAdmin = !!me?.user?.isAdmin;
+  // ✅ sync classId จาก member + master (รองรับทั้ง class_id และ class name)
+  useEffect(() => {
+    if (!member) return;
 
-  async function onSave() {
+    // 1) ถ้ามี class_id อยู่แล้ว ใช้เลย
+    const cid = Number(member.class_id);
+    if (Number.isFinite(cid)) {
+      setClassId(String(cid));
+      return;
+    }
+
+    // 2) ถ้าเป็นของเดิม (class เป็น string) ให้ map จากชื่อ -> id
+    const name = String(member.class ?? "").trim();
+    if (!name) {
+      setClassId("0");
+      return;
+    }
+    const hit = classes.find((c) => c.name === name);
+    if (hit) setClassId(String(hit.id));
+    else setClassId("0");
+  }, [member, classes]);
+  
+  const selectedClassIconUrl = useMemo(() => {
+    const cid = Number(classId) || 0;
+    const row = classes.find((c) => c.id === cid);
+    return row?.icon_url ?? null;
+  }, [classes, classId]);
+
+  const canAdmin = !!me?.user?.isAdmin;
+  const canAccessAdmin = !!(me?.user?.isAdmin || me?.user?.isHead);
+
+  async function onSaveProfile() {
     if (!member) return;
     setSaving(true);
     setErr(null);
+
     try {
+      const selectedClassId = Number(classId) || 0;
+      const selectedClassName = classes.find((c) => c.id === selectedClassId)?.name ?? "";
+
+      // ✅ อัปเดต local state ให้มีทั้ง class_id และ class (กัน API เดิมที่ยังรับ string)
+      const nextMember: MemberRow = {
+        ...member,
+        class_id: selectedClassId,
+        class: selectedClassName,
+      };
+      setMember(nextMember);
+
       const res = await fetch("/api/member/me", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: member.name,
-          class: member.class,
-          power: member.power,
-          color: member.color,
-          is_special: member.is_special,
+          // ✅ ชื่อถูก disable ไม่ให้แก้ แต่ส่งไปก็ไม่เป็นไร
+          name: nextMember.name,
+          power: nextMember.power,
+
+          // ✅ ส่งทั้ง 2 แบบเพื่อ backward-compatible
+          class_id: nextMember.class_id,
+          class: nextMember.class,
         }),
       });
+
       const j = await res.json();
       if (!j.ok) throw new Error(j.error ?? "save_failed");
-      setMember(j.member);
+      setMember(j.member as MemberRow);
     } catch (e: any) {
       setErr(String(e.message ?? e));
     } finally {
@@ -66,9 +230,66 @@ export default function MePage() {
     }
   }
 
-  if (!me) {
-    return <main className="p-6">Loading...</main>;
+  async function createMyLeave(rows: LeaveCreateRow[]) {
+    setLeaveErr(null);
+    const res = await fetch("/api/leave/me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error ?? "leave_create_failed");
+    await reloadLeaves();
   }
+
+  async function cancelMyLeave(id: number) {
+    setLeaveErr(null);
+    setCanceling(id);
+    try {
+      const res = await fetch("/api/leave/me", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leaveIds: [id] }),
+      });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error ?? "leave_cancel_failed");
+      await reloadLeaves();
+    } catch (e: any) {
+      setLeaveErr(String(e.message ?? e));
+    } finally {
+      setCanceling(null);
+    }
+  }
+
+  async function onLogout() {
+    setLoggingOut(true);
+    try {
+      await fetch("/api/logout", { method: "POST" });
+    } finally {
+      // ไปหน้า login เสมอ
+      location.href = "/login";
+    }
+  }
+
+  const upcomingGrouped = useMemo(() => {
+    const upcoming = myLeaves
+      .map((l) => ({ l, ...bkkDateTimeParts(String(l.date_time ?? "")) }))
+      .filter((x) => x.date && x.date >= todayBkk)
+      .sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return a.time.localeCompare(b.time);
+      });
+
+    const map = new Map<string, Array<{ leave: DbLeave; time: string }>>();
+    for (const x of upcoming) {
+      const arr = map.get(x.date) ?? [];
+      arr.push({ leave: x.l, time: x.time });
+      map.set(x.date, arr);
+    }
+    return map;
+  }, [myLeaves, todayBkk]);
+
+  if (!me) return <main className="p-6">Loading...</main>;
 
   if (!me.ok) {
     return (
@@ -77,7 +298,9 @@ export default function MePage() {
           <div className="text-lg font-semibold">Unauthorized</div>
           <div className="mt-2 text-sm text-zinc-400">กรุณาเข้าสู่ระบบใหม่</div>
           <div className="mt-4">
-            <a className="underline" href="/login">ไปหน้า Login</a>
+            <a className="underline" href="/login">
+              ไปหน้า Login
+            </a>
           </div>
         </Card>
       </main>
@@ -89,68 +312,168 @@ export default function MePage() {
       <div className="mx-auto max-w-3xl space-y-6">
         <Card>
           <div className="flex items-center gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={me.user?.avatarUrl}
               alt="avatar"
               className="h-14 w-14 rounded-2xl border border-zinc-200 dark:border-zinc-800"
             />
-            <div className="flex-1">
-              <div className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-                {me.user?.displayName}
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                  {me.user?.displayName}
+                </div>
+
+                {/* ✅ icon อาชีพหลังชื่อ */}
+                {selectedClassIconUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={selectedClassIconUrl}
+                    alt="class icon"
+                    className="h-6 w-6 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 object-contain"
+                  />
+                ) : null}
               </div>
+
               <div className="text-sm text-zinc-500 dark:text-zinc-400">
                 Guild: {me.user?.guild} • {canAdmin ? "Admin" : "Member"}
               </div>
             </div>
-            {canAdmin && (
-              <a href="/admin" className="text-sm underline text-red-600">ไป Admin</a>
+
+
+            {canAccessAdmin && (
+              <a href="/admin" className="text-sm underline text-red-600">
+                ไป Admin
+              </a>
             )}
+
+            <Button variant="outline" onClick={toggleTheme}>
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              สลับธีม
+            </Button>
+            
+            <Button variant="outline" onClick={onLogout} disabled={loggingOut}>
+              <LogOut className="w-4 h-4 text-rose-600" />
+              {loggingOut ? "กำลังออก..." : "Logout"}
+            </Button>
           </div>
         </Card>
 
         <Card>
-          <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">โปรไฟล์ในเกม</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">โปรไฟล์</div>
+
+            {/* ✅ ศิษย์เอก: ไม่โชว์ปุ่มลา */}
+            {!member?.is_special ? (
+              <LeaveRequestButton memberName={member?.name ?? "ฉัน"} existingLeaves={myLeaves} onCreate={createMyLeave} />
+            ) : null}
+          </div>
+
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs text-zinc-500 mb-1">ชื่อในเกม</div>
-              <Input value={member?.name ?? ""} onChange={(e) => setMember(m => m ? ({ ...m, name: e.target.value }) : m)} />
-            </div>
-            <div>
-              <div className="text-xs text-zinc-500 mb-1">อาชีพ</div>
-              <Input value={member?.class ?? ""} onChange={(e) => setMember(m => m ? ({ ...m, class: e.target.value }) : m)} />
-            </div>
             <div>
               <div className="text-xs text-zinc-500 mb-1">Power</div>
               <Input
                 type="number"
                 value={member?.power ?? 0}
-                onChange={(e) => setMember(m => m ? ({ ...m, power: Number(e.target.value) }) : m)}
+                onChange={(e) => setMember((m) => (m ? { ...m, power: Number(e.target.value) } : m))}
               />
             </div>
+
             <div>
-              <div className="text-xs text-zinc-500 mb-1">Color</div>
-              <Input value={member?.color ?? ""} onChange={(e) => setMember(m => m ? ({ ...m, color: e.target.value }) : m)} />
-            </div>
-            <div className="md:col-span-2 flex items-center gap-2">
-              <input
-                id="special"
-                type="checkbox"
-                checked={!!member?.is_special}
-                onChange={(e) => setMember(m => m ? ({ ...m, is_special: e.target.checked }) : m)}
-              />
-              <label htmlFor="special" className="text-sm text-zinc-700 dark:text-zinc-200">
-                เป็นสมาชิกพิเศษ (Special)
-              </label>
+              <div className="text-xs text-zinc-500 mb-1">อาชีพ</div>
+              <Select
+                value={classId}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setClassId(e.target.value)}
+              >
+                {classes.map((c) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
 
           {err && <div className="mt-3 text-sm text-rose-600">Error: {err}</div>}
 
           <div className="mt-5 flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={() => location.reload()} disabled={saving}>รีโหลด</Button>
-            <Button onClick={onSave} disabled={saving}>
+            <Button onClick={onSaveProfile} disabled={saving}>
               {saving ? "กำลังบันทึก..." : "บันทึก"}
             </Button>
+          </div>
+        </Card>
+
+        {/* ✅ ใบลาของฉัน (วันนี้-อนาคต) + ยกเลิกได้ */}
+        <Card>
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-5 h-5" />
+            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">การลาของฉัน</div>
+          </div>
+          <div className="mt-1 text-xs text-zinc-500">
+            ยกเลิกได้เฉพาะ “วันนี้” ถึง “อนาคต” เท่านั้น (ระบบตรวจตามวันที่ในเวลาไทย)
+          </div>
+
+          {leaveErr ? <div className="mt-3 text-sm text-rose-600">Error: {leaveErr}</div> : null}
+
+          <div className="mt-4 space-y-3">
+            {Array.from(upcomingGrouped.entries()).length === 0 ? (
+              <div className="text-sm text-zinc-500">ยังไม่มีการลาในอนาคต</div>
+            ) : (
+              Array.from(upcomingGrouped.entries()).map(([date, items]) => {
+                const saturday = isSaturday(date);
+
+                return (
+                  <div
+                    key={date}
+                    className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-100">{prettyDate(date)}</div>
+                        <div className="text-xs text-zinc-500">{saturday ? "วันวอ (เสาร์)" : "ลากิจ"}</div>
+                      </div>
+                      <div className="text-xs text-zinc-500">{date}</div>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {items.map(({ leave, time }) => {
+                        const label = saturday
+                          ? time === "20:00"
+                            ? "ลาวอ 20:00"
+                            : time === "20:30"
+                              ? "ลาวอ 20:30"
+                              : "ลาวอ"
+                          : "ลากิจ";
+
+                        return (
+                          <div
+                            key={leave.id}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{label}</div>
+                              <div className="text-xs text-zinc-500 truncate">
+                                {leave.reason ? `เหตุผล: ${leave.reason}` : "เหตุผล: -"}
+                              </div>
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              onClick={() => cancelMyLeave(leave.id)}
+                              disabled={canceling === leave.id}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              {canceling === leave.id ? "กำลังยกเลิก..." : "ยกเลิก"}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </Card>
       </div>

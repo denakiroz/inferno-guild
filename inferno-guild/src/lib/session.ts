@@ -6,15 +6,20 @@ export type SessionUser = {
   discordUserId: string;
   displayName: string;
   avatarUrl: string | null;
-  isAdmin: boolean;
   guild: number;
-  roles?: string[];    
+
+  /** Super admin: can view all guilds, run admin actions */
+  isAdmin: boolean;
+
+  /** Head: can access /admin but locked to own guild */
+  isHead: boolean;
+
+  roles?: string[];
 };
 
-
 const redis = new Redis({
-  url: env.UPSTASH_REDIS_REST_URL,
-  token: env.UPSTASH_REDIS_REST_TOKEN,
+  url: env.UPSTASH_REDIS_REST_URL!,
+  token: env.UPSTASH_REDIS_REST_TOKEN!,
 });
 
 const keyOf = (sid: string) => `session:${sid}`;

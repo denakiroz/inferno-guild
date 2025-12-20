@@ -1,46 +1,73 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+/**
+ * Protect /me/* and /admin/*
+ * - ต้องมี session (sid cookie) ถึงเข้าได้
+ * - /admin/* ต้องเป็น (isAdmin || isHead)
+ *
+ * NOTE:
+ * - ใช้ cookie name จาก ENV ถ้ามี ไม่งั้น default = "sid"
+ * - เรียก /api/me เพื่อดึง role จาก session (server-side)
+ */
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  const isMe = pathname.startsWith("/me");
-  const isAdmin = pathname.startsWith("/admin");
+  const isMePath = pathname.startsWith("/me");
+  const isAdminPath = pathname.startsWith("/admin");
 
-  if (!isMe && !isAdmin) return NextResponse.next();
+  if (!isMePath && !isAdminPath) return NextResponse.next();
 
-  const sid = req.cookies.get("sid")?.value;
+  const cookieName = process.env.AUTH_COOKIE_NAME || "sid";
+  const sid = req.cookies.get(cookieName)?.value;
+
+  // ไม่ login -> ส่งไปหน้า login
   if (!sid) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
+    url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  // เรียก API ตรวจ session + isAdmin (ส่ง cookie ไปด้วย)
-  const meUrl = new URL("/api/me", req.url);
-  const res = await fetch(meUrl, {
-    headers: { cookie: req.headers.get("cookie") ?? "" },
-    cache: "no-store",
-  });
+  // ดึงข้อมูล user จาก API (อาศัย sid cookie)
+  let me: any = null;
+  try {
+    const meRes = await fetch(new URL("/api/me", req.url), {
+      headers: {
+        // ส่ง cookie ทั้งหมดไปด้วย เพื่อให้ /api/me อ่าน sid ได้
+        cookie: req.headers.get("cookie") || `${cookieName}=${sid}`,
+      },
+    });
 
-  if (!res.ok) {
+    if (!meRes.ok) {
+      // session invalid หรือ api error
+      const url = req.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+
+    me = await meRes.json();
+  } catch {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("error", "unauthorized");
+    url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  const data = (await res.json().catch(() => null)) as any;
-  if (!data?.ok) {
+  // ถ้า /api/me บอกว่าไม่ ok -> ถือว่า session ใช้ไม่ได้
+  if (!me?.ok) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("error", "unauthorized");
+    url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  if (isAdmin && !data?.user?.isAdmin) {
+  // /admin ต้องเป็น admin หรือ head
+  if (isAdminPath && !(me?.user?.isAdmin || me?.user?.isHead)) {
     const url = req.nextUrl.clone();
-    url.pathname = "/me"; // หรือจะให้ไป /403 ก็ได้
+    url.pathname = "/me";
+    url.searchParams.set("error", "forbidden");
     return NextResponse.redirect(url);
   }
 

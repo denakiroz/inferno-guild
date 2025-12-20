@@ -1,90 +1,39 @@
-// src/services/memberService.ts
-import { supabase } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase";
 import type { DbMember, GuildNo } from "@/type/db";
-import type { CharacterClass } from "@/app/types";
 
-type ListArgs = {
-  guild?: GuildNo;
-  orderByPowerDesc?: boolean;
-};
-
-function normalizeMember(row: any): DbMember {
-  return {
-    id: Number(row.id),
-    name: String(row.name ?? ""),
-    class: (row.class ?? "Ironclan") as CharacterClass,
-    power: Number(row.power ?? 0),
-
-    party: row.party ?? null,
-    party_2: row.party_2 ?? null,
-    pos_party: row.pos_party ?? null,
-    pos_party_2: row.pos_party_2 ?? null,
-
-    color: row.color ?? null,
-    is_special: Boolean(row.is_special),
-    guild: Number(row.guild ?? 1) as GuildNo,
-
-    discord_user_id: row.discord_user_id ?? null,
-  };
-}
+const SELECT_MEMBER =
+  "id,name,class_id,power,party,party_2,pos_party,pos_party_2,color,is_special,guild,discord_user_id,status";
 
 export const memberService = {
-  async list(args: ListArgs = {}): Promise<DbMember[]> {
-    const { guild, orderByPowerDesc = true } = args;
+  async list(params: {
+    guild?: GuildNo;
+    status?: string;
+    orderByPowerDesc?: boolean;
+  } = {}): Promise<DbMember[]> {
+    let q = supabase.from("member").select(SELECT_MEMBER);
 
-    let q = supabase.from("member").select("*");
+    if (params.guild) q = q.eq("guild", params.guild);
+    if (params.status) q = q.eq("status", params.status);
 
-    if (guild) q = q.eq("guild", guild);
-    if (orderByPowerDesc) q = q.order("power", { ascending: false });
+    if (params.orderByPowerDesc) q = q.order("power", { ascending: false });
     else q = q.order("id", { ascending: true });
 
     const { data, error } = await q;
     if (error) throw error;
 
-    return (data ?? []).map(normalizeMember);
+    // NOTE: ไม่ embed class ใน query เพื่อเลี่ยง relationship ambiguity
+    return (data || []) as DbMember[];
   },
 
-  async create(payload: Omit<DbMember, "id">): Promise<DbMember> {
+  async update(id: number, payload: Partial<DbMember>): Promise<DbMember> {
     const { data, error } = await supabase
       .from("member")
-      .insert([payload])
-      .select("*")
-      .single();
-
-    if (error) throw error;
-    return normalizeMember(data);
-  },
-
-  async createMany(payloads: Array<Omit<DbMember, "id">>): Promise<DbMember[]> {
-    if (payloads.length === 0) return [];
-
-    const { data, error } = await supabase
-      .from("member")
-      .insert(payloads)
-      .select("*");
-
-    if (error) throw error;
-
-    // กันลำดับเพี้ยน
-    return (data ?? []).map(normalizeMember).sort((a, b) => b.power - a.power);
-  },
-
-  async update(payload: DbMember): Promise<DbMember> {
-    const { id, ...rest } = payload;
-
-    const { data, error } = await supabase
-      .from("member")
-      .update(rest)
+      .update(payload)
       .eq("id", id)
-      .select("*")
+      .select(SELECT_MEMBER)
       .single();
 
     if (error) throw error;
-    return normalizeMember(data);
-  },
-
-  async delete(id: number): Promise<void> {
-    const { error } = await supabase.from("member").delete().eq("id", id);
-    if (error) throw error;
+    return data as DbMember;
   },
 };

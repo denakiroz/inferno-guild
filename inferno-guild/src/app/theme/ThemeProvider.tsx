@@ -5,11 +5,16 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 export type ThemeMode = "light" | "dark";
 
 type ThemeCtx = {
+  /** Raw theme state used by the app */
   theme: ThemeMode;
-  resolvedTheme: ThemeMode;     // alias
+  /** Alias for compatibility with next-themes style naming */
+  resolvedTheme: ThemeMode;
   setTheme: (t: ThemeMode) => void;
+  /** Canonical toggle */
   toggleTheme: () => void;
-  toggle: () => void;           // alias
+  /** Alias for compatibility with existing UI (ThemeToggle) */
+  toggle: () => void;
+  /** True after first client mount */
   mounted: boolean;
 };
 
@@ -17,32 +22,45 @@ const ThemeContext = createContext<ThemeCtx | null>(null);
 
 const STORAGE_KEY = "inferno_theme";
 
-function getInitialTheme(): ThemeMode {
+function readInitialTheme(): ThemeMode {
   if (typeof window === "undefined") return "dark";
   const saved = window.localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
   if (saved === "light" || saved === "dark") return saved;
-  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+  return prefersDark ? "dark" : "light";
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(() => getInitialTheme());
+  // Keep SSR/first render stable (dark) then reconcile on mount.
+  const [theme, setThemeState] = useState<ThemeMode>("dark");
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => setMounted(true), []);
+  const setTheme = useCallback((t: ThemeMode) => {
+    setThemeState(t);
+  }, []);
 
-  // sync class บน <html> ทุกครั้งที่ theme เปลี่ยน
+  const toggleTheme = useCallback(() => {
+    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
+  }, []);
+
+  // 1) Resolve theme on first mount from localStorage / system preference.
   useEffect(() => {
-  const root = document.documentElement;
-    root.classList.toggle("dark", theme === "dark");
-    root.style.colorScheme = theme;
-    localStorage.setItem("inferno_theme", theme);
+    setThemeState(readInitialTheme());
+    setMounted(true);
+  }, []);
+
+  // 2) Apply theme to <html> and persist.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const root = window.document.documentElement;
+    const isDark = theme === "dark";
+    root.classList.toggle("dark", isDark);
+    // Optional, but helps native controls follow theme.
+    root.style.colorScheme = isDark ? "dark" : "light";
+    window.localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-
-  const setTheme = useCallback((t: ThemeMode) => setThemeState(t), []);
-  const toggleTheme = useCallback(() => setThemeState((p) => (p === "dark" ? "light" : "dark")), []);
-
-  const value = useMemo(
+  const value = useMemo<ThemeCtx>(
     () => ({
       theme,
       resolvedTheme: theme,

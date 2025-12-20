@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { getSession } from "../../../lib/session";
+import { cookies } from "next/headers";
+import { env } from "@/lib/env";
+import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
-  const cookie = req.headers.get("cookie") ?? "";
-  const sid = cookie.match(/(?:^|;\s*)sid=([^;]+)/)?.[1];
+export async function GET() {
+  const cookieStore = await cookies();
+  const sid = cookieStore.get(env.AUTH_COOKIE_NAME)?.value;
+
   if (!sid) return NextResponse.json({ ok: false }, { status: 401 });
 
   const session = await getSession(sid);
@@ -19,6 +22,7 @@ export async function GET(req: Request) {
       avatarUrl: session.avatarUrl,
       guild: session.guild,
       isAdmin: !!session.isAdmin,
+      isHead: !!session.isHead,
     },
   });
 }

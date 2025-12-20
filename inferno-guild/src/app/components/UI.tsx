@@ -53,7 +53,7 @@ export const Badge: React.FC<BadgeProps> = ({ variant = "default", className, ..
 
 /** Button */
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "danger" | "ghost" | "outline";
+  variant?: "primary" | "secondary" | "danger" | "ghost" | "outline" | "default"; // ✅
   size?: "sm" | "md" | "lg";
 }
 export const Button: React.FC<ButtonProps> = ({
@@ -68,7 +68,9 @@ export const Button: React.FC<ButtonProps> = ({
     "focus-visible:ring-offset-white dark:focus-visible:ring-offset-zinc-950 " +
     "disabled:opacity-50 disabled:cursor-not-allowed select-none";
 
-  const variants: Record<string, string> = {
+ const variants: Record<string, string> = {
+    default:
+      "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-sm shadow-red-900/10",
     primary:
       "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-sm shadow-red-900/10",
     secondary:
@@ -88,7 +90,15 @@ export const Button: React.FC<ButtonProps> = ({
     lg: "h-12 px-5 text-base",
   };
 
-  return <button className={cn(base, variants[variant], sizes[size], className)} {...props} />;
+  // suppressHydrationWarning: mitigate noisy warnings when browser extensions inject extra attributes
+  // (e.g., fdprocessedid) before React hydrates.
+  return (
+    <button
+      suppressHydrationWarning
+      className={cn(base, variants[variant], sizes[size], className)}
+      {...props}
+    />
+  );
 };
 
 /** Input */
@@ -96,6 +106,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
   ({ className, ...props }, ref) => (
     <input
       ref={ref}
+      suppressHydrationWarning
       className={cn(
         "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm",
         "placeholder:text-zinc-400",
@@ -116,6 +127,7 @@ export const Select = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <select
     ref={ref}
+    suppressHydrationWarning
     className={cn(
       "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm",
       "focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500",

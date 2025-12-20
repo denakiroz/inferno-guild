@@ -1,109 +1,54 @@
 // src/app/admin/members/page.tsx
-"use client";
+import AdminMembersClient from "./AdminMembersClient";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import type { DbLeave, DbMember } from "@/type/db";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { env } from "@/lib/env";
+import { getSession } from "@/lib/session";
+import MembersClient from "./MembersClient";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Members} from "./Members";
-import { memberService } from "@/services/memberService";
-import { leaveService } from "@/services/leaveService";
-import type { DbMember, DbLeave, GuildNo } from "@/type/db";
+export const dynamic = "force-dynamic";
 
-type MeResponse =
-  | {
-      ok: true;
-      user: {
-        discordUserId: string;
-        displayName: string;
-        avatarUrl: string;
-        guild: number;     // 1|2|3
-        isAdmin: boolean;  // DISCORD_ADMIN_ROLE_ID => true
-      };
-    }
-  | { ok: false };
+const SELECT_MEMBER_WITH_CLASS = `
+  id,
+  name,
+  class_id,
+  power,
+  party,
+  party_2,
+  pos_party,
+  pos_party_2,
+  color,
+  is_special,
+  guild,
+  discord_user_id,
+  status,
+  class:class!member_class_id_fkey(
+    id,
+    name,
+    icon_url
+  )
+`;
 
-export default function AdminMembersPage() {
-  const router = useRouter();
+export default async function AdminMembersPage() {
+  const sid = (await cookies()).get(env.AUTH_COOKIE_NAME)?.value;
+  if (!sid) redirect("/login?next=/admin/members");
 
-  const [members, setMembers] = useState<DbMember[]>([]);
-  const [leaves, setLeaves] = useState<DbLeave[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const session = await getSession(sid);
+  if (!session) redirect("/login?error=unauthorized&next=/admin/members");
 
-  const [lockedGuild, setLockedGuild] = useState<GuildNo | null>(null);
-  const [canViewAllGuilds, setCanViewAllGuilds] = useState(false);
+  // ✅ head เข้าได้ แต่เห็นเฉพาะกิลด์ตัวเองผ่าน MembersClient
+  if (!session.isAdmin) return <MembersClient />;
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/me", { cache: "no-store" });
-      const me = (await res.json()) as MeResponse;
+  // ✅ admin: SSR เห็นทั้งหมดเหมือนเดิม
+  const { data: members, error: memErr } = await supabaseAdmin
+    .from("member")
+    .select(/* SELECT_MEMBER_WITH_CLASS */)
+    .order("id", { ascending: true });
 
-      if (!res.ok || !("ok" in me) || !me.ok) {
-        router.replace("/login");
-        return;
-      }
+  if (memErr) return <div className="p-6 text-sm">Failed to load members: {memErr.message}</div>;
 
-      const isAdmin = !!me.user.isAdmin;
-      const guild = (Number(me.user.guild || 1) as GuildNo) || 1;
-
-      setCanViewAllGuilds(isAdmin);
-      setLockedGuild(isAdmin ? null : guild);
-
-      const ms = await memberService.list({ guild: isAdmin ? undefined : guild });
-      const ls = await leaveService.list({ memberIds: ms.map((m) => m.id) });
-
-      setMembers(ms);
-      setLeaves(ls);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [router]);
-
-  useEffect(() => {
-    void load();
-  }, [load]); 
-
-  const onAddMember = useCallback(async (payload: Omit<DbMember, "id">) => {
-    const created = await memberService.create(payload);
-    setMembers((prev) => [created, ...prev]);
-  }, []);
-
-  const onUpdateMember = useCallback(async (payload: DbMember) => {
-    const updated = await memberService.update(payload);
-    setMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-  }, []);
-
-  const onDeleteMember = useCallback(async (id: number) => {
-    // ลบ leave ก่อน (กัน FK/ข้อมูลค้าง)
-    await leaveService.deleteByMember(id).catch(() => undefined);
-    await memberService.delete(id);
-
-    setLeaves((prev) => prev.filter((l) => l.member_id !== id));
-    setMembers((prev) => prev.filter((m) => m.id !== id));
-  }, []);
-
-  const onReportLeave = useCallback(async (payload: Omit<DbLeave, "id">) => {
-    const created = await leaveService.create(payload);
-    setLeaves((prev) => [created, ...prev]);
-  }, []);
-
-  const onImportMembers = useCallback(async (payloads: Omit<DbMember, "id">[]) => {
-    if (!payloads.length) return;
-    const created = await memberService.createMany(payloads);
-    setMembers((prev) => [...created, ...prev]);
-  }, []);
-
-  return (
-    <Members
-      members={members}
-      leaves={leaves}
-      isLoading={isLoading}
-      onAddMember={onAddMember}
-      onUpdateMember={onUpdateMember}
-      onDeleteMember={onDeleteMember}
-      onReportLeave={onReportLeave}
-      onImportMembers={onImportMembers}
-      lockedGuild={lockedGuild}
-      canViewAllGuilds={canViewAllGuilds}
-    />
-  );
+  const { data: leaves } = await supabaseAdmin.from("leave").select("id,date_time,member_id,reason");
+  return <AdminMembersClient members={(members ?? []) as any} leaves={(leaves ?? []) as any} />;
 }

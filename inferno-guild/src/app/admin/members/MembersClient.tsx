@@ -1,10 +1,11 @@
 "use client";
 
 // src/app/admin/members/MembersClient.tsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Members } from "./Members";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import Members from "./Members";
 import { memberService } from "@/services/memberService";
 import { leaveService } from "@/services/leaveService";
+import { supabase } from "@/lib/supabase";
 import type { DbMember, DbLeave, GuildNo } from "@/type/db";
 
 type MeResp =
@@ -13,7 +14,7 @@ type MeResp =
       user: {
         discordUserId: string;
         displayName: string;
-        avatarUrl: string;
+        avatarUrl: string | null;
         guild: number;
         isAdmin: boolean;
       };
@@ -28,15 +29,21 @@ export default function MembersClient() {
   const [isLoading, setIsLoading] = useState(true);
 
   // admin เห็นทุกกิลด์, head เห็นกิลด์ตัวเอง
-  const lockedGuild = useMemo<GuildNo | null>(() => {
-    if (!me || !me.ok) return null;
-    if (me.user.isAdmin) return null;
-    return Number(me.user.guild) as GuildNo;
+  // ✅ แปลงเป็น admin ให้รองรับกรณี guild = 0 (admin) จากฝั่ง /api/me
+  const effectiveIsAdmin = useMemo(() => {
+    if (!me || !me.ok) return false;
+    return !!me.user.isAdmin || Number(me.user.guild) === 0;
   }, [me]);
 
+  const lockedGuild = useMemo<GuildNo | null>(() => {
+    if (!me || !me.ok) return null;
+    if (effectiveIsAdmin) return null;
+    return Number(me.user.guild) as GuildNo;
+  }, [me, effectiveIsAdmin]);
+
   const canViewAllGuilds = useMemo(() => {
-    return !!(me && me.ok && me.user.isAdmin);
-  }, [me]);
+    return !!(me && me.ok && effectiveIsAdmin);
+  }, [me, effectiveIsAdmin]);
 
   useEffect(() => {
     (async () => {
@@ -50,21 +57,25 @@ export default function MembersClient() {
     })();
   }, []);
 
-  const load = async (guild?: GuildNo) => {
+  const load = useCallback(async (guild?: GuildNo) => {
     setIsLoading(true);
     try {
-      // ✅ ใช้ชื่อเมธอดใหม่
       const rows = await memberService.list({ guild, orderByPowerDesc: true });
       setMembers(rows);
 
-      // ✅ leaves ต้องไปใช้ leaveService
       const ids = rows.map((m) => m.id);
-      const leaveRows = await leaveService.list({ memberIds: ids });
+      const leaveRows = ids.length ? await leaveService.list({ memberIds: ids }) : [];
       setLeaves(leaveRows);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  const onReload = useCallback(async () => {
+    if (!me || !me.ok) return;
+    if (me.user.isAdmin) return load(undefined);
+    return load(Number(me.user.guild) as GuildNo);
+  }, [load, me]);
 
   useEffect(() => {
     if (me == null) return;
@@ -76,67 +87,39 @@ export default function MembersClient() {
       return;
     }
 
-    if (me.user.isAdmin) load(undefined);
+    if (effectiveIsAdmin) load(undefined);
     else load(Number(me.user.guild) as GuildNo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me]);
+  }, [me, load]);
 
-  // CRUD handlers
-  const onAddMember = async (payload: Omit<DbMember, "id">) => {
-    const created = await memberService.create(payload);
-    setMembers((prev) => [created, ...prev].sort((a, b) => b.power - a.power));
+  // ✅ Realtime: member/leave เปลี่ยน → reload
+  useEffect(() => {
+    if (!me || !me.ok) return;
 
-    // refresh leaves for current list (optional แต่ทำให้ state consistent)
-    const ids = [created.id, ...members.map((m) => m.id)];
-    const leaveRows = await leaveService.list({ memberIds: ids });
-    setLeaves(leaveRows);
-  };
+    const ch = supabase
+      .channel("admin-members-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "member" },
+        () => void onReload()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leave" },
+        () => void onReload()
+      )
+      .subscribe();
 
-  const onUpdateMember = async (payload: DbMember) => {
-    const updated = await memberService.update(payload);
-    setMembers((prev) =>
-      prev
-        .map((m) => (m.id === updated.id ? updated : m))
-        .sort((a, b) => b.power - a.power)
-    );
-  };
-
-  const onDeleteMember = async (id: number) => {
-    // ลบ leave ก่อน (กัน FK/ข้อมูลค้าง)
-    await leaveService.deleteByMember(id).catch(() => undefined);
-    await memberService.delete(id);
-
-    setMembers((prev) => prev.filter((m) => m.id !== id));
-    setLeaves((prev) => prev.filter((l) => l.member_id !== id));
-  };
-
-  const onReportLeave = async (payload: Omit<DbLeave, "id">) => {
-    const created = await leaveService.create(payload);
-    setLeaves((prev) => [created, ...prev]);
-  };
-
-  const onImportMembers = async (payload: Array<Omit<DbMember, "id">>) => {
-    const created = await memberService.createMany(payload);
-
-    // merge + sort
-    setMembers((prev) => [...created, ...prev].sort((a, b) => b.power - a.power));
-
-    // reload leaves for all visible members
-    const allIds = [...created.map((m) => m.id), ...members.map((m) => m.id)];
-    const leaveRows = await leaveService.list({ memberIds: allIds });
-    setLeaves(leaveRows);
-  };
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [me, onReload]);
 
   return (
     <Members
       members={members}
       leaves={leaves}
       isLoading={isLoading}
-      onAddMember={onAddMember}
-      onUpdateMember={onUpdateMember}
-      onDeleteMember={onDeleteMember}
-      onReportLeave={onReportLeave}
-      onImportMembers={onImportMembers}
+      onReload={onReload}
       lockedGuild={lockedGuild}
       canViewAllGuilds={canViewAllGuilds}
     />

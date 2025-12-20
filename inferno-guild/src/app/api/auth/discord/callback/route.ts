@@ -22,8 +22,16 @@ function resolveGuildFromRoles(roles: string[]): number | null {
   return null;
 }
 
-function isAdminByRoles(roles: string[]): boolean {
+function isSuperAdminByRoles(roles: string[]): boolean {
   return !!env.DISCORD_ADMIN_ROLE_ID && roles.includes(env.DISCORD_ADMIN_ROLE_ID);
+}
+
+function isHeadByRoles(roles: string[]): boolean {
+  return !!(
+    (env.DISCORD_HEAD_1_ROLE_ID && roles.includes(env.DISCORD_HEAD_1_ROLE_ID)) ||
+    (env.DISCORD_HEAD_2_ROLE_ID && roles.includes(env.DISCORD_HEAD_2_ROLE_ID)) ||
+    (env.DISCORD_HEAD_3_ROLE_ID && roles.includes(env.DISCORD_HEAD_3_ROLE_ID))
+  );
 }
 
 function redirectLogin(params: Record<string, string>) {
@@ -40,52 +48,43 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
 
-  if (!code) {
-    return redirectLogin({ error: "missing_code" });
-  }
+  if (!code) return redirectLogin({ error: "missing_code" });
 
   try {
-    // 1) OAuth: code -> token
     const token = await exchangeCodeForToken(code);
-
-    // 2) token -> discord user
     const user = await fetchDiscordUser(token.access_token);
 
-    // 3) fetch guild member (roles + nick)
     const member = await fetchGuildMember(user.id);
-
     if (!member || member.inGuild === false) {
       return redirectLogin({ error: "not_in_guild" });
     }
 
     const roles = Array.isArray(member.roles) ? member.roles : [];
 
-    // 4) resolve guild
     const guild = resolveGuildFromRoles(roles);
-    if (!guild) {
-      return redirectLogin({ error: "not_in_guild" });
-    }
+    if (!guild) return redirectLogin({ error: "not_in_guild" });
 
-    const isAdmin = isAdminByRoles(roles);
+    const isAdmin = isSuperAdminByRoles(roles); // super admin
+    const isHead = isHeadByRoles(roles);        // head
+
+    // NOTE: access /admin is allowed for (isAdmin || isHead) via middleware.
+
     const displayName = member.nick || user.global_name || user.username;
-
-    // ✅ avatarUrl อาจ undefined ได้ → ปล่อยให้ optional
     const avatarUrl = avatarUrlOf(user.id, user.avatar);
 
-    // 5) create session
     const sid = await createSession({
       discordUserId: user.id,
       displayName,
       avatarUrl,
-      isAdmin,
       guild,
+      isAdmin,
+      isHead,
       roles,
     });
 
-    // 6) set cookie
     const isProd = process.env.NODE_ENV === "production";
-
     const res = NextResponse.redirect(`${env.BASE_URL}/me`);
+
     res.cookies.set({
       name: env.AUTH_COOKIE_NAME,
       value: sid,

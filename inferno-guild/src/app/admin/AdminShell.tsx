@@ -1,198 +1,147 @@
 "use client";
 
-// src/app/admin/AdminShell.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useTheme } from "@/app/theme/ThemeProvider";
-import {
-  Home,
-  Users,
-  Sword,
-  CalendarDays,
-  ClipboardList,
-  Menu,
-  Sun,
-  Moon,
-  ChevronRight,
-} from "lucide-react";
+import { LayoutDashboard, Users, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
+import { Button } from "@/app/components/UI";
+import { useTheme } from "@/app/theme/ThemeProvider";
+
+type MeRes = {
+  ok: boolean;
+  user?: {
+    discordUserId: string;
+    displayName: string;
+    avatarUrl: string;
+    guild: number;
+    isAdmin: boolean;
+    isHead: boolean;
+  };
 };
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { theme, resolvedTheme, toggleTheme, mounted } = useTheme();
+  const { theme, toggleTheme } = useTheme();
 
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [sidebarLocked, setSidebarLocked] = useState(true);
-  const [sidebarHover, setSidebarHover] = useState(false);
+  const [me, setMe] = useState<MeRes | null>(null);
+  const [openProfile, setOpenProfile] = useState(false);
 
-  const isDesktopExpanded = sidebarLocked || sidebarHover;
+  useEffect(() => {
+    fetch("/api/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setMe(j as MeRes))
+      .catch(() => setMe({ ok: false }));
+  }, []);
 
-  const nav: NavItem[] = useMemo(
+  const roleLabel = useMemo(() => {
+    if (!me?.ok) return null;
+    if (me.user?.isAdmin) return "Admin";
+    if (me.user?.isHead) return "Head";
+    return "Member";
+  }, [me]);
+
+  async function logout() {
+    try {
+      await fetch("/api/logout", { method: "POST" });
+    } finally {
+      location.href = "/login";
+    }
+  }
+
+  const items = useMemo(
     () => [
-      { href: "/admin/dashboard", label: "แดชบอร์ด", icon: Home },
-      { href: "/admin/members", label: "สมาชิก", icon: Users },
-      { href: "/admin/war-builder", label: "จัดทัพวอ", icon: Sword },
-      { href: "/admin/leaves", label: "จัดการการลา", icon: ClipboardList },
-      { href: "/admin/history", label: "คลังข้อมูลสงคราม", icon: CalendarDays },
-      { href: "/admin/regular-wars", label: "ประวัติวอ-ธรรมดา", icon: CalendarDays },
+      { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/admin/members", label: "Members", icon: Users },
     ],
-    []
+    [],
   );
 
-  const title = useMemo(() => {
-    const hit = nav.find((n) => pathname?.startsWith(n.href));
-    return hit?.label ?? "Admin";
-  }, [pathname, nav]);
-
   return (
-    <div className="flex h-screen overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-      {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 w-full h-16 z-50 flex items-center justify-between px-4 border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setMobileOpen((v) => !v)}
-            className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            aria-label="Toggle menu"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-          <span className="text-lg font-bold text-red-700 dark:text-red-400 rpg-font">
-            INFERNO
-          </span>
-        </div>
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <div className="flex">
+        <aside className="w-64 p-4 hidden md:block">
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/50 backdrop-blur p-4 sticky top-4">
+            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Inferno Admin</div>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Manage guild data</div>
 
-        <button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900"
-            aria-label="Toggle theme"
-            >
-            {!mounted ? null : resolvedTheme === "dark" ? (
-                <Sun className="w-5 h-5" />
-            ) : (
-                <Moon className="w-5 h-5" />
-            )}
-            </button>
-      </div>
+            <nav className="mt-4 space-y-1">
+              {items.map((it) => {
+                const active = pathname === it.href || (it.href !== "/admin" && pathname?.startsWith(it.href));
+                const Icon = it.icon;
+                return (
+                  <Link
+                    key={it.href}
+                    href={it.href}
+                    className={[
+                      "flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition",
+                      active
+                        ? "bg-red-600 text-white border-red-600"
+                        : "bg-white/50 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-transparent hover:border-zinc-200 dark:hover:border-zinc-800",
+                    ].join(" ")}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {it.label}
+                  </Link>
+                );
+              })}
+            </nav>
 
-      {/* Sidebar */}
-      <aside
-        className={[
-          "fixed inset-y-0 left-0 z-40",
-          "border-r shadow-xl md:shadow-none",
-          "bg-white dark:bg-zinc-950",
-          "border-zinc-200 dark:border-zinc-800",
-          "transform transition-all duration-300 ease-in-out",
-          mobileOpen ? "translate-x-0" : "-translate-x-full",
-          "md:relative md:translate-x-0",
-          isDesktopExpanded ? "md:w-64" : "md:w-20",
-        ].join(" ")}
-        onMouseEnter={() => setSidebarHover(true)}
-        onMouseLeave={() => setSidebarHover(false)}
-      >
-        {/* Sidebar top */}
-        <div className="p-4 h-16 flex items-center gap-3 overflow-hidden whitespace-nowrap border-b border-zinc-100 dark:border-zinc-900">
-          <button
-            onClick={() => setSidebarLocked((v) => !v)}
-            className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-200 transition-colors"
-            aria-label="Lock sidebar"
-            title="ขยาย/ย่อเมนู"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
+            <div className="mt-6 border-t border-zinc-200 dark:border-zinc-800 pt-4 space-y-2">
+              <Button variant="outline" className="w-full justify-center" onClick={toggleTheme}>
+                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                สลับธีม
+              </Button>
 
-          <div className={`transition-all duration-300 ${isDesktopExpanded ? "opacity-100 w-auto" : "opacity-0 w-0"}`}>
-            <h1 className="text-xl font-bold rpg-font tracking-wider">INFERNO</h1>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 -mt-1">
-              Guild Manager
-            </p>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenProfile((v) => !v)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/40"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={me?.user?.avatarUrl ?? "/favicon.ico"}
+                    alt="avatar"
+                    className="h-8 w-8 rounded-xl border border-zinc-200 dark:border-zinc-800"
+                  />
+                  <div className="min-w-0 flex-1 text-left">
+                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                      {me?.user?.displayName ?? "Guest"}
+                    </div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                      {roleLabel ?? "-"} • Guild {me?.user?.guild ?? "-"}
+                    </div>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-zinc-500" />
+                </button>
+
+                {openProfile ? (
+                  <div className="absolute left-0 right-0 mt-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-lg overflow-hidden z-20">
+                    <Link
+                      href="/me"
+                      className="block px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      onClick={() => setOpenProfile(false)}
+                    >
+                      ไปหน้าโปรไฟล์
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="w-full text-left px-4 py-3 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      ออกจากระบบ
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
-        </div>
+        </aside>
 
-        {/* Nav */}
-        <nav className="mt-4 space-y-1 px-2">
-          {nav.map((item) => {
-            const active = pathname?.startsWith(item.href);
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={[
-                  "relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
-                  "text-sm font-medium transition-all overflow-hidden whitespace-nowrap",
-                  active
-                    ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
-                    : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:text-zinc-100 dark:hover:bg-zinc-900/60",
-                ].join(" ")}
-                title={!isDesktopExpanded ? item.label : ""}
-              >
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-zinc-100 dark:bg-zinc-900">
-                  <Icon className={active ? "w-5 h-5 text-red-600 dark:text-red-300" : "w-5 h-5"} />
-                </div>
-
-                <span className={`transition-all duration-300 ${isDesktopExpanded ? "opacity-100" : "opacity-0 w-0"}`}>
-                  {item.label}
-                </span>
-
-                <ChevronRight
-                  className={[
-                    "ml-auto w-4 h-4 transition-all",
-                    isDesktopExpanded ? "opacity-60" : "opacity-0",
-                  ].join(" ")}
-                />
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Sidebar footer */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-zinc-100 dark:border-zinc-900">
-          <button
-            onClick={toggleTheme}
-            className={[
-              "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg",
-              "hover:bg-zinc-50 dark:hover:bg-zinc-900/60",
-              "text-sm text-zinc-700 dark:text-zinc-200",
-            ].join(" ")}
-          >
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-zinc-100 dark:bg-zinc-900">
-            {!mounted ? null : resolvedTheme === "dark" ? (
-                <Sun className="w-5 h-5" />
-            ) : (
-                <Moon className="w-5 h-5" />
-            )}
-            </div>
-
-            <span className={`${isDesktopExpanded ? "opacity-100" : "opacity-0 w-0"} transition-all duration-300`}>
-            สลับโหมด {mounted ? (resolvedTheme === "dark" ? "สว่าง" : "มืด") : ""}
-            </span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="flex-1 overflow-y-auto h-full pt-16 md:pt-0 bg-white dark:bg-zinc-950 relative">
-        <div className="min-h-full w-full p-4 md:p-8 max-w-7xl mx-auto">
-          <header className="mb-6 flex items-end justify-between">
-            <div>
-              <h2 className="text-3xl font-bold rpg-font">{title}</h2>
-              <p className="text-zinc-500 dark:text-zinc-400">
-                จัดการกิลด์ของคุณอย่างมีประสิทธิภาพ
-              </p>
-            </div>
-          </header>
-
-          {children}
-        </div>
-      </main>
+        <main className="flex-1 p-4 md:p-6">{children}</main>
+      </div>
     </div>
   );
 }
