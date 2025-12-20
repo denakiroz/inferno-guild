@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/sync-discord-members",
-      "schedule": "*/10 * * * *"
+      "schedule": "5 0 * * *"
     }
   ]
 }
