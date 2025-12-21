@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
+import { LayoutDashboard, Users, LogOut, ChevronDown, Moon, Sun, Swords } from "lucide-react";
 
 import { Button } from "@/app/components/UI";
 import { useTheme } from "@/app/theme/ThemeProvider";
@@ -53,6 +53,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     () => [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/members", label: "Members", icon: Users },
+      { href: "/admin/war-builder", label: "War Builder", icon: Swords },
     ],
     [],
   );

@@ -7,6 +7,12 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
+/**
+ * Keep shape compatible with old response.
+ * - Return members with class join
+ * - Do NOT return inactive members
+ * - Allow optional guild filter via query param (?guild=1)
+ */
 const SELECT_MEMBER_WITH_CLASS = `
   id,
   name,
@@ -21,6 +27,8 @@ const SELECT_MEMBER_WITH_CLASS = `
   guild,
   discord_user_id,
   status,
+  special_text,
+  remark,
   class:class!member_class_id_fkey(
     id,
     name,
@@ -28,31 +36,33 @@ const SELECT_MEMBER_WITH_CLASS = `
   )
 `;
 
-export async function GET() {
-  // Next 16 บาง setup cookies() เป็น async → ใช้ await ให้ชัวร์
+function normalizeStatusForFilter(status: unknown): string {
+  if (status === null || status === undefined) return "active";
+  return String(status).toLowerCase();
+}
+
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const guild = url.searchParams.get("guild"); // optional
+
   const cookieStore = await cookies();
   const sid = cookieStore.get(env.AUTH_COOKIE_NAME)?.value;
 
-  if (!sid) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!sid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const session = await getSession(sid);
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!session.isAdmin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session.isAdmin && !session.isHead) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { data: members, error: memErr } = await supabaseAdmin
-    .from("member")
-    .select(SELECT_MEMBER_WITH_CLASS)
-    .order("id", { ascending: true });
+  let q = supabaseAdmin.from("member").select(SELECT_MEMBER_WITH_CLASS).order("id", { ascending: true });
 
-  if (memErr) {
-    return NextResponse.json({ error: memErr.message }, { status: 500 });
-  }
+  if (guild) q = q.eq("guild", Number(guild));
+
+  const { data: rawMembers, error: memErr } = await q;
+
+  if (memErr) return NextResponse.json({ error: memErr.message }, { status: 500 });
+
+  const members = (rawMembers ?? []).filter((m: any) => normalizeStatusForFilter(m?.status) !== "inactive");
 
   const { data: leaves, error: leaveErr } = await supabaseAdmin
     .from("leave")
@@ -60,15 +70,8 @@ export async function GET() {
     .order("date_time", { ascending: false });
 
   if (leaveErr) {
-    // leaves พังไม่ควรทำให้ทั้งหน้าพัง
-    return NextResponse.json(
-      { members: members ?? [], leaves: [] },
-      { status: 200 }
-    );
+    return NextResponse.json({ members, leaves: [] }, { status: 200 });
   }
 
-  return NextResponse.json(
-    { members: members ?? [], leaves: leaves ?? [] },
-    { status: 200 }
-  );
+  return NextResponse.json({ members, leaves: leaves ?? [] }, { status: 200 });
 }
