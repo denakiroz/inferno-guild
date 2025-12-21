@@ -104,6 +104,7 @@ export default function MePage() {
   const [myLeaves, setMyLeaves] = useState<DbLeave[]>([]);
 
   const [saving, setSaving] = useState(false);
+  const [saveOk, setSaveOk] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const [leaveErr, setLeaveErr] = useState<string | null>(null);
@@ -134,6 +135,12 @@ export default function MePage() {
     withZero.sort((a, b) => a.id - b.id);
     setClasses(withZero);
   }
+
+  useEffect(() => {
+    if (!saveOk) return;
+    const t = setTimeout(() => setSaveOk(false), 2000);
+    return () => clearTimeout(t);
+  }, [saveOk]);
 
   // โหลดข้อมูลทั้งหมด
   useEffect(() => {
@@ -189,6 +196,11 @@ export default function MePage() {
   const canAdmin = !!me?.user?.isAdmin;
   const canAccessAdmin = !!(me?.user?.isAdmin || me?.user?.isHead);
 
+  function getAuthDisplayName(): string {
+    const n = String(me?.user?.displayName ?? "").trim();
+    return n;
+  }
+
   async function onSaveProfile() {
     if (!member) return;
     setSaving(true);
@@ -198,9 +210,13 @@ export default function MePage() {
       const selectedClassId = Number(classId) || 0;
       const selectedClassName = classes.find((c) => c.id === selectedClassId)?.name ?? "";
 
-      // ✅ อัปเดต local state ให้มีทั้ง class_id และ class (กัน API เดิมที่ยังรับ string)
+      // ✅ เอาชื่อจาก authorize มาก่อน (กันชื่อใน DB ไม่ตรง)
+      const authName = getAuthDisplayName();
+      const finalName = authName || String(member.name ?? "").trim();
+
       const nextMember: MemberRow = {
         ...member,
+        name: finalName,            // ✅ สำคัญ: sync name ก่อน save
         class_id: selectedClassId,
         class: selectedClassName,
       };
@@ -210,11 +226,8 @@ export default function MePage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // ✅ ชื่อถูก disable ไม่ให้แก้ แต่ส่งไปก็ไม่เป็นไร
-          name: nextMember.name,
+          name: nextMember.name,     // ตอนนี้จะเป็นชื่อจาก authorize แล้ว
           power: nextMember.power,
-
-          // ✅ ส่งทั้ง 2 แบบเพื่อ backward-compatible
           class_id: nextMember.class_id,
           class: nextMember.class,
         }),
@@ -226,6 +239,7 @@ export default function MePage() {
     } catch (e: any) {
       setErr(String(e.message ?? e));
     } finally {
+      setSaveOk(true);
       setSaving(false);
     }
   }
@@ -310,6 +324,16 @@ export default function MePage() {
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6">
       <div className="mx-auto max-w-3xl space-y-6">
+        {saveOk && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed top-4 right-4 z-50 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-lg
+                      dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200"
+          >
+            บันทึกสำเร็จ
+          </div>
+        )}
         <Card>
           <div className="flex items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
