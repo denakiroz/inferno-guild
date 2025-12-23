@@ -34,7 +34,7 @@ export function DiscordLoginButton() {
                  shadow-[0_0_30px_rgba(88,101,242,0.35)] transition-all flex items-center justify-center gap-3
                  disabled:opacity-70 disabled:cursor-not-allowed"
     >
-      <span>{loading ? "Redirecting..." : "Sign in with Discord1"}</span>
+      <span>{loading ? "Redirecting..." : "Sign in with Discord"}</span>
     </button>
   );
 }
