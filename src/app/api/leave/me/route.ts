@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 
 const BKK_TZ = "Asia/Bangkok";
 
+// yyyy-mm-dd (Bangkok)
 const bkkDateFmt = new Intl.DateTimeFormat("en-CA", {
   timeZone: BKK_TZ,
   year: "numeric",
@@ -15,7 +16,18 @@ const bkkDateFmt = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 function bkkDateOf(date: Date) {
-  return bkkDateFmt.format(date); // YYYY-MM-DD (Bangkok)
+  return bkkDateFmt.format(date);
+}
+
+// HH:MM (Bangkok)
+const bkkTimeFmt = new Intl.DateTimeFormat("en-GB", {
+  timeZone: BKK_TZ,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+function bkkNowHHMM() {
+  return bkkTimeFmt.format(new Date()); // "20:05"
 }
 
 async function requireSession() {
@@ -37,13 +49,12 @@ async function getMyMemberId(discordUserId: string) {
   if (error) throw new Error(error.message);
   if (!data?.id) return null;
 
-  // int8 อาจกลับมาเป็น string => บังคับเป็น number
   const idNum = Number(data.id);
   return Number.isFinite(idNum) ? idNum : null;
 }
 
 /**
- * GET: list my leaves
+ * GET: list my leaves (เฉพาะ Active)
  */
 export async function GET() {
   try {
@@ -54,26 +65,25 @@ export async function GET() {
     if (!memberId) return NextResponse.json({ ok: true, leaves: [] });
 
     const { data, error } = await supabaseAdmin
-      .from("leave") // ✅ ตารางจริงคือ leave
-      .select("id, member_id, date_time, reason")
+      .from("leave")
+      .select("id, member_id, date_time, reason, status, update_date")
       .eq("member_id", memberId)
+      .eq("status", "Active")
       .order("date_time", { ascending: true });
 
     if (error) throw new Error(error.message);
 
     return NextResponse.json({ ok: true, leaves: data ?? [] });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: String(e.message ?? e) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: String(e.message ?? e) }, { status: 500 });
   }
 }
 
 type LeaveCreateRow = { date_time: string; reason: string | null };
 
 /**
- * POST: create my leaves (de-dupe member_id + date_time)
+ * POST: create my leaves
+ * ✅ ใช้ upsert (member_id,date_time) เพื่อไม่ชน unique constraint และ "ชุบ Cancel กลับเป็น Active"
  * body: { rows: [{date_time, reason}, ...] }
  */
 export async function POST(req: Request) {
@@ -82,22 +92,15 @@ export async function POST(req: Request) {
     if (!session) return NextResponse.json({ ok: false }, { status: 401 });
 
     const memberId = await getMyMemberId(session.discordUserId);
-    if (!memberId)
-      return NextResponse.json(
-        { ok: false, error: "member_not_found" },
-        { status: 400 }
-      );
+    if (!memberId) {
+      return NextResponse.json({ ok: false, error: "member_not_found" }, { status: 400 });
+    }
 
-    const body = (await req.json().catch(() => null)) as
-      | { rows?: LeaveCreateRow[] }
-      | null;
+    const body = (await req.json().catch(() => null)) as { rows?: LeaveCreateRow[] } | null;
 
     const rows = body?.rows ?? [];
     if (!Array.isArray(rows) || rows.length === 0) {
-      return NextResponse.json(
-        { ok: false, error: "rows_required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "rows_required" }, { status: 400 });
     }
 
     const want = rows
@@ -108,122 +111,108 @@ export async function POST(req: Request) {
       .filter((r) => !!r.date_time);
 
     if (want.length === 0) {
-      return NextResponse.json(
-        { ok: false, error: "invalid_rows" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "invalid_rows" }, { status: 400 });
     }
 
-    // ✅ De-dupe (member_id + date_time)
-    const wantDateTimes = Array.from(new Set(want.map((r) => r.date_time)));
+    const nowIso = new Date().toISOString();
 
-    const { data: existing, error: existingErr } = await supabaseAdmin
-      .from("leave") // ✅ ต้องเป็น leave
-      .select("id, date_time")
-      .eq("member_id", memberId)
-      .in("date_time", wantDateTimes);
+    const upsertRows = want.map((r) => ({
+      member_id: memberId,
+      date_time: r.date_time,
+      reason: r.reason,
+      status: "Active",
+      update_date: nowIso,
+    }));
 
-    if (existingErr) throw new Error(existingErr.message);
+    const { error: upErr } = await supabaseAdmin
+      .from("leave")
+      .upsert(upsertRows, { onConflict: "member_id,date_time" });
 
-    const existingSet = new Set(
-      (existing ?? []).map((x: any) => String(x.date_time))
-    );
+    if (upErr) throw new Error(upErr.message);
 
-    const toInsert = want
-      .filter((r) => !existingSet.has(r.date_time))
-      .map((r) => ({
-        member_id: memberId,
-        date_time: r.date_time,
-        reason: r.reason,
-      }));
-
-    if (toInsert.length === 0) {
-      return NextResponse.json({ ok: true, inserted: 0 });
-    }
-
-    const { error: insErr } = await supabaseAdmin.from("leave").insert(toInsert);
-    if (insErr) throw new Error(insErr.message);
-
-    return NextResponse.json({ ok: true, inserted: toInsert.length });
+    return NextResponse.json({ ok: true, upserted: upsertRows.length });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: String(e.message ?? e) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: String(e.message ?? e) }, { status: 500 });
   }
 }
 
 /**
- * DELETE: cancel my leaves by ids
- * เงื่อนไข: ยกเลิกได้เฉพาะ "วันนี้-อนาคต" (ตามวัน Bangkok)
+ * PATCH: cancel my leaves by ids (soft-cancel)
+ * เงื่อนไข:
+ * - อนุญาต: อนาคต (ทุกเวลา)
+ * - อนุญาต: วันนี้ เฉพาะก่อน 20:00 (เวลาไทย)
+ * - ไม่อนุญาต: อดีต
  * body: { leaveIds: number[] }
  */
-export async function DELETE(req: Request) {
+export async function PATCH(req: Request) {
   try {
     const session = await requireSession();
     if (!session) return NextResponse.json({ ok: false }, { status: 401 });
 
     const memberId = await getMyMemberId(session.discordUserId);
-    if (!memberId)
-      return NextResponse.json(
-        { ok: false, error: "member_not_found" },
-        { status: 400 }
-      );
+    if (!memberId) {
+      return NextResponse.json({ ok: false, error: "member_not_found" }, { status: 400 });
+    }
 
-    const body = (await req.json().catch(() => null)) as
-      | { leaveIds?: number[] }
-      | null;
+    const body = (await req.json().catch(() => null)) as { leaveIds?: number[] } | null;
 
     const leaveIds = body?.leaveIds ?? [];
     if (!Array.isArray(leaveIds) || leaveIds.length === 0) {
-      return NextResponse.json(
-        { ok: false, error: "leaveIds_required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "leaveIds_required" }, { status: 400 });
     }
 
+    // เลือกเฉพาะของตัวเอง + เฉพาะ Active
     const { data: leaves, error: selErr } = await supabaseAdmin
-      .from("leave") // ✅ ต้องเป็น leave
-      .select("id, date_time")
+      .from("leave")
+      .select("id, date_time, status")
       .eq("member_id", memberId)
+      .eq("status", "Active")
       .in("id", leaveIds);
 
     if (selErr) throw new Error(selErr.message);
 
     const todayBkk = bkkDateOf(new Date());
+    const nowHHMM = bkkNowHHMM();
+    const isAfterCutoff = nowHHMM >= "20:00";
 
     const allowedIds = (leaves ?? [])
       .filter((l: any) => {
-        const d = bkkDateOf(new Date(String(l.date_time)));
-        return d >= todayBkk; // ✅ วันนี้-อนาคตเท่านั้น
+        const leaveDateBkk = bkkDateOf(new Date(String(l.date_time)));
+
+        if (leaveDateBkk < todayBkk) return false; // อดีต
+        if (leaveDateBkk > todayBkk) return true; // อนาคต
+        return !isAfterCutoff; // วันนี้ก่อน 20:00 เท่านั้น
       })
       .map((l: any) => Number(l.id))
       .filter((x) => Number.isFinite(x));
 
     if (allowedIds.length === 0) {
       return NextResponse.json(
-        { ok: false, error: "cannot_cancel_past_leave" },
+        { ok: false, error: isAfterCutoff ? "cannot_cancel_today_after_20" : "cannot_cancel_past_leave" },
         { status: 400 }
       );
     }
 
-    const { error: delErr } = await supabaseAdmin
-      .from("leave") // ✅ ต้องเป็น leave
-      .delete()
+    const { error: updErr } = await supabaseAdmin
+      .from("leave")
+      .update({
+        status: "Cancel",
+        update_date: new Date().toISOString(),
+      })
       .eq("member_id", memberId)
       .in("id", allowedIds);
 
-    if (delErr) throw new Error(delErr.message);
+    if (updErr) throw new Error(updErr.message);
 
-    return NextResponse.json({
-      ok: true,
-      deleted: allowedIds.length,
-      ids: allowedIds,
-    });
+    return NextResponse.json({ ok: true, canceled: allowedIds.length, ids: allowedIds });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: String(e.message ?? e) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: String(e.message ?? e) }, { status: 500 });
   }
+}
+
+/**
+ * DELETE: ไม่ใช้แล้ว
+ */
+export async function DELETE() {
+  return NextResponse.json({ ok: false, error: "method_not_allowed" }, { status: 405 });
 }

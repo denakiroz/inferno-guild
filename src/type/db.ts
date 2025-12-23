@@ -31,4 +31,6 @@ export type DbLeave = {
   member_id: number;
   date_time: string;
   reason: string | null;
+  update_date: string| null;
+  status: string| null;
 };

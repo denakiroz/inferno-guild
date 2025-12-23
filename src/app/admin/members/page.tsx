@@ -1,7 +1,6 @@
 // src/app/admin/members/page.tsx
 import AdminMembersClient from "./AdminMembersClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import type { DbLeave, DbMember } from "@/type/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@/lib/env";
@@ -31,6 +30,15 @@ const SELECT_MEMBER_WITH_CLASS = `
   )
 `;
 
+const SELECT_LEAVE = `
+  id,
+  date_time,
+  member_id,
+  reason,
+  status,
+  update_date
+`;
+
 export default async function AdminMembersPage() {
   const sid = (await cookies()).get(env.AUTH_COOKIE_NAME)?.value;
   if (!sid) redirect("/login?next=/admin/members");
@@ -44,11 +52,18 @@ export default async function AdminMembersPage() {
   // ✅ admin: SSR เห็นทั้งหมดเหมือนเดิม
   const { data: members, error: memErr } = await supabaseAdmin
     .from("member")
-    .select(/* SELECT_MEMBER_WITH_CLASS */)
+    .select(SELECT_MEMBER_WITH_CLASS)
     .order("id", { ascending: true });
 
   if (memErr) return <div className="p-6 text-sm">Failed to load members: {memErr.message}</div>;
 
-  const { data: leaves } = await supabaseAdmin.from("leave").select("id,date_time,member_id,reason");
-  return <AdminMembersClient members={(members ?? []) as any} leaves={(leaves ?? []) as any} />;
+  const { data: leaves, error: leaveErr } = await supabaseAdmin
+    .from("leave")
+    .select(SELECT_LEAVE)
+    .order("date_time", { ascending: false });
+
+  // กันพัง เผื่อ leave error
+  const safeLeaves = leaveErr ? [] : (leaves ?? []);
+
+  return <AdminMembersClient members={(members ?? []) as any} leaves={safeLeaves as any} />;
 }

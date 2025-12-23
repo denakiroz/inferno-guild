@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Moon, Sun, Trash2, LogOut } from "lucide-react";
 
-import { Button, Card, Input, Select } from "@/app/components/UI";
+import { Button, Card, Input, Select, Modal } from "@/app/components/UI";
 import LeaveRequestButton, { type LeaveCreateRow } from "@/app/components/LeaveRequestButton";
 import { useTheme } from "@/app/theme/ThemeProvider";
+import type { DbLeave } from "@/type/db";
 
 type MeRes = {
   ok: boolean;
@@ -32,16 +33,8 @@ type MemberRow = {
   is_special: boolean;
   guild: number;
 
-  // ✅ รองรับทั้งของเดิมและของใหม่ (กันพัง)
   class?: string; // legacy
   class_id?: number; // preferred
-};
-
-type DbLeave = {
-  id: number;
-  member_id: number;
-  date_time: string; // ISO
-  reason: string | null;
 };
 
 const BKK_TZ = "Asia/Bangkok";
@@ -89,6 +82,25 @@ function prettyDate(dateStr: string) {
   });
 }
 
+// HH:MM (Bangkok)
+const bkkTimeFmt = new Intl.DateTimeFormat("en-GB", {
+  timeZone: BKK_TZ,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+function bkkNowHHMM() {
+  return bkkTimeFmt.format(new Date()); // "20:05"
+}
+
+// rule: อดีตห้าม, อนาคตได้, วันนี้ได้ก่อน 20:00
+function canCancelLeave(dateYYYYMMDD: string) {
+  const today = bkkDateOf(new Date());
+  if (dateYYYYMMDD < today) return false;
+  if (dateYYYYMMDD > today) return true;
+  return bkkNowHHMM() < "20:00";
+}
+
 type LeaveMeRes = { ok: true; leaves: DbLeave[] } | { ok: false; error?: string };
 type ClassListRes = { ok: true; classes: ClassRow[] } | { ok: false; error?: string };
 
@@ -99,7 +111,7 @@ export default function MePage() {
   const [member, setMember] = useState<MemberRow | null>(null);
 
   const [classes, setClasses] = useState<ClassRow[]>([]);
-  const [classId, setClassId] = useState<string>("0"); // controlled Select
+  const [classId, setClassId] = useState<string>("0");
 
   const [myLeaves, setMyLeaves] = useState<DbLeave[]>([]);
 
@@ -111,7 +123,22 @@ export default function MePage() {
   const [canceling, setCanceling] = useState<number | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // ✅ confirm cancel
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<{
+    id: number;
+    date: string;
+    time: string;
+    label: string;
+  } | null>(null);
+
   const todayBkk = useMemo(() => bkkDateOf(new Date()), []);
+
+  // ✅ ใช้เฉพาะใบลาที่ "ยัง Active" สำหรับ logic/disable/ตาราง
+  const activeLeaves = useMemo(
+    () => (myLeaves ?? []).filter((l) => String(l.status ?? "Active") !== "Cancel"),
+    [myLeaves]
+  );
 
   async function reloadLeaves() {
     const r = await fetch("/api/leave/me", { cache: "no-store" });
@@ -126,11 +153,8 @@ export default function MePage() {
     if (!j.ok) throw new Error(j.error ?? "load_class_failed");
 
     const normalized = Array.isArray(j.classes) ? j.classes : [];
-    // ✅ บังคับให้มี id=0 เสมอ
     const hasZero = normalized.some((c) => c.id === 0);
-    const withZero = hasZero
-      ? normalized
-      : [{ id: 0, name: "ยังไม่เลือกอาชีพ", icon_url: null }, ...normalized];
+    const withZero = hasZero ? normalized : [{ id: 0, name: "ยังไม่เลือกอาชีพ", icon_url: null }, ...normalized];
 
     withZero.sort((a, b) => a.id - b.id);
     setClasses(withZero);
@@ -142,7 +166,6 @@ export default function MePage() {
     return () => clearTimeout(t);
   }, [saveOk]);
 
-  // โหลดข้อมูลทั้งหมด
   useEffect(() => {
     (async () => {
       const r1 = await fetch("/api/me", { cache: "no-store" });
@@ -151,7 +174,6 @@ export default function MePage() {
 
       if (!j1.ok) return;
 
-      // โหลดพร้อมกัน
       await Promise.all([
         (async () => {
           const r2 = await fetch("/api/member/me", { cache: "no-store" });
@@ -165,18 +187,15 @@ export default function MePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ sync classId จาก member + master (รองรับทั้ง class_id และ class name)
   useEffect(() => {
     if (!member) return;
 
-    // 1) ถ้ามี class_id อยู่แล้ว ใช้เลย
     const cid = Number(member.class_id);
     if (Number.isFinite(cid)) {
       setClassId(String(cid));
       return;
     }
 
-    // 2) ถ้าเป็นของเดิม (class เป็น string) ให้ map จากชื่อ -> id
     const name = String(member.class ?? "").trim();
     if (!name) {
       setClassId("0");
@@ -186,7 +205,7 @@ export default function MePage() {
     if (hit) setClassId(String(hit.id));
     else setClassId("0");
   }, [member, classes]);
-  
+
   const selectedClassIconUrl = useMemo(() => {
     const cid = Number(classId) || 0;
     const row = classes.find((c) => c.id === cid);
@@ -197,8 +216,7 @@ export default function MePage() {
   const canAccessAdmin = !!(me?.user?.isAdmin || me?.user?.isHead);
 
   function getAuthDisplayName(): string {
-    const n = String(me?.user?.displayName ?? "").trim();
-    return n;
+    return String(me?.user?.displayName ?? "").trim();
   }
 
   async function onSaveProfile() {
@@ -210,13 +228,12 @@ export default function MePage() {
       const selectedClassId = Number(classId) || 0;
       const selectedClassName = classes.find((c) => c.id === selectedClassId)?.name ?? "";
 
-      // ✅ เอาชื่อจาก authorize มาก่อน (กันชื่อใน DB ไม่ตรง)
       const authName = getAuthDisplayName();
       const finalName = authName || String(member.name ?? "").trim();
 
       const nextMember: MemberRow = {
         ...member,
-        name: finalName,            // ✅ สำคัญ: sync name ก่อน save
+        name: finalName,
         class_id: selectedClassId,
         class: selectedClassName,
       };
@@ -226,7 +243,7 @@ export default function MePage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: nextMember.name,     // ตอนนี้จะเป็นชื่อจาก authorize แล้ว
+          name: nextMember.name,
           power: nextMember.power,
           class_id: nextMember.class_id,
           class: nextMember.class,
@@ -256,12 +273,13 @@ export default function MePage() {
     await reloadLeaves();
   }
 
+  // ✅ PATCH (soft-cancel)
   async function cancelMyLeave(id: number) {
     setLeaveErr(null);
     setCanceling(id);
     try {
       const res = await fetch("/api/leave/me", {
-        method: "DELETE",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leaveIds: [id] }),
       });
@@ -280,15 +298,22 @@ export default function MePage() {
     try {
       await fetch("/api/logout", { method: "POST" });
     } finally {
-      // ไปหน้า login เสมอ
       location.href = "/login";
     }
   }
 
   const upcomingGrouped = useMemo(() => {
-    const upcoming = myLeaves
+    const nowHHMM = bkkNowHHMM();
+
+    const upcoming = activeLeaves
       .map((l) => ({ l, ...bkkDateTimeParts(String(l.date_time ?? "")) }))
-      .filter((x) => x.date && x.date >= todayBkk)
+      .filter((x) => {
+        if (!x.date) return false;
+
+        if (x.date > todayBkk) return true;
+        if (x.date === todayBkk) return nowHHMM < "20:00"; // หลัง 20:00 ไม่เห็นของวันนี้
+        return false; // อดีตไม่แสดง
+      })
       .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date);
         return a.time.localeCompare(b.time);
@@ -301,7 +326,7 @@ export default function MePage() {
       map.set(x.date, arr);
     }
     return map;
-  }, [myLeaves, todayBkk]);
+  }, [activeLeaves, todayBkk]);
 
   if (!me) return <main className="p-6">Loading...</main>;
 
@@ -334,6 +359,7 @@ export default function MePage() {
             บันทึกสำเร็จ
           </div>
         )}
+
         <Card>
           <div className="flex items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -349,7 +375,6 @@ export default function MePage() {
                   {me.user?.displayName}
                 </div>
 
-                {/* ✅ icon อาชีพหลังชื่อ */}
                 {selectedClassIconUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -365,7 +390,6 @@ export default function MePage() {
               </div>
             </div>
 
-
             {canAccessAdmin && (
               <a href="/admin" className="text-sm underline text-red-600">
                 ไป Admin
@@ -376,7 +400,7 @@ export default function MePage() {
               {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               สลับธีม
             </Button>
-            
+
             <Button variant="outline" onClick={onLogout} disabled={loggingOut}>
               <LogOut className="w-4 h-4 text-rose-600" />
               {loggingOut ? "กำลังออก..." : "Logout"}
@@ -388,9 +412,13 @@ export default function MePage() {
           <div className="flex items-center justify-between gap-3">
             <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">โปรไฟล์</div>
 
-            {/* ✅ ศิษย์เอก: ไม่โชว์ปุ่มลา */}
             {!member?.is_special ? (
-              <LeaveRequestButton memberName={member?.name ?? "ฉัน"} existingLeaves={myLeaves} onCreate={createMyLeave} />
+              <LeaveRequestButton
+                memberName={member?.name ?? "ฉัน"}
+                // ✅ สำคัญ: ส่งเฉพาะ Active ไม่งั้นวันเดิมจะถูก disable ทั้งที่เคย Cancel แล้ว
+                existingLeaves={activeLeaves}
+                onCreate={createMyLeave}
+              />
             ) : null}
           </div>
 
@@ -406,10 +434,7 @@ export default function MePage() {
 
             <div>
               <div className="text-xs text-zinc-500 mb-1">อาชีพ</div>
-              <Select
-                value={classId}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setClassId(e.target.value)}
-              >
+              <Select value={classId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setClassId(e.target.value)}>
                 {classes.map((c) => (
                   <option key={c.id} value={String(c.id)}>
                     {c.name}
@@ -428,15 +453,12 @@ export default function MePage() {
           </div>
         </Card>
 
-        {/* ✅ ใบลาของฉัน (วันนี้-อนาคต) + ยกเลิกได้ */}
         <Card>
           <div className="flex items-center gap-2">
             <CalendarDays className="w-5 h-5" />
             <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">การลาของฉัน</div>
           </div>
-          <div className="mt-1 text-xs text-zinc-500">
-            ยกเลิกได้เฉพาะ “วันนี้” ถึง “อนาคต” เท่านั้น (ระบบตรวจตามวันที่ในเวลาไทย)
-          </div>
+          <div className="mt-1 text-xs text-zinc-500">ยกเลิกได้เฉพาะ “วันนี้” ก่อน 20:00 และ “อนาคต” เท่านั้น (ตามเวลาไทย)</div>
 
           {leaveErr ? <div className="mt-3 text-sm text-rose-600">Error: {leaveErr}</div> : null}
 
@@ -466,9 +488,12 @@ export default function MePage() {
                           ? time === "20:00"
                             ? "ลาวอ 20:00"
                             : time === "20:30"
-                              ? "ลาวอ 20:30"
-                              : "ลาวอ"
+                            ? "ลาวอ 20:30"
+                            : "ลาวอ"
                           : "ลากิจ";
+
+                        const isCanceled = String(leave.status ?? "Active") === "Cancel";
+                        const canCancel = canCancelLeave(date) && !isCanceled;
 
                         return (
                           <div
@@ -484,11 +509,15 @@ export default function MePage() {
 
                             <Button
                               variant="outline"
-                              onClick={() => cancelMyLeave(leave.id)}
-                              disabled={canceling === leave.id}
+                              disabled={canceling === leave.id || !canCancel}
+                              onClick={() => {
+                                if (!canCancel) return;
+                                setConfirmTarget({ id: leave.id, date, time, label });
+                                setConfirmOpen(true);
+                              }}
                             >
                               <Trash2 className="w-4 h-4" />
-                              {canceling === leave.id ? "กำลังยกเลิก..." : "ยกเลิก"}
+                              {canCancel ? (canceling === leave.id ? "กำลังยกเลิก..." : "ยกเลิก") : "ยกเลิกไม่ได้แล้ว"}
                             </Button>
                           </div>
                         );
@@ -500,6 +529,58 @@ export default function MePage() {
             )}
           </div>
         </Card>
+
+        {/* ✅ Confirm Cancel */}
+        <Modal
+          open={confirmOpen}
+          onClose={() => {
+            setConfirmOpen(false);
+            setConfirmTarget(null);
+          }}
+          title="ยืนยันการยกเลิก"
+        >
+          <div className="space-y-3">
+            <div className="text-sm text-zinc-600 dark:text-zinc-300">
+              ต้องการยกเลิก <span className="font-semibold">{confirmTarget?.label}</span> ใช่หรือไม่
+            </div>
+
+            <div className="text-xs text-zinc-500">
+              วันที่: <span className="font-semibold">{confirmTarget?.date}</span> เวลา:{" "}
+              <span className="font-semibold">{confirmTarget?.time}</span>
+            </div>
+
+            {confirmTarget?.date === bkkDateOf(new Date()) && bkkNowHHMM() >= "20:00" ? (
+              <div className="text-sm text-rose-600">ตอนนี้เกินเวลา 20:00 แล้ว ไม่สามารถยกเลิกของวันนี้ได้</div>
+            ) : null}
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => {
+                  setConfirmOpen(false);
+                  setConfirmTarget(null);
+                }}
+              >
+                กลับ
+              </Button>
+
+              <Button
+                className="flex-1"
+                disabled={!confirmTarget || !canCancelLeave(confirmTarget.date) || canceling === confirmTarget.id}
+                onClick={async () => {
+                  if (!confirmTarget) return;
+                  if (!canCancelLeave(confirmTarget.date)) return;
+                  await cancelMyLeave(confirmTarget.id);
+                  setConfirmOpen(false);
+                  setConfirmTarget(null);
+                }}
+              >
+                {canceling === confirmTarget?.id ? "กำลังยกเลิก..." : "ยกเลิก"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </main>
   );

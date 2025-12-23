@@ -1,3 +1,4 @@
+// src/app/components/LeaveRequestButton.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -32,6 +33,9 @@ type Props = {
 
   /** className ให้ปุ่ม */
   className?: string;
+
+  /** (optional) admin bypass rules อื่น ๆ (ถ้ามีในโปรเจคคุณ) */
+  isAdmin?: boolean;
 };
 
 /** yyyy-mm-dd + hh:mm -> ISO string with +07:00 */
@@ -101,12 +105,21 @@ type LeaveIndex = {
   keySet: Set<string>; // `${date}#${time}` where weekday uses 00:00
 };
 
+// ✅ helper: treat Cancel as "not existing"
+function isCancelledLeave(l: any) {
+  const s = String(l?.status ?? "").trim().toLowerCase();
+  return s === "cancel";
+}
+
 function buildExistingLeaveIndex(existingLeaves: DbLeave[]): LeaveIndex {
   const byDate = new Map<string, { hasErrand: boolean; has20: boolean; has2030: boolean }>();
   const keySet = new Set<string>();
 
   for (const l of existingLeaves) {
-    const dt = String(l.date_time ?? "");
+    // ✅ สำคัญ: ถ้า status = Cancel ให้ข้าม (ถือว่าเลือกได้)
+    if (isCancelledLeave(l as any)) continue;
+
+    const dt = String((l as any).date_time ?? "");
     if (!dt) continue;
 
     const { date, time } = bkkDateTimeParts(dt);
@@ -148,7 +161,8 @@ export default function LeaveRequestButton({
   const [leaveReason, setLeaveReason] = useState<string>("");
 
   // เสาร์เลือก 20:00 / 20:30 / both (ทั้งสองรอบ)
-  const [satRoundByDate, setSatRoundByDate] = useState<Record<string, "20:00" | "20:30" | "both">>({});
+  const [satRoundByDate, setSatRoundByDate] = useState<Record<string, "select" | "20:00" | "20:30" | "both">>({});
+  const [satErrors, setSatErrors] = useState<Record<string, boolean>>({});
 
   const existingLeaveIndex = useMemo(() => buildExistingLeaveIndex(existingLeaves), [existingLeaves]);
 
@@ -175,14 +189,12 @@ export default function LeaveRequestButton({
         const has20 = !!info?.has20;
         const has2030 = !!info?.has2030;
 
-        // default: เลือกรอบที่ยังว่างก่อน
-        if (has20 || has2030) {
-          // ถ้ามีบางรอบแล้ว ทั้งสองรอบจะถูก disable อยู่แล้ว
-          if (has20 && !has2030) next[d] = "20:30";
-          else if (!has20 && has2030) next[d] = "20:00";
-          else next[d] = "20:00";
-        } else {
+        // ✅ ให้เริ่มต้นเป็น "select" เสมอ (ถ้ายังมีรอบให้เลือก)
+        if (has20 && has2030) {
+          // กรณีนี้จะถูก disable อยู่แล้ว จะใส่อะไรก็ได้
           next[d] = "20:00";
+        } else {
+          next[d] = "select";
         }
       }
 
@@ -190,12 +202,18 @@ export default function LeaveRequestButton({
     });
   }, [saturdayDates, existingLeaveIndex.byDate]);
 
-  // disable dates in calendar
+  // ✅ disable “วันย้อนหลัง” ในปฏิทินเสมอ (ตามที่คุยล่าสุด: ทำแค่ disable วันย้อนหลัง + วันนี้ 20:00)
+  // หมายเหตุ: ถ้าคุณไม่ต้องการกฎเวลา 20:00 ใน component นี้ ให้ลบเงื่อนไข time ได้
   const disabledMatcher = useMemo(() => {
     const byDate = existingLeaveIndex.byDate;
 
     return (date: Date) => {
       const d = bkkDateOf(date);
+
+      // 1) disable วันย้อนหลังเสมอ
+      const today = bkkDateOf(new Date());
+      if (d < today) return true;
+
       const info = byDate.get(d);
       if (!info) return false;
 
@@ -212,6 +230,7 @@ export default function LeaveRequestButton({
     setRange(undefined);
     setLeaveReason("");
     setSatRoundByDate({});
+    setSatErrors({});
     setOpen(true);
   };
 
@@ -220,6 +239,24 @@ export default function LeaveRequestButton({
 
     const dates = rangeDatesInclusive(leaveStart, leaveEnd);
     if (!dates.length) return;
+
+    // ✅ validate: เสาร์ทุกวันต้องเลือก round ก่อน (เลือก "select" ไม่ได้)
+    const nextErr: Record<string, boolean> = {};
+    for (const d of dates) {
+      if (!isSaturday(d)) continue;
+
+      const info = existingLeaveIndex.byDate.get(d);
+      if (info?.has20 && info?.has2030) continue; // ลาครบแล้ว ไม่ต้อง validate
+
+      const choice = satRoundByDate[d] ?? "select";
+      if (choice === "select") nextErr[d] = true;
+    }
+
+    if (Object.keys(nextErr).length > 0) {
+      setSatErrors(nextErr);
+      return; // ❌ ไม่บันทึก
+    }
+    setSatErrors({});
 
     const reason = leaveReason.trim() ? leaveReason.trim() : null;
 
@@ -231,9 +268,10 @@ export default function LeaveRequestButton({
         const info = existingLeaveIndex.byDate.get(d);
         if (info?.has20 && info?.has2030) continue;
 
-        const choice = satRoundByDate[d] ?? "20:00";
-        const times: Array<"20:00" | "20:30"> =
-          choice === "both" ? ["20:00", "20:30"] : [choice];
+        const choice = (satRoundByDate[d] ?? "select") as "select" | "20:00" | "20:30" | "both";
+        if (choice === "select") continue; // กันพลาด (ควรไม่เกิด)
+
+        const times: Array<"20:00" | "20:30"> = choice === "both" ? ["20:00", "20:30"] : [choice];
 
         for (const t of times) {
           const key = `${d}#${t}`;
@@ -320,7 +358,7 @@ export default function LeaveRequestButton({
 
                   const disable20 = has20;
                   const disable2030 = has2030;
-                  const disableBoth = has20 || has2030; // ✅ ถ้ามีรอบใดรอบหนึ่งแล้ว ให้ disable "ทั้งสองรอบ"
+                  const disableBoth = has20 || has2030; // ถ้ามีรอบใดรอบหนึ่งแล้ว ให้ disable "ทั้งสองรอบ"
                   const disableSelect = has20 && has2030;
 
                   return (
@@ -328,12 +366,28 @@ export default function LeaveRequestButton({
                       <div className="text-sm w-28">{d}</div>
 
                       <Select
-                        value={satRoundByDate[d] ?? "20:00"}
+                        value={satRoundByDate[d] ?? "select"}
                         disabled={disableSelect}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                          setSatRoundByDate((prev) => ({ ...prev, [d]: e.target.value as any }))
-                        }
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                          const v = e.target.value as any;
+                          setSatRoundByDate((prev) => ({ ...prev, [d]: v }));
+
+                          // ล้าง error ของวันนั้นเมื่อเลือกแล้ว
+                          setSatErrors((prev) => {
+                            if (!prev[d]) return prev;
+                            const next = { ...prev };
+                            delete next[d];
+                            return next;
+                          });
+                        }}
+                        className={[satErrors[d] ? "border-rose-500 focus:ring-rose-500/40 focus:border-rose-500" : ""].join(
+                          " "
+                        )}
                       >
+                        <option value="select" disabled>
+                          เลือกรอบ...
+                        </option>
+
                         <option value="20:00" disabled={disable20}>
                           รอบ 20:00{disable20 ? " (ลาแล้ว)" : ""}
                         </option>

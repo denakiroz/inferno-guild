@@ -66,7 +66,8 @@ export async function GET(req: Request) {
 
   const { data: leaves, error: leaveErr } = await supabaseAdmin
     .from("leave")
-    .select("id,date_time,member_id,reason")
+    // ✅ ดึง status + update_date มาด้วย (สำคัญ)
+    .select("id,date_time,member_id,reason,status,update_date")
     .order("date_time", { ascending: false });
 
   if (leaveErr) {

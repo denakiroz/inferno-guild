@@ -139,6 +139,9 @@ export default function Members({
   const leaveByMemberId = useMemo(() => {
     const map = new Map<number, DbLeave[]>();
     for (const l of leaves) {
+      // ✅ ไม่เอา Cancel
+      if (isCancelLeaveStatus(l.status)) continue;
+
       const arr = map.get(l.member_id) ?? [];
       arr.push(l);
       map.set(l.member_id, arr);
@@ -151,25 +154,31 @@ export default function Members({
     const map = new Map<number, TodayLeaveMeta>();
 
     for (const l of leaves) {
+      // ✅ ไม่เอา Cancel
+      if (isCancelLeaveStatus(l.status)) continue;
+
       const dt = String(l.date_time ?? "");
       if (!dt) continue;
 
       const { date, time } = bkkDateTimeParts(dt);
       if (!date) continue;
 
-      // ✅ นับเฉพาะ “วันนี้” เท่านั้น
       if (date !== todayBkk) continue;
 
       const cur =
-        map.get(l.member_id) ?? { hasErrandToday: false, war20Today: false, war2030Today: false, warLabelToday: null };
+        map.get(l.member_id) ?? {
+          hasErrandToday: false,
+          war20Today: false,
+          war2030Today: false,
+          warLabelToday: null,
+        };
 
       if (isSaturday(date)) {
         if (time === "20:00") cur.war20Today = true;
         if (time === "20:30") cur.war2030Today = true;
 
         // ถ้าเป็นเสาร์ แต่เวลาไม่ใช่ 20:00/20:30 ก็ยังถือว่าเป็น “ลาวอ”
-        const hasAnyWar = cur.war20Today || cur.war2030Today || true;
-        cur.warLabelToday = hasAnyWar ? computeWarLabel(cur.war20Today, cur.war2030Today) : null;
+        cur.warLabelToday = computeWarLabel(cur.war20Today, cur.war2030Today);
       } else {
         cur.hasErrandToday = true;
         cur.warLabelToday = null;
@@ -227,6 +236,11 @@ export default function Members({
     leaveTypeFilter,
     todayMetaByMemberId,
   ]);
+
+  function isCancelLeaveStatus(status?: string | null) {
+    const s = String(status ?? "").trim().toLowerCase();
+    return s === "cancel";
+  }
 
   const openEdit = (m: DbMember) => {
     const cid = m.class_id == null ? "0" : String(m.class_id);
@@ -430,8 +444,14 @@ export default function Members({
                     memberName={m.name}
                     existingLeaves={memberLeaves}
                     onCreate={async (rows: LeaveCreateRow[]) => {
-                      const payload = rows.map((r) => ({ member_id: m.id, date_time: r.date_time, reason: r.reason }));
-                      await leaveService.createMany(payload);
+                      const payload = rows.map((r) => ({
+                        member_id: m.id,
+                        date_time: r.date_time,
+                        reason: r.reason,
+                        status: "Active",
+                        update_date: new Date().toISOString(),
+                      }));
+                      await leaveService.createMany(payload as any);
                     }}
                     onAfterSave={onReload}
                   />

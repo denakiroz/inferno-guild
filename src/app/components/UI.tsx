@@ -123,8 +123,8 @@ Input.displayName = "Input";
 /** Select */
 export const Select = React.forwardRef<
   HTMLSelectElement,
-  React.SelectHTMLAttributes<HTMLSelectElement>
->(({ className, ...props }, ref) => (
+  React.SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }
+>(({ className, invalid, ...props }, ref) => (
   <select
     ref={ref}
     suppressHydrationWarning
@@ -132,6 +132,8 @@ export const Select = React.forwardRef<
       "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm",
       "focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500",
       "dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
+      // ✅ force invalid style
+      invalid ? "!border-rose-500 !focus:border-rose-500 !focus:ring-rose-500/30" : "",
       className
     )}
     {...props}
