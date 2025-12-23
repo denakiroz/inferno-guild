@@ -16,19 +16,16 @@ type DiscordUser = {
 };
 
 export function discordAuthorizeUrl(state: string) {
-  // ✅ ใช้ UI endpoint (ไม่ใช่ /api)
-  const url = new URL("https://discord.com/oauth2/authorize");
+  const url = new URL("https://discord.com/oauth2/authorize"); // ✅ UI endpoint
   url.searchParams.set("client_id", env.DISCORD_CLIENT_ID);
   url.searchParams.set("redirect_uri", env.DISCORD_REDIRECT_URI);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "identify");
   url.searchParams.set("state", state);
-
-  // แนะนำเพิ่มเพื่อให้เด้ง consent ชัด ๆ (โดยเฉพาะถ้าเคย authorize แล้วมันอาจ redirect เงียบ)
-  url.searchParams.set("prompt", "consent");
-
+  url.searchParams.set("prompt", "consent"); // ✅ บังคับให้เห็นหน้า consent
   return url.toString();
 }
+
 
 
 export async function exchangeCodeForToken(code: string): Promise<DiscordTokenResponse> {
