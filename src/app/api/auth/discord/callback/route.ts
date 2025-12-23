@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import {
   avatarUrlOf,
@@ -36,9 +37,7 @@ function isHeadByRoles(roles: string[]): boolean {
 
 function redirectLogin(params: Record<string, string>) {
   const u = new URL("/login", env.BASE_URL);
-  for (const [k, v] of Object.entries(params)) {
-    u.searchParams.set(k, v);
-  }
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   return NextResponse.redirect(u.toString());
 }
 
@@ -47,8 +46,26 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
 
   if (!code) return redirectLogin({ error: "missing_code" });
+
+  // ✅ ตรวจ state (สำคัญมาก โดยเฉพาะมือถือ / in-app browser)
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get("discord_oauth_state")?.value;
+
+  if (!state || !expectedState || state !== expectedState) {
+    // state ไม่ตรง/หาย = ป้องกัน flow หลุดหรือถูกยิงกลับผิด session
+    const res = redirectLogin({ error: "auth_failed", msg: "state_mismatch" });
+    // ล้าง state ทิ้งเพื่อไม่ให้ค้าง
+    res.cookies.set({
+      name: "discord_oauth_state",
+      value: "",
+      path: "/",
+      maxAge: 0,
+    });
+    return res;
+  }
 
   try {
     const token = await exchangeCodeForToken(code);
@@ -56,18 +73,22 @@ export async function GET(req: Request) {
 
     const member = await fetchGuildMember(user.id);
     if (!member || member.inGuild === false) {
-      return redirectLogin({ error: "not_in_guild" });
+      const res = redirectLogin({ error: "not_in_guild" });
+      res.cookies.set({ name: "discord_oauth_state", value: "", path: "/", maxAge: 0 });
+      return res;
     }
 
     const roles = Array.isArray(member.roles) ? member.roles : [];
 
     const guild = resolveGuildFromRoles(roles);
-    if (!guild) return redirectLogin({ error: "not_in_guild" });
+    if (!guild) {
+      const res = redirectLogin({ error: "not_in_guild" });
+      res.cookies.set({ name: "discord_oauth_state", value: "", path: "/", maxAge: 0 });
+      return res;
+    }
 
-    const isAdmin = isSuperAdminByRoles(roles); // super admin
-    const isHead = isHeadByRoles(roles);        // head
-
-    // NOTE: access /admin is allowed for (isAdmin || isHead) via middleware.
+    const isAdmin = isSuperAdminByRoles(roles);
+    const isHead = isHeadByRoles(roles);
 
     const displayName = member.nick || user.global_name || user.username;
     const avatarUrl = avatarUrlOf(user.id, user.avatar);
@@ -85,6 +106,7 @@ export async function GET(req: Request) {
     const isProd = process.env.NODE_ENV === "production";
     const res = NextResponse.redirect(`${env.BASE_URL}/me`);
 
+    // ✅ set session cookie
     res.cookies.set({
       name: env.AUTH_COOKIE_NAME,
       value: sid,
@@ -95,12 +117,23 @@ export async function GET(req: Request) {
       maxAge: env.SESSION_TTL_SECONDS,
     });
 
+    // ✅ ล้าง oauth state cookie ทิ้ง (กัน reuse)
+    res.cookies.set({
+      name: "discord_oauth_state",
+      value: "",
+      path: "/",
+      maxAge: 0,
+    });
+
     return res;
   } catch (e: any) {
     console.error("DISCORD AUTH FAILED:", e);
-    return redirectLogin({
+    const res = redirectLogin({
       error: "auth_failed",
       msg: encodeURIComponent(e?.message || "unknown"),
     });
+    // ล้าง state ทิ้งด้วย
+    res.cookies.set({ name: "discord_oauth_state", value: "", path: "/", maxAge: 0 });
+    return res;
   }
 }
