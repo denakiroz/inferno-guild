@@ -24,32 +24,41 @@ function openCurrentInChrome(url: string) {
   setTimeout(() => window.open(url, "_blank", "noopener,noreferrer"), 1200);
 }
 
-export function LoginInAppNotice() {
+export function LoginInAppNotice({
+  onInAppChange,
+}: {
+  onInAppChange?: (v: boolean) => void;
+}) {
   const [inApp, setInApp] = useState(false);
 
-  const url = useMemo(() => (typeof window === "undefined" ? "" : window.location.href), []);
+  const url = useMemo(
+    () => (typeof window === "undefined" ? "" : window.location.href),
+    []
+  );
 
   useEffect(() => {
     const ua = navigator.userAgent || "";
-    setInApp(isInAppBrowser(ua));
+    const detected = isInAppBrowser(ua);
+    setInApp(detected);
+    onInAppChange?.(detected);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!inApp) return null;
 
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const ua = navigator.userAgent || "";
   const isAndroid = /android/i.test(ua);
-  const isIOS = /iphone|ipad|ipod/i.test(ua);
 
   return (
     <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3">
       <div className="font-semibold">กำลังเปิดผ่าน In-app Browser</div>
       <div className="text-sm text-white/70 mt-1">
-        เพื่อให้ล็อกอิน Discord ได้ลื่นและไม่ต้องกรอกซ้ำ แนะนำให้เปิดด้วย{" "}
-        {isAndroid ? "Chrome" : isIOS ? "Safari" : "เบราว์เซอร์หลัก"} ก่อน
+        เพื่อให้ล็อกอิน Discord ได้สำเร็จและไม่ต้องกรอกซ้ำ กรุณาเปิดหน้านี้ด้วย{" "}
+        {isAndroid ? "Chrome" : "เบราว์เซอร์หลัก"} ก่อน
       </div>
 
       <div className="mt-3 flex gap-2">
-        {isAndroid && (
+        {isAndroid ? (
           <button
             type="button"
             className="h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10"
@@ -57,9 +66,7 @@ export function LoginInAppNotice() {
           >
             เปิดใน Chrome
           </button>
-        )}
-
-        {!isAndroid && (
+        ) : (
           <button
             type="button"
             className="h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10"

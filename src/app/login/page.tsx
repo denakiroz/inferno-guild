@@ -1,6 +1,4 @@
-// src/app/login/page.tsx
-import { LoginInAppNotice } from "./LoginInAppNotice";
-import { DiscordLoginButton } from "./DiscordLoginButton";
+import { LoginCardClient } from "./LoginCardClient";
 
 const ERROR_TEXT: Record<string, { title: string; desc: string }> = {
   missing_code: { title: "ไม่พบโค้ดล็อกอิน", desc: "กรุณาลองล็อกอินใหม่อีกครั้ง" },
@@ -28,8 +26,7 @@ export default function LoginPage({
     <main className="min-h-screen bg-[#0b0d13] text-white flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="mb-6">
-          {/* ✅ รูปเพิ่มตรงนี้ */}
-          <div className="w-48 sm:w-56 h-auto mx-auto drop-shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+          <div className="mb-4 flex justify-center">
             <img
               src="https://i.ibb.co/sdLkHBWK/IMG-3235.png"
               alt="Inferno"
@@ -45,18 +42,7 @@ export default function LoginPage({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6 shadow-xl">
-          <LoginInAppNotice />
-
-          {errMeta && (
-            <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3">
-              <div className="font-semibold">{errMeta.title}</div>
-              <div className="text-sm text-white/70">{errMeta.desc}</div>
-            </div>
-          )}
-
-          <DiscordLoginButton />
-        </div>
+        <LoginCardClient errTitle={errMeta?.title} errDesc={errMeta?.desc} />
       </div>
     </main>
   );
