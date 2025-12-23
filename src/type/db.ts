@@ -22,6 +22,7 @@ export type DbMember = {
   guild: GuildNo;
   discord_user_id: string | null;
   status: MemberStatus | null;
+  update_date:string;
 
   class?: DbClass | null;
 };

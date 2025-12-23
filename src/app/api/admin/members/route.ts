@@ -29,6 +29,7 @@ const SELECT_MEMBER_WITH_CLASS = `
   status,
   special_text,
   remark,
+  update_date,
   class:class!member_class_id_fkey(
     id,
     name,

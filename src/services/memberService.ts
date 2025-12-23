@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type { DbMember, GuildNo } from "@/type/db";
 
 const SELECT_MEMBER =
-  "id,name,class_id,power,party,party_2,pos_party,pos_party_2,color,is_special,guild,discord_user_id,status";
+  "id,name,class_id,power,party,party_2,pos_party,pos_party_2,color,is_special,guild,discord_user_id,status,update_date";
 
 export const memberService = {
   async list(params: {

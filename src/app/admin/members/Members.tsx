@@ -203,7 +203,7 @@ export default function Members({
         if (!q) return true;
         const c = (m.class_id != null ? classById.get(m.class_id) : undefined) || null;
         const className = c?.name ?? "";
-        return `${m.name} ${className} ${m.discord_user_id ?? ""}`.toLowerCase().includes(q);
+        return `${m.name} ${className}`.toLowerCase().includes(q);
       })
       .filter((m) => (classId === "All" ? true : String(m.class_id ?? 0) === classId))
       .filter((m) => {
@@ -240,6 +240,13 @@ export default function Members({
   function isCancelLeaveStatus(status?: string | null) {
     const s = String(status ?? "").trim().toLowerCase();
     return s === "cancel";
+  }
+
+  function formatBkkDateTime(dt?: string | null) {
+    if (!dt) return "-";
+    const { date, time } = bkkDateTimeParts(dt);
+    if (!date) return "-";
+    return `${date} ${time}`;
   }
 
   const openEdit = (m: DbMember) => {
@@ -416,7 +423,9 @@ export default function Members({
                     <div className="text-xs text-zinc-500 dark:text-zinc-400">
                       {className} • Guild {m.guild}
                     </div>
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">Discord: {m.discord_user_id ?? "-"}</div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Update: {formatBkkDateTime((m as any).update_date)}
+                    </div>
                   </div>
                 </div>
 

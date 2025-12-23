@@ -32,6 +32,7 @@ type MemberRow = {
   power: number;
   is_special: boolean;
   guild: number;
+  update_date:string;
 
   class?: string; // legacy
   class_id?: number; // preferred
@@ -230,12 +231,14 @@ export default function MePage() {
 
       const authName = getAuthDisplayName();
       const finalName = authName || String(member.name ?? "").trim();
+      const nowIso = new Date().toISOString();
 
       const nextMember: MemberRow = {
         ...member,
         name: finalName,
         class_id: selectedClassId,
         class: selectedClassName,
+        update_date: nowIso,
       };
       setMember(nextMember);
 
@@ -247,6 +250,7 @@ export default function MePage() {
           power: nextMember.power,
           class_id: nextMember.class_id,
           class: nextMember.class,
+          update_date:nextMember.update_date
         }),
       });
 

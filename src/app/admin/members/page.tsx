@@ -23,6 +23,7 @@ const SELECT_MEMBER_WITH_CLASS = `
   guild,
   discord_user_id,
   status,
+  update_date,
   class:class!member_class_id_fkey(
     id,
     name,

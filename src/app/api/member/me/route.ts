@@ -21,7 +21,7 @@ async function getMyMember(discordUserId: string, guild: number) {
 
   const { data, error } = await supabaseAdmin
     .from("member")
-    .select("id, discord_user_id, name, power, is_special, guild, class_id")
+    .select("id, discord_user_id, name, power, is_special, guild, class_id,update_date")
     .eq("discord_user_id", discord_user_id)
     .eq("guild", guild)
     .maybeSingle();
@@ -99,7 +99,6 @@ export async function PUT(req: Request) {
     // ✅ allowlist เฉพาะฟิลด์ที่มีจริงใน table member
     const patch: Record<string, any> = {};
 
-    // ถ้าคุณ disable ชื่อใน UI ก็จะไม่ส่งมาก็ได้ แต่เผื่อไว้
     if (typeof body.name === "string") patch.name = body.name.trim();
 
     if (typeof body.power === "number") patch.power = Math.max(0, Math.floor(body.power));
@@ -111,7 +110,6 @@ export async function PUT(req: Request) {
     } else if (typeof body.class_id === "string") {
       patch.class_id = Number(body.class_id) || 0;
     } else if (typeof body.class === "string") {
-      // ✅ backward-compatible: client เก่าส่ง class เป็นชื่ออาชีพ
       patch.class_id = await resolveClassIdFromName(body.class);
     }
 
@@ -120,12 +118,16 @@ export async function PUT(req: Request) {
       return NextResponse.json({ ok: false, error: "no_fields_to_update" }, { status: 400 });
     }
 
+    // ✅ server เป็นคนกำหนดเวลาอัปเดตเสมอ
+    patch.update_date = new Date().toISOString();
+
     const { data, error } = await supabaseAdmin
       .from("member")
       .update(patch)
       .eq("discord_user_id", discord_user_id)
       .eq("guild", guild)
-      .select("id, discord_user_id, name, power, is_special, guild, class_id")
+      // ✅ เพิ่ม update_date ใน select ด้วย
+      .select("id, discord_user_id, name, power, is_special, guild, class_id, update_date")
       .single();
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
