@@ -53,7 +53,7 @@ export const Badge: React.FC<BadgeProps> = ({ variant = "default", className, ..
 
 /** Button */
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "danger" | "ghost" | "outline" | "default"; // ✅
+  variant?: "primary" | "secondary" | "danger" | "ghost" | "outline" | "default";
   size?: "sm" | "md" | "lg";
 }
 export const Button: React.FC<ButtonProps> = ({
@@ -68,7 +68,7 @@ export const Button: React.FC<ButtonProps> = ({
     "focus-visible:ring-offset-white dark:focus-visible:ring-offset-zinc-950 " +
     "disabled:opacity-50 disabled:cursor-not-allowed select-none";
 
- const variants: Record<string, string> = {
+  const variants: Record<string, string> = {
     default:
       "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-sm shadow-red-900/10",
     primary:
@@ -90,8 +90,6 @@ export const Button: React.FC<ButtonProps> = ({
     lg: "h-12 px-5 text-base",
   };
 
-  // suppressHydrationWarning: mitigate noisy warnings when browser extensions inject extra attributes
-  // (e.g., fdprocessedid) before React hydrates.
   return (
     <button
       suppressHydrationWarning
@@ -128,12 +126,14 @@ export const Select = React.forwardRef<
   <select
     ref={ref}
     suppressHydrationWarning
+    aria-invalid={invalid ? true : undefined}
     className={cn(
       "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm",
       "focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500",
       "dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
-      // ✅ force invalid style
-      invalid ? "!border-rose-500 !focus:border-rose-500 !focus:ring-rose-500/30" : "",
+      // ✅ FIX: Tailwind syntax ต้องเป็น focus:!xxx ไม่ใช่ !focus:xxx
+      // และต้อง override ทั้ง border + ring ตอน focus
+      invalid ? "!border-rose-500 focus:!border-rose-500 focus:!ring-rose-500/30" : "",
       className
     )}
     {...props}
@@ -150,16 +150,19 @@ export interface ModalProps {
   footer?: React.ReactNode;
   className?: string;
 }
-export const Modal: React.FC<ModalProps> = ({ open, title, children, onClose, footer, className }) => {
+export const Modal: React.FC<ModalProps> = ({
+  open,
+  title,
+  children,
+  onClose,
+  footer,
+  className,
+}) => {
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50">
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
           className={cn(
@@ -172,7 +175,9 @@ export const Modal: React.FC<ModalProps> = ({ open, title, children, onClose, fo
         >
           {(title || footer) && (
             <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-              <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</div>
+              <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                {title}
+              </div>
               <button
                 onClick={onClose}
                 className="rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"

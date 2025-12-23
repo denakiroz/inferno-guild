@@ -339,7 +339,7 @@ export default function Members({
           <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-3">
             <div className="lg:col-span-5">
               <Input
-                placeholder="ค้นหา: discord id / ชื่อ / อาชีพ..."
+                placeholder="ค้นหา: ชื่อ "
                 value={query}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
               />
