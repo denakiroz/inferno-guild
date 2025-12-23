@@ -28,6 +28,16 @@ export default function LoginPage({
     <main className="min-h-screen bg-[#0b0d13] text-white flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="mb-6">
+          {/* ✅ รูปเพิ่มตรงนี้ */}
+          <div className="w-48 sm:w-56 h-auto mx-auto drop-shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+            <img
+              src="https://i.ibb.co/sdLkHBWK/IMG-3235.png"
+              alt="Inferno"
+              loading="eager"
+              className="w-48 sm:w-56 h-auto mx-auto"
+            />
+          </div>
+
           <div className="text-sm tracking-[0.2em] text-white/60">INFERNO</div>
           <div className="text-3xl font-bold">Guild Portal</div>
           <div className="mt-1 text-white/60 text-sm">
@@ -36,7 +46,6 @@ export default function LoginPage({
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6 shadow-xl">
-          {/* แจ้งเตือน in-app browser (LINE/FB/IG) */}
           <LoginInAppNotice />
 
           {errMeta && (
@@ -46,12 +55,7 @@ export default function LoginPage({
             </div>
           )}
 
-          {/* ปุ่มล็อกอิน: พยายามเด้งเข้า Discord App ก่อน แล้ว fallback ไป /api/auth/discord/start */}
           <DiscordLoginButton />
-
-          <div className="mt-4 text-xs text-white/50">
-            หากเข้าระบบแล้วขึ้น <b>not_in_guild</b> ให้เช็คว่า Discord account นี้อยู่ใน Server และ Guild ID ถูกต้อง
-          </div>
         </div>
       </div>
     </main>
