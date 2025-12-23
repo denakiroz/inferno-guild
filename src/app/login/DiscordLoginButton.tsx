@@ -8,8 +8,8 @@ export function DiscordLoginButton() {
     try {
       setLoading(true);
 
-      // ขอ authorize URL จาก server เพื่อให้ set state cookie ได้ครบ
-      const r = await fetch("/api/auth/discord/start?mode=url", {
+      // 1) ลองแบบไม่ให้ขึ้นหน้า login ถ้ามี session อยู่แล้ว
+      const r = await fetch("/api/auth/discord/start?mode=url&prompt=none", {
         method: "GET",
         credentials: "include",
         cache: "no-store",
@@ -19,7 +19,6 @@ export function DiscordLoginButton() {
       const { authorizeUrl } = (await r.json()) as { authorizeUrl: string };
       if (!authorizeUrl) throw new Error("missing_authorize_url");
 
-      // ✅ เปิดหน้า authorize ใน browser โดยตรง (ชัวร์ว่าเข้า consent)
       window.location.href = authorizeUrl;
     } finally {
       setLoading(false);
@@ -35,7 +34,7 @@ export function DiscordLoginButton() {
                  shadow-[0_0_30px_rgba(88,101,242,0.35)] transition-all flex items-center justify-center gap-3
                  disabled:opacity-70 disabled:cursor-not-allowed"
     >
-      <span>{loading ? "Redirecting..." : "Sign in with Discord"}</span>
+      <span>{loading ? "Redirecting..." : "Sign in with Discord1"}</span>
     </button>
   );
 }

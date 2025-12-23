@@ -15,14 +15,14 @@ type DiscordUser = {
   avatar?: string | null;
 };
 
-export function discordAuthorizeUrl(state: string) {
-  const url = new URL("https://discord.com/oauth2/authorize"); // ✅ UI endpoint
+export function discordAuthorizeUrl(state: string, prompt?: "none" | "consent") {
+  const url = new URL("https://discord.com/oauth2/authorize");
   url.searchParams.set("client_id", env.DISCORD_CLIENT_ID);
   url.searchParams.set("redirect_uri", env.DISCORD_REDIRECT_URI);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "identify");
   url.searchParams.set("state", state);
-  url.searchParams.set("prompt", "consent"); // ✅ บังคับให้เห็นหน้า consent
+  if (prompt) url.searchParams.set("prompt", prompt);
   return url.toString();
 }
 

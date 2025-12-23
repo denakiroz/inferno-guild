@@ -7,11 +7,11 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const mode = url.searchParams.get("mode"); // "url" | null
+  const prompt = (url.searchParams.get("prompt") as "none" | "consent" | null) ?? null;
 
   const state = crypto.randomBytes(16).toString("hex");
-  const authorizeUrl = discordAuthorizeUrl(state);
+  const authorizeUrl = discordAuthorizeUrl(state, prompt ?? undefined);
 
-  // แนะนำ: เก็บ state ไว้ใน cookie เพื่อให้ callback ตรวจสอบได้ (กัน CSRF / mismatch)
   const isProd = process.env.NODE_ENV === "production";
 
   if (mode === "url") {
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
       secure: isProd,
       sameSite: "lax",
       path: "/",
-      maxAge: 10 * 60, // 10 นาที
+      maxAge: 10 * 60,
     });
     return res;
   }
