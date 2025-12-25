@@ -79,15 +79,15 @@ type TodayLeaveMeta = {
   hasErrandToday: boolean; // วันนี้ (ไม่ใช่เสาร์) มีลา => ลากิจ
   war20Today: boolean; // วันนี้เป็นเสาร์ และลา 20:00
   war2030Today: boolean; // วันนี้เป็นเสาร์ และลา 20:30
-  warLabelToday: string | null; // "ลา 20.00 น." | "ลา 20.30 น." | "ลาทั้งหมด" | "ลาวอ" | null
+  warLabelToday: string | null; // "ลาวอ 20.00 น." | "ลาวอ 20.30 น." | "ลาทั้งหมด" | "ลาวอ" | null
 };
 
 type TodayStatus = "special" | "errand" | "war" | "ready";
 
 function computeWarLabel(war20: boolean, war2030: boolean) {
   if (war20 && war2030) return "ลาทั้งหมด";
-  if (war20) return "ลา 20.00 น.";
-  if (war2030) return "ลา 20.30 น.";
+  if (war20) return "ลาวอ 20.00 น.";
+  if (war2030) return "ลาวอ 20.30 น.";
   return "ลาวอ";
 }
 
@@ -326,8 +326,8 @@ export default function Members({
     const hasWarAny = hasWar20 || hasWar2030 || !!meta?.warLabelToday;
 
     // ✅ ลาวอ — แยกตามเวลา (ถ้าลาทั้ง 2 เวลาให้ขึ้นทั้งหมด)
-    if (hasWar20) badges.push({ key: "war20", label: "ลา 20.00 น.", variant: "warning" });
-    if (hasWar2030) badges.push({ key: "war2030", label: "ลา 20.30 น.", variant: "warning" });
+    if (hasWar20) badges.push({ key: "war20", label: "ลาวอ 20.00 น.", variant: "warning" });
+    if (hasWar2030) badges.push({ key: "war2030", label: "ลาวอ 20.30 น.", variant: "warning" });
     if (!hasWar20 && !hasWar2030 && meta?.warLabelToday) {
       badges.push({ key: "war", label: meta.warLabelToday, variant: "warning" });
     }
