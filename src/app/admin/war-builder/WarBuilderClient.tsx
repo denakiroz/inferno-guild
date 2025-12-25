@@ -1918,7 +1918,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               </div>
             </div>
 
-            <div className="mt-3 flex-1 min-h-0 grid grid-cols-1 gap-2 xl:grid-cols-[1fr_180px_340px]">
+            <div className="mt-3 flex-1 min-h-0 grid grid-cols-1 gap-2 xl:grid-cols-[1fr_180px_200px]">
               {/* Parties */}
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {partiesForMap.map(({ party, groupColor, groupLabel }) => (
