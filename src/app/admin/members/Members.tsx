@@ -55,9 +55,24 @@ function bkkDateTimeParts(dt: string) {
   return { date, time };
 }
 
+const bkkWeekdayFmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: BKK_TZ,
+  weekday: "short",
+});
 function isSaturday(dateStr: string) {
-  const d = new Date(`${dateStr}T00:00:00+07:00`);
-  return d.getDay() === 6; // Sat
+  // ใช้ Intl + timezone เพื่อไม่ผูกกับ timezone ของเครื่องผู้ใช้
+  return bkkWeekdayFmt.format(new Date(`${dateStr}T12:00:00+07:00`)) === "Sat";
+}
+
+function nextSaturdayFrom(dateStr: string) {
+  // dateStr เป็น YYYY-MM-DD (BKK)
+  let d = new Date(`${dateStr}T12:00:00+07:00`);
+  for (let i = 0; i < 7; i++) {
+    const cur = bkkDateOf(d);
+    if (isSaturday(cur)) return cur;
+    d = new Date(d.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return dateStr;
 }
 
 type TodayLeaveMeta = {
@@ -107,6 +122,8 @@ export default function Members({
     const t = setInterval(() => setTodayBkk(bkkDateOf(new Date())), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  const nextSaturdayBkk = useMemo(() => nextSaturdayFrom(todayBkk), [todayBkk]);
 
   useEffect(() => {
     classService
@@ -163,7 +180,9 @@ export default function Members({
       const { date, time } = bkkDateTimeParts(dt);
       if (!date) continue;
 
-      if (date !== todayBkk) continue;
+      const isToday = date === todayBkk;
+      const isNextSaturday = date === nextSaturdayBkk;
+      if (!isToday && !isNextSaturday) continue;
 
       const cur =
         map.get(l.member_id) ?? {
@@ -174,21 +193,22 @@ export default function Members({
         };
 
       if (isSaturday(date)) {
+        // เสาร์ (วอ) — นับทั้งวันนี้ (ถ้าวันนี้เป็นเสาร์) และเสาร์ที่จะถึง
         if (time === "20:00") cur.war20Today = true;
         if (time === "20:30") cur.war2030Today = true;
 
         // ถ้าเป็นเสาร์ แต่เวลาไม่ใช่ 20:00/20:30 ก็ยังถือว่าเป็น “ลาวอ”
         cur.warLabelToday = computeWarLabel(cur.war20Today, cur.war2030Today);
-      } else {
+      } else if (isToday && time === "00:00") {
+        // ลากิจ — จะถูกบันทึกเป็นเวลา 00:00 ของ “วันนี้” (เวลาไทย)
         cur.hasErrandToday = true;
-        cur.warLabelToday = null;
       }
 
       map.set(l.member_id, cur);
     }
 
     return map;
-  }, [leaves, todayBkk]);
+  }, [leaves, todayBkk, nextSaturdayBkk]);
 
   const visibleMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -293,19 +313,34 @@ export default function Members({
     );
   };
 
-  const getTodayStatus = (m: DbMember): { status: TodayStatus; label: string; variant: "outline" | "warning" | "success" } => {
-    // ✅ priority ตามที่คุณขอ: วันนี้แสดงอย่างใดอย่างหนึ่ง
-    if (m.is_special) return { status: "special", label: "ศิษย์เอก", variant: "outline" };
+  const getTodayBadges = (m: DbMember): { key: string; label: string; variant: "outline" | "warning" | "success" }[] => {
+    // ✅ กติกา: ถ้าเป็น “ศิษย์เอก” ให้ขึ้นแค่ “ศิษย์เอก” อย่างเดียว
+    if (m.is_special) return [{ key: "special", label: "ศิษย์เอก", variant: "outline" }];
+
+    const badges: { key: string; label: string; variant: "outline" | "warning" | "success" }[] = [];
 
     const meta = todayMetaByMemberId.get(m.id);
-    const hasErrandToday = !!meta?.hasErrandToday;
-    const hasWarToday = !!(meta?.war20Today || meta?.war2030Today) || (!!meta?.warLabelToday && meta.warLabelToday !== null);
+    const hasErrandToday = !!meta?.hasErrandToday; // ลากิจ (วันนี้ 00:00)
+    const hasWar20 = !!meta?.war20Today;
+    const hasWar2030 = !!meta?.war2030Today;
+    const hasWarAny = hasWar20 || hasWar2030 || !!meta?.warLabelToday;
 
-    if (hasErrandToday) return { status: "errand", label: "ลากิจ", variant: "warning" };
-    if (hasWarToday) return { status: "war", label: meta?.warLabelToday ?? "ลาวอ", variant: "warning" };
+    // ✅ ลาวอ — แยกตามเวลา (ถ้าลาทั้ง 2 เวลาให้ขึ้นทั้งหมด)
+    if (hasWar20) badges.push({ key: "war20", label: "ลา 20.00 น.", variant: "warning" });
+    if (hasWar2030) badges.push({ key: "war2030", label: "ลา 20.30 น.", variant: "warning" });
+    if (!hasWar20 && !hasWar2030 && meta?.warLabelToday) {
+      badges.push({ key: "war", label: meta.warLabelToday, variant: "warning" });
+    }
 
-    return { status: "ready", label: "พร้อม", variant: "success" };
+    // ✅ ลากิจ — แสดงร่วมกับลาวอได้
+    if (hasErrandToday) badges.push({ key: "errand", label: "ลากิจ", variant: "warning" });
+
+    // ✅ ไม่ลาเลย => พร้อม
+    if (!hasWarAny && !hasErrandToday) badges.push({ key: "ready", label: "พร้อม", variant: "success" });
+
+    return badges;
   };
+
 
   return (
     <div className="space-y-6">
@@ -374,16 +409,16 @@ export default function Members({
                   setLeaveTypeFilter(e.target.value as LeaveTypeFilter)
                 }
               >
-                <option value="all">สถานะวันนี้: ทั้งหมด</option>
+                <option value="all">สถานะ (วันนี้/วอ): ทั้งหมด</option>
                 <option value="ready">พร้อม</option>
-                <option value="errand">ลากิจ</option>
-                <option value="war">ลาวอ</option>
+                <option value="errand">ลากิจ (วันนี้)</option>
+                <option value="war">ลาวอ (เสาร์ที่จะถึง)</option>
               </Select>
             </div>
           </div>
 
           <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-            สถานะคำนวณจาก “วันนี้” เท่านั้น (เวลาไทย) • วันนี้: {todayBkk}
+            สถานะคำนวณจาก “วันนี้ (ลากิจ 00:00)” และ “เสาร์ที่จะถึง (วอ 20:00/20:30)” (เวลาไทย) • วันนี้: {todayBkk} • เสาร์ที่จะถึง: {nextSaturdayBkk}
           </div>
         </div>
       </Card>
@@ -401,7 +436,7 @@ export default function Members({
           const iconUrl = c?.icon_url ?? null;
 
           // ✅ วันนี้เท่านั้น: แสดง badge อย่างเดียว
-          const todayStatus = getTodayStatus(m);
+          const todayBadges = getTodayBadges(m);
 
           const memberLeaves = leaveByMemberId.get(m.id) ?? [];
 
@@ -430,7 +465,11 @@ export default function Members({
                 </div>
 
                 <div className="flex flex-col items-end gap-2">
-                  <Badge variant={todayStatus.variant}>{todayStatus.label}</Badge>
+                  {todayBadges.map((b) => (
+                    <Badge key={b.key} variant={b.variant}>
+                      {b.label}
+                    </Badge>
+                  ))}
                 </div>
               </div>
 
