@@ -3,7 +3,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, LogOut, ChevronDown, Moon, Sun, Swords, Settings2, Calendar } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  LogOut,
+  ChevronDown,
+  Moon,
+  Sun,
+  Swords,
+  Settings2,
+  Calendar,
+  Menu,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/app/components/UI";
 import { useTheme } from "@/app/theme/ThemeProvider";
@@ -27,12 +39,33 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [me, setMe] = useState<MeRes | null>(null);
   const [openProfile, setOpenProfile] = useState(false);
 
+  // ✅ Hamburger sidebar (ซ้าย) — desktop: push content, mobile: overlay
+  const [menuOpen, setMenuOpen] = useState(false);
+
   useEffect(() => {
     fetch("/api/me", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setMe(j as MeRes))
       .catch(() => setMe({ ok: false }));
   }, []);
+
+  // ✅ เปลี่ยนหน้าแล้วปิดเมนู/โปรไฟล์ เพื่อไม่ค้าง
+  useEffect(() => {
+    setMenuOpen(false);
+    setOpenProfile(false);
+  }, [pathname]);
+
+  // ✅ กด ESC ปิดเมนู
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        setOpenProfile(false);
+      }
+    }
+    if (menuOpen) window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   const roleLabel = useMemo(() => {
     if (!me?.ok) return null;
@@ -57,25 +90,70 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       { href: "/admin/war-builder", label: "War Builder", icon: Swords },
       { href: "/admin/leaves", label: "Leaves", icon: Calendar },
     ],
-    [],
+    []
   );
+
+  const closeAll = () => {
+    setMenuOpen(false);
+    setOpenProfile(false);
+  };
+
+  const toggleMenu = () => setMenuOpen((v) => !v);
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <div className="flex">
-        <aside className="w-64 p-4 hidden md:block">
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/50 backdrop-blur p-4 sticky top-4">
+      {/* ✅ Top-left Hamburger */}
+      <button
+        type="button"
+        className={[
+          "fixed left-4 top-4 z-[60]",
+          "rounded-2xl border border-zinc-200 dark:border-zinc-800",
+          "bg-white/70 dark:bg-zinc-950/60 backdrop-blur px-3 py-2 shadow-sm",
+          "hover:bg-white/90 dark:hover:bg-zinc-950/80",
+        ].join(" ")}
+        onClick={toggleMenu}
+        aria-label={menuOpen ? "Close menu" : "Open menu"}
+        title={menuOpen ? "ปิดเมนู" : "เปิดเมนู"}
+      >
+        {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+      </button>
+
+      {/* ✅ Mobile overlay backdrop */}
+      {menuOpen ? (
+        <button
+          type="button"
+          className="md:hidden fixed inset-0 z-40 bg-black/20"
+          onClick={closeAll}
+          aria-label="Close menu"
+        />
+      ) : null}
+
+      {/* ✅ Left Sidebar: desktop = push content, mobile = overlay */}
+      <aside
+        className={[
+          "fixed z-50 left-0 top-0 bottom-0",
+          "w-72 md:w-64",
+          "bg-white/85 dark:bg-zinc-950/70 backdrop-blur",
+          "border-r border-zinc-200 dark:border-zinc-800",
+          "transition-transform duration-200 ease-out",
+          menuOpen ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
+      >
+        <div className="h-full p-4 overflow-auto">
+          <div className="pt-14 md:pt-12">
             <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Inferno Admin</div>
             <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Manage guild data</div>
 
             <nav className="mt-4 space-y-1">
               {items.map((it) => {
-                const active = pathname === it.href || (it.href !== "/admin" && pathname?.startsWith(it.href));
+                const active =
+                  pathname === it.href || (it.href !== "/admin" && pathname?.startsWith(it.href));
                 const Icon = it.icon;
                 return (
                   <Link
                     key={it.href}
                     href={it.href}
+                    onClick={() => setMenuOpen(false)}
                     className={[
                       "flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition",
                       active
@@ -124,7 +202,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                     <Link
                       href="/me"
                       className="block px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                      onClick={() => setOpenProfile(false)}
+                      onClick={() => {
+                        setOpenProfile(false);
+                        setMenuOpen(false);
+                      }}
                     >
                       ไปหน้าโปรไฟล์
                     </Link>
@@ -141,9 +222,19 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               </div>
             </div>
           </div>
-        </aside>
+        </div>
+      </aside>
 
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+      {/* ✅ Main: desktop push เมื่อ menuOpen */}
+      <div
+        className={[
+          "transition-[padding-left] duration-200 ease-out",
+          // ปุ่ม hamburger วางทับอยู่แล้ว เลยเพิ่ม padding-top กันชนิด content ชน
+          "pt-14 md:pt-0",
+          menuOpen ? "md:pl-64" : "md:pl-0",
+        ].join(" ")}
+      >
+        <main className="p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

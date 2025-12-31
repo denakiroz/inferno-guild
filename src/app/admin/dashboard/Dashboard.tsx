@@ -380,7 +380,8 @@ export default function Dashboard({
   }, [warThisMonthByGuild]);
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="p-4 md:p-6">
+      <div className="mx-auto w-full max-w-[1400px] space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
@@ -640,6 +641,7 @@ export default function Dashboard({
           </table>
         </div>
       </Card>
+      </div>
     </div>
   );
 }

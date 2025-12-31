@@ -14,6 +14,22 @@ type GuildTab = "all" | GuildNo;
 type SpecialFilter = "all" | "special" | "normal";
 type LeaveTypeFilter = "all" | "ready" | "errand" | "war";
 
+
+// ✅ สีแถบด้านบนตามอาชีพ (ตามที่ระบุ)
+// id1 สีเหลือง, id2 สีม่วง, id3 สีแดง, id4 สีน้ำเงิน, id5 สีชมพู, id6 สีฟ้าอมเขียว
+const TOPBAR_BY_CLASS_ID: Record<number, string> = {
+  1: "#EAB308", // yellow
+  2: "#A855F7", // purple
+  3: "#EF4444", // red
+  4: "#3B82F6", // blue
+  5: "#EC4899", // pink
+  6: "#22D3EE", // cyan-ish
+};
+
+function topbarColor(classId: number | null | undefined) {
+  if (!classId) return "#A1A1AA"; // default (ยังไม่เลือกอาชีพ)
+  return TOPBAR_BY_CLASS_ID[classId] ?? "#A1A1AA";
+}
 type Props = {
   members: DbMember[];
   leaves: DbLeave[];
@@ -343,7 +359,7 @@ export default function Members({
 
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-[1400px] px-4 md:px-6 space-y-6">
       <Card noPadding className="sticky top-4 z-10">
         <div className="p-4 bg-white/70 dark:bg-zinc-950/50 backdrop-blur rounded-2xl border border-zinc-200 dark:border-zinc-800">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -429,7 +445,7 @@ export default function Members({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {visibleMembers.map((m) => {
           const c = (m.class_id != null ? classById.get(m.class_id) : undefined) || null;
           const className = c?.name ?? (m.class_id == null || m.class_id === 0 ? "ยังไม่เลือกอาชีพ" : "-");
@@ -441,8 +457,10 @@ export default function Members({
           const memberLeaves = leaveByMemberId.get(m.id) ?? [];
 
           return (
-            <Card key={m.id} className="p-4">
-              <div className="flex items-start justify-between gap-3">
+            <Card key={m.id} className="overflow-hidden" noPadding>
+              <div className="h-2 w-full" style={{ backgroundColor: topbarColor(m.class_id) }} />
+              <div className="p-4">
+<div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center overflow-hidden">
                     {iconUrl ? (
@@ -504,6 +522,7 @@ export default function Members({
                     onAfterSave={onReload}
                   />
                 ) : null}
+              </div>
               </div>
             </Card>
           );

@@ -465,8 +465,9 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
 
     const { data, error } = await supabase
       .from("leave")
-      .select("member_id,date_time,reason")
+      .select("member_id,date_time,reason,status")
       .in("member_id", guildMemberIds)
+      .eq("status","Active")
       .gte("date_time", startLocal.toISOString())
       .lt("date_time", endLocal.toISOString());
 
@@ -2106,15 +2107,54 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         {/* Party Pane (grouped) */}
         <div className="min-h-0 overflow-y-auto pr-1" style={{ height: paneHeight }}>
           <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
             {groupedPartySections.map((sec, secIdx) => {
+              const partyCount = sec.parties.length;
+              const span = Math.min(Math.max(partyCount, 1), 4);
+
+              const xlSpanClass =
+                span === 1
+                  ? "xl:col-span-1"
+                  : span === 2
+                    ? "xl:col-span-2"
+                    : span === 3
+                      ? "xl:col-span-3"
+                      : "xl:col-span-4";
+
+              // inner columns: ทำให้จำนวนคอลัมน์สัมพันธ์กับขนาดกลุ่ม เพื่อให้ 1+3 หรือ 2+2 อยู่แถวเดียวกันได้
+              const innerColsClass =
+                span === 1
+                  ? "xl:grid-cols-1"
+                  : span === 2
+                    ? "xl:grid-cols-2"
+                    : span === 3
+                      ? "xl:grid-cols-3"
+                      : "xl:grid-cols-4";
+
+              // base responsive: ไม่บังคับให้คอลัมน์เยอะเกินในจอเล็ก
+              const innerBase =
+                span === 1
+                  ? "grid-cols-1"
+                  : span === 2
+                    ? "grid-cols-1 sm:grid-cols-2"
+                    : span === 3
+                      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+
               if (sec.type === "ungrouped") {
                 return (
-                  <div key={`ungrouped-${secIdx}`} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-zinc-500">อื่นๆ (ยังไม่จัดกลุ่ม)</div>
-                      <div className="text-[11px] text-zinc-400">{sec.parties.length} ปาร์ตี้</div>
+                  <div key={`ungrouped-${secIdx}`} className={["space-y-2", xlSpanClass].join(" ")}>
+                    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20">
+                      <div className="flex items-center justify-between p-3">
+                        <div className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                          ยังไม่จัดกลุ่ม
+                        </div>
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">{partyCount} ปาร์ตี้</div>
+                      </div>
+                      <div className="h-px w-full bg-zinc-100 dark:bg-zinc-900" />
                     </div>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+
+                    <div className={["grid gap-3", innerBase, innerColsClass].join(" ")}>
                       {sec.parties.map((p) => (
                         <PartyCard
                           key={p.id}
@@ -2127,8 +2167,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                           dragOverTarget={dragOverTarget}
                           onDragStart={onDragStart}
                           onDragEnd={onDragEnd}
-                          onDragOverSlot={onDragOverSlot}
                           onDropOnSlot={onDropOnSlot}
+                          onOpenMemberEditor={openRemarkEditor}
                           onToggleSelect={toggleSelect}
                           onOpenRemark={openRemarkEditor}
                           onRemoveFromSlot={removeFromSlot}
@@ -2147,7 +2187,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               const gColor = g.color ?? null;
 
               return (
-                <div key={`group-${g.id}`} className="space-y-2">
+                <div key={`group-${g.id}`} className={["space-y-2", xlSpanClass].join(" ")}>
                   <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20">
                     <div className="flex items-center justify-between p-3">
                       <div className="min-w-0 flex items-center gap-2">
@@ -2159,7 +2199,9 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                           <div className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                             {g.name}
                           </div>
-                          <div className="truncate text-[11px] text-zinc-500">ปาร์ตี้: {g.group}</div>
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                            ปาร์ตี้: {g.group}
+                          </div>
                         </div>
                       </div>
 
@@ -2167,7 +2209,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            className="rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                            className="rounded-md border border-zinc-200 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
                             onClick={() => moveGroup(g.id, -1)}
                             title="เลื่อนกลุ่มขึ้น"
                           >
@@ -2175,7 +2217,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                           </button>
                           <button
                             type="button"
-                            className="rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                            className="rounded-md border border-zinc-200 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
                             onClick={() => moveGroup(g.id, 1)}
                             title="เลื่อนกลุ่มลง"
                           >
@@ -2183,7 +2225,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                           </button>
                           <button
                             type="button"
-                            className="rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                            className="rounded-md border border-zinc-200 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
                             onClick={() => openEditGroupModal(g)}
                             title="แก้ไขกลุ่ม"
                           >
@@ -2193,12 +2235,10 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                       ) : null}
                     </div>
 
-                    {gColor ? (
-                      <div className="h-1 w-full" style={{ backgroundColor: gColor, opacity: 0.7 }} />
-                    ) : null}
+                    {gColor ? <div className="h-1 w-full" style={{ backgroundColor: gColor, opacity: 0.7 }} /> : null}
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className={["grid gap-3", innerBase, innerColsClass].join(" ")}>
                     {sec.parties.map((p) => (
                       <PartyCard
                         key={p.id}
@@ -2211,12 +2251,12 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                         dragOverTarget={dragOverTarget}
                         onDragStart={onDragStart}
                         onDragEnd={onDragEnd}
-                        onDragOverSlot={onDragOverSlot}
                         onDropOnSlot={onDropOnSlot}
+                        onOpenMemberEditor={openRemarkEditor}
                         onToggleSelect={toggleSelect}
                         onOpenRemark={openRemarkEditor}
                         onRemoveFromSlot={removeFromSlot}
-                        groupColor={groupColorByParty.get(p.id) ?? null}
+                        groupColor={gColor}
                         warTime={warTime}
                         isOnLeave={isOnLeave}
                         getLeaveReason={(id) => leaveReasonByMemberRef.current.get(id) ?? null}
@@ -2226,6 +2266,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 </div>
               );
             })}
+          </div>
           </div>
         </div>
       </div>

@@ -495,7 +495,7 @@ export default function Leaves({
       : `ช่วงวันที่: ${rangeStart || "-"} ถึง ${rangeEnd || "-"}`;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-[1400px] space-y-6">
       <Card noPadding className="sticky top-4 z-10">
         <div className="p-4 bg-white/70 dark:bg-zinc-950/50 backdrop-blur rounded-2xl border border-zinc-200 dark:border-zinc-800">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

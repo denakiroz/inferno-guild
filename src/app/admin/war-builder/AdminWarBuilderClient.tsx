@@ -35,7 +35,7 @@ export default function AdminWarBuilderClient() {
   if (!me) return null;
 
   return (
-    <div className="space-y-3">
+    <div className="mx-auto w-full max-w-[1700px] space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold">War Builder</div>
 

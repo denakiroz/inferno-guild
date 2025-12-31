@@ -54,7 +54,8 @@ export default function AdminClient({ displayName }: Props) {
   }, [cronUrl]);
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-6">
+      <div className="mx-auto w-full max-w-[1200px] space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Admin</div>
@@ -93,6 +94,7 @@ export default function AdminClient({ displayName }: Props) {
           </div>
         ) : null}
       </Card>
+      </div>
     </div>
   );
 }
