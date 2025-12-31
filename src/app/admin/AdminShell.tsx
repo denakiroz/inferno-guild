@@ -51,7 +51,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   const items = useMemo(
     () => [
-      { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/admin", label: "Admin", icon: Settings2 },
       { href: "/admin/members", label: "Members", icon: Users },
       { href: "/admin/war-builder", label: "War Builder", icon: Swords },
