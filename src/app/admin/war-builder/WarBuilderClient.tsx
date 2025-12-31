@@ -2169,7 +2169,6 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                           onDragEnd={onDragEnd}
                           onDragOverSlot={onDragOverSlot}
                           onDropOnSlot={onDropOnSlot}
-                          onOpenMemberEditor={openRemarkEditor}
                           onToggleSelect={toggleSelect}
                           onOpenRemark={openRemarkEditor}
                           onRemoveFromSlot={removeFromSlot}
@@ -2252,9 +2251,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                         dragOverTarget={dragOverTarget}
                         onDragStart={onDragStart}
                         onDragEnd={onDragEnd}
-                        onDragOverSlot={onDragOverSlot}
+                          onDragOverSlot={onDragOverSlot}
                         onDropOnSlot={onDropOnSlot}
-                        onOpenMemberEditor={openRemarkEditor}
                         onToggleSelect={toggleSelect}
                         onOpenRemark={openRemarkEditor}
                         onRemoveFromSlot={removeFromSlot}
@@ -2464,7 +2462,7 @@ function PartyCard(props: {
                     ? "border-red-300 bg-red-50 dark:bg-red-950/20"
                     : "border-zinc-100 dark:border-zinc-900",
               ].join(" ")}
-              onDragOver={onDragOverSlot ? (e) => onDragOverSlot(e, p.id, idx) : undefined}
+              onDragOver={(e) => onDragOverSlot(e, p.id, idx)}
               onDrop={(e) => onDropOnSlot(e, p.id, idx)}
               title={leaveThisTime ? (leaveReason ? `ลาวอ (${warTime}) • ${leaveReason}` : `ลาวอ (${warTime})`) : undefined}
             >
