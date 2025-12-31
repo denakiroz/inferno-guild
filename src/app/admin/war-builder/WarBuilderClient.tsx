@@ -13,6 +13,12 @@ type MemberRow = {
   class_id: number | null;
   guild: number;
 
+  /**
+   * ใช้สำหรับตัดสมาชิกพิเศษออกจาก War Builder (ไม่เข้า roster / ไม่โชว์สำรอง)
+   * ฟิลด์นี้ควรถูกส่งมาจาก /api/admin/members (table member.is_special)
+   */
+  is_special?: boolean | null;
+
   party: number | null;
   party_2: number | null;
 
@@ -26,6 +32,10 @@ type MemberRow = {
 
   status?: "Active" | "Inactive" | "active" | "inactive" | null;
 };
+
+function isSpecialMember(m: MemberRow): boolean {
+  return (m as any)?.is_special === true;
+}
 
 type DbClass = {
   id: number;
@@ -340,6 +350,103 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<DragTarget>(null);
 
+  // scroll assist during drag (ทำให้เลื่อนง่ายขึ้นตอนลากสมาชิก)
+  const rosterScrollRef = useRef<HTMLDivElement | null>(null);
+  const partyScrollRef = useRef<HTMLDivElement | null>(null);
+  const dragPointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragScrollRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!dragItem) return;
+
+    const EDGE_PX = 120; // ทำให้โซนขอบกว้างขึ้น (เลื่อนง่ายขึ้น)
+    const MAX_SPEED = 22; // px/frame
+
+    function inRect(x: number, y: number, r: DOMRect): boolean {
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }
+
+    function scrollElementByPointer(el: HTMLElement, x: number, y: number) {
+      const r = el.getBoundingClientRect();
+      if (!inRect(x, y, r)) return;
+
+      const topDist = y - r.top;
+      const bottomDist = r.bottom - y;
+
+      // intensity: 0..1 แล้วเร่งแบบ quadratic ให้รู้สึก “ติดมือ”
+      if (topDist < EDGE_PX) {
+        const t = Math.max(0, Math.min(1, 1 - topDist / EDGE_PX));
+        el.scrollTop -= Math.round(MAX_SPEED * t * t);
+      } else if (bottomDist < EDGE_PX) {
+        const t = Math.max(0, Math.min(1, 1 - bottomDist / EDGE_PX));
+        el.scrollTop += Math.round(MAX_SPEED * t * t);
+      }
+    }
+
+    function scrollWindowByPointer(y: number) {
+      const vh = window.innerHeight;
+      const topDist = y;
+      const bottomDist = vh - y;
+      const EDGE = 90;
+      const MAX = 18;
+
+      if (topDist < EDGE) {
+        const t = Math.max(0, Math.min(1, 1 - topDist / EDGE));
+        window.scrollBy(0, -Math.round(MAX * t * t));
+      } else if (bottomDist < EDGE) {
+        const t = Math.max(0, Math.min(1, 1 - bottomDist / EDGE));
+        window.scrollBy(0, Math.round(MAX * t * t));
+      }
+    }
+
+    function pickTarget(x: number, y: number): HTMLElement | null {
+      // ให้ priority: ถ้า pointer อยู่ใน roster list ให้เลื่อน roster; ไม่งั้นถ้าอยู่ใน party pane ให้เลื่อน party pane
+      const rosterEl = rosterScrollRef.current;
+      if (rosterEl) {
+        const r = rosterEl.getBoundingClientRect();
+        if (inRect(x, y, r)) return rosterEl;
+      }
+
+      const partyEl = partyScrollRef.current;
+      if (partyEl) {
+        const r = partyEl.getBoundingClientRect();
+        if (inRect(x, y, r)) return partyEl;
+      }
+
+      return null;
+    }
+
+    const onDragOver = (e: DragEvent) => {
+      // ทำให้ dragover ถูกยิงต่อเนื่อง เพื่ออัปเดตตำแหน่ง pointer
+      dragPointerRef.current = { x: e.clientX, y: e.clientY };
+      // allow drop
+      e.preventDefault();
+    };
+
+    const tick = () => {
+      const { x, y } = dragPointerRef.current;
+      const target = pickTarget(x, y);
+
+      if (target) {
+        scrollElementByPointer(target, x, y);
+      } else {
+        // fallback: เลื่อนหน้าจอ (กรณีจอเล็ก/มี modal)
+        scrollWindowByPointer(y);
+      }
+
+      dragScrollRafRef.current = window.requestAnimationFrame(tick);
+    };
+
+    window.addEventListener("dragover", onDragOver, { passive: false });
+    dragScrollRafRef.current = window.requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener("dragover", onDragOver as any);
+      if (dragScrollRafRef.current) window.cancelAnimationFrame(dragScrollRafRef.current);
+      dragScrollRafRef.current = null;
+    };
+  }, [dragItem]);
+
   // remark modal (popup)
   const [remarkOpen, setRemarkOpen] = useState(false);
   const [editingRemarkMemberId, setEditingRemarkMemberId] = useState<number | null>(null);
@@ -567,6 +674,7 @@ useEffect(() => {
     for (const m of sorted) {
       if (guild && m.guild !== guild) continue;
       if (normalizeActiveStatus(m.status) !== "active") continue;
+      if (isSpecialMember(m)) continue;
 
       const pid = sourceTime === "20:00" ? m.party : m.party_2;
       const pos = sourceTime === "20:00" ? m.pos_party : m.pos_party_2;
@@ -587,6 +695,40 @@ useEffect(() => {
     }
 
     return next;
+  }
+
+  /**
+   * Sanitize layout:
+   * - remove member ที่ไม่อยู่ในกิลด์ / inactive / is_special
+   * - กันซ้ำ (member เดียวอยู่หลายช่อง)
+   */
+  function sanitizePartiesLayout(input: Party[], sourceMembers: MemberRow[]): { next: Party[]; changed: boolean } {
+    const eligible = new Set<number>();
+    for (const m of sourceMembers ?? []) {
+      if (guild && Number(m.guild) !== Number(guild)) continue;
+      if (normalizeActiveStatus(m.status) !== "active") continue;
+      if (isSpecialMember(m)) continue;
+      eligible.add(m.id);
+    }
+
+    const next = cloneParties(input ?? []);
+    const seen = new Set<number>();
+    let changed = false;
+
+    for (const p of next) {
+      for (const sl of p.slots) {
+        const mid = sl.memberId;
+        if (!mid) continue;
+        if (!eligible.has(mid) || seen.has(mid)) {
+          sl.memberId = null;
+          changed = true;
+          continue;
+        }
+        seen.add(mid);
+      }
+    }
+
+    return { next, changed };
   }
 
   async function loadGroups() {
@@ -634,6 +776,14 @@ useEffect(() => {
         const current = getDraft(warTime) ?? buildPartiesFromMembers(memList, warTime);
         setDraft(warTime, current, false);
         setParties(current);
+      } else {
+        // draft ที่ dirty อาจมี member ที่ไม่ควรอยู่ (เช่น is_special) -> sanitize ทิ้ง
+        const draft = getDraft(warTime) ?? parties;
+        const { next, changed } = sanitizePartiesLayout(draft, memList);
+        if (changed) {
+          setDraft(warTime, next, true);
+          setParties(next);
+        }
       }
 
       const noteRes = await fetch(`/api/admin/note?guild=${guild}`, { cache: "no-store" });
@@ -709,7 +859,12 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
     const draft = getDraft(warTime);
     if (draft) {
-      setParties(draft);
+      const wasDirty = !!draftDirtyByTimeRef.current.get(warTime);
+      const { next, changed } = sanitizePartiesLayout(draft, members);
+      setParties(next);
+
+      // ถ้ามีการ sanitize (เช่น ตัด is_special) ให้ถือว่า dirty เพื่อให้กด save แล้ว DB ถูกเคลียร์
+      setDraft(warTime, next, changed ? true : wasDirty);
       return;
     }
 
@@ -727,7 +882,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
   const activeInGuild = useMemo(() => {
     return members
       .filter((m) => (guild ? m.guild === guild : true))
-      .filter((m) => normalizeActiveStatus(m.status) === "active");
+      .filter((m) => normalizeActiveStatus(m.status) === "active")
+      .filter((m) => !isSpecialMember(m));
   }, [members, guild]);
 
   const classCounts = useMemo(() => {
@@ -1869,6 +2025,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     const active = members
       .filter((m) => (guild ? Number(m.guild) === Number(guild) : true))
       .filter((m) => normalizeActiveStatus(m.status) === "active")
+      .filter((m) => !isSpecialMember(m))
       .filter((m) => !assignedIds.has(m.id))
       .filter((m) => !isOnLeave(m.id, warTime));
     active.sort((a, b) => (b.power ?? 0) - (a.power ?? 0));
@@ -2037,7 +2194,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             <div className="text-[11px] font-normal">ลากจากปาร์ตี้มาวางเพื่อเอาออก</div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-2">
+            <div ref={rosterScrollRef} className="flex-1 min-h-0 overflow-y-auto p-2">
             {roster.map((m) => {
               const isAssigned = assignedIds.has(m.id);
               const leaveThisTime = isOnLeave(m.id, warTime);
@@ -2105,7 +2262,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         </div>
 
         {/* Party Pane (grouped) */}
-        <div className="min-h-0 overflow-y-auto pr-1" style={{ height: paneHeight }}>
+        <div ref={partyScrollRef} className="min-h-0 overflow-y-auto pr-1" style={{ height: paneHeight }}>
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
             {groupedPartySections.map((sec, secIdx) => {
