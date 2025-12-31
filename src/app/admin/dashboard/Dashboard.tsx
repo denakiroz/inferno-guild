@@ -408,15 +408,6 @@ export default function Dashboard({
               ))}
             </Select>
           </div>
-
-          <div className="min-w-[220px]">
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหาชื่อสมาชิก..." />
-          </div>
-
-          <Button onClick={() => void onReload()} disabled={isLoading}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            รีเฟรช
-          </Button>
         </div>
       </div>
 
