@@ -164,6 +164,7 @@ export default function Dashboard({
 
   const filteredMembers = useMemo(() => {
     let rows = members;
+    rows = rows.filter((m) => String((m as any).status ?? "").toLowerCase() === "active");
     if (tab !== "all") rows = rows.filter((m) => Number((m as any).guild) === Number(tab));
     if (q.trim()) {
       const s = q.trim().toLowerCase();
@@ -215,36 +216,53 @@ export default function Dashboard({
   const currentMonthLabel = useMemo(() => thMonthYearLabelFromKey(currentMonthKey), [currentMonthKey]);
 
   // Today (errand)
-  const todayErrand = useMemo(() => rows.filter((r) => r.kind === "errand" && r.date === todayBkk), [rows, todayBkk]);
+  // Today (errand) — group by guild (unique member)
+  const todayErrandByGuild = useMemo(() => {
+    const memberGuild = new Map<number, number>();
+    for (const r of rows) {
+      if (r.kind !== "errand") continue;
+      if (r.date !== todayBkk) continue;
+      memberGuild.set(r.memberId, r.guild);
+    }
 
-  // Next Saturday war time split (20:00 / 20:30 / both)
-  const nextSatWarSplit = useMemo(() => {
-    const map = new Map<number, Set<string>>();
+    const byGuild = new Map<number, number>();
+    for (const g of memberGuild.values()) {
+      byGuild.set(g, (byGuild.get(g) ?? 0) + 1);
+    }
+
+    return { totalMembers: memberGuild.size, byGuild };
+  }, [rows, todayBkk]);
+
+  // Next Saturday war leaves (group by guild, per member shows 20.00 / 20.30 / both)
+  // Next Saturday war leaves — group by guild, count slots (no member names)
+  const nextSatWarByGuild = useMemo(() => {
+    const memberTimes = new Map<number, { guild: number; times: Set<string> }>();
     for (const r of rows) {
       if (r.kind !== "war") continue;
       if (r.date !== nextSatBkk) continue;
-      const s = map.get(r.memberId) ?? new Set<string>();
-      s.add(r.time);
-      map.set(r.memberId, s);
+      const cur = memberTimes.get(r.memberId) ?? { guild: r.guild, times: new Set<string>() };
+      cur.guild = r.guild;
+      cur.times.add(r.time);
+      memberTimes.set(r.memberId, cur);
     }
-    let only2000 = 0;
-    let only2030 = 0;
-    let both = 0;
-    let other = 0;
-    for (const times of map.values()) {
-      const has2000 = times.has("20:00");
-      const has2030 = times.has("20:30");
-      const others = Array.from(times).filter((t) => t !== "20:00" && t !== "20:30");
-      if (others.length) {
-        other++;
-        continue;
-      }
-      if (has2000 && has2030) both++;
-      else if (has2000) only2000++;
-      else if (has2030) only2030++;
-      else other++;
+
+    type SlotCount = { t2000: number; t2030: number; both: number; total: number };
+    const byGuild = new Map<number, SlotCount>();
+
+    for (const rec of memberTimes.values()) {
+      const times = Array.from(rec.times).sort();
+      const has2000 = times.includes("20:00");
+      const has2030 = times.includes("20:30");
+      const bucket = byGuild.get(rec.guild) ?? { t2000: 0, t2030: 0, both: 0, total: 0 };
+      if (has2000 && has2030) bucket.both += 1;
+      else if (has2000) bucket.t2000 += 1;
+      else if (has2030) bucket.t2030 += 1;
+      else bucket.t2000 += 0; // ignore unknown
+      bucket.total += 1;
+      byGuild.set(rec.guild, bucket);
     }
-    return { totalMembers: map.size, only2000, only2030, both, other };
+
+    return { totalMembers: memberTimes.size, byGuild };
   }, [rows, nextSatBkk]);
 
   // War days (unique member+date) by month
@@ -421,21 +439,24 @@ export default function Dashboard({
           <div className="flex items-start justify-between">
             <div>
               <div className="text-sm text-zinc-500 dark:text-zinc-400">ลากิจวันนี้</div>
-              <div className="mt-1 text-2xl font-semibold">{todayErrand.length}</div>
+              <div className="mt-1 text-2xl font-semibold">{todayErrandByGuild.totalMembers}</div>
             </div>
             <CalendarClock className="h-5 w-5 text-zinc-500" />
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {todayErrand.slice(0, 6).map((r) => (
-              <span key={String(r.id)} className="inline-flex items-center gap-2">
-                <Badge variant={badgeVariant(r.kind)}>{r.label}</Badge>
-                <span className="text-sm">{r.name}</span>
-              </span>
-            ))}
-            {todayErrand.length > 6 ? (
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">+{todayErrand.length - 6} คน</span>
-            ) : null}
+          <div className="mt-3 space-y-2">
+            {(tab === "all" ? [1, 2, 3] : [Number(tab)]).map((g) => {
+              const cnt = todayErrandByGuild.byGuild.get(g) ?? 0;
+              return (
+                <div
+                  key={g}
+                  className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950"
+                >
+                  <div className="text-sm font-medium">{guildLabel(g)}</div>
+                  <Badge variant="warning" className="shrink-0"> {cnt} คน </Badge>
+                </div>
+              );
+            })}
           </div>
         </Card>
 
@@ -443,18 +464,46 @@ export default function Dashboard({
           <div className="flex items-start justify-between">
             <div>
               <div className="text-sm text-zinc-500 dark:text-zinc-400">ลาวอ (เสาร์ถัดไป)</div>
-              <div className="mt-1 text-2xl font-semibold">{nextSatWarSplit.totalMembers}</div>
+              <div className="mt-1 text-2xl font-semibold">{nextSatWarByGuild.totalMembers}</div>
             </div>
             <AlertTriangle className="h-5 w-5 text-zinc-500" />
           </div>
-          <div className="mt-3 text-sm">
-            <div className="flex items-center justify-between"><span>20.00 น.</span><span className="font-medium">{nextSatWarSplit.only2000}</span></div>
-            <div className="flex items-center justify-between"><span>20.30 น.</span><span className="font-medium">{nextSatWarSplit.only2030}</span></div>
-            <div className="flex items-center justify-between"><span>สองรอบ</span><span className="font-medium">{nextSatWarSplit.both}</span></div>
+          <div className="mt-3 space-y-3">
+            {(tab === "all" ? [1, 2, 3] : [Number(tab)]).map((g) => {
+              const c =
+                nextSatWarByGuild.byGuild.get(g) ??
+                ({ t2000: 0, t2030: 0, both: 0, total: 0 } as { t2000: number; t2030: number; both: number; total: number });
+
+              return (
+                <div
+                  key={g}
+                  className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                >
+                  <div className="flex items-center justify-between bg-zinc-50 px-3 py-2 dark:bg-zinc-900">
+                    <div className="text-sm font-medium">{guildLabel(g)}</div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">{c.total} คน</div>
+                  </div>
+
+                  <div className="p-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
+                      <div className="text-sm text-zinc-600 dark:text-zinc-300">20.00</div>
+                      <Badge variant="danger">{c.t2000}</Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
+                      <div className="text-sm text-zinc-600 dark:text-zinc-300">20.30</div>
+                      <Badge variant="danger">{c.t2030}</Badge>
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">
+                      <div className="text-sm text-zinc-600 dark:text-zinc-300">ทั้งสองรอบ</div>
+                      <Badge variant="danger">{c.both}</Badge>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          {nextSatWarSplit.other ? (
-            <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">เวลาอื่น/ไม่ชัดเจน: {nextSatWarSplit.other}</div>
-          ) : null}
         </Card>
 
         <Card>
@@ -560,7 +609,7 @@ export default function Dashboard({
         <div className="flex items-center justify-between">
           <div>
             <div className="text-base font-semibold">Recent Leave Requests</div>
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">ล่าสุด 10 รายการ · เรียงตาม update_date (ตัด Cancel ออก)</div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">ล่าสุด 10 รายการ </div>
           </div>
         </div>
 
