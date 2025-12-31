@@ -167,6 +167,23 @@ function ColorDot({ value }: { value: string | null }) {
   );
 }
 
+function countMemberParties(m: MemberRow): number {
+  const p1 = typeof m.party === "number" && m.party > 0;
+  const p2 = typeof m.party_2 === "number" && m.party_2 > 0;
+  return (p1 ? 1 : 0) + (p2 ? 1 : 0);
+}
+
+function PartyCountBadge({ count }: { count: number }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums"
+      title="จำนวนปาร์ตี้ที่อยู่ (party + party_2)"
+    >
+      ({count})
+    </span>
+  );
+}
+
 function ClassIcon({
   iconUrl,
   label,
@@ -2146,6 +2163,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                           className="flex items-center justify-between rounded-lg border border-zinc-100 bg-white px-2 py-1.5 dark:border-zinc-900 dark:bg-zinc-950/30"
                         >
                           <div className="min-w-0 flex items-center gap-2">
+                            <PartyCountBadge count={countMemberParties(m)} />
                             <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={18} />
 	                            <div className="min-w-0 flex-1">
 	                              <div className="min-w-0 truncate text-[15px] font-bold" style={nameStyle}>
@@ -2235,6 +2253,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <ColorDot value={m.color} />
+                      <PartyCountBadge count={countMemberParties(m)} />
                       <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={16} />
                       <div className="min-w-0 flex items-center gap-2">
                         <span
@@ -2494,6 +2513,7 @@ function WarMapPartyCard(props: {
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-2 min-w-0">
+                  <PartyCountBadge count={countMemberParties(mem)} />
                   <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={16} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
@@ -2640,6 +2660,7 @@ function PartyCard(props: {
                     onClick={() => onToggleSelect(mem.id, leaveThisTime)}
                   >
                     <div className="flex items-center gap-2 min-w-0">
+                      <PartyCountBadge count={countMemberParties(mem)} />
                       <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={16} />
                       <div className="text-sm font-semibold truncate flex items-center gap-2">
                         <NameText m={mem} />
