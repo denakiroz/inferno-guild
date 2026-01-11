@@ -1,112 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Moon, Sun, Trash2, LogOut } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Moon, Sun, LogOut } from "lucide-react";
 
-import { Button, Card, Input, Select, Modal } from "@/app/components/UI";
-import LeaveRequestButton, { type LeaveCreateRow } from "@/app/components/LeaveRequestButton";
+import { Button, Card, Modal } from "@/app/components/UI";
 import { useTheme } from "@/app/theme/ThemeProvider";
+
+import LeaveRequestButton, { type LeaveCreateRow } from "@/app/components/LeaveRequestButton";
 import type { DbLeave } from "@/type/db";
 
-type MeRes = {
-  ok: boolean;
-  user?: {
-    discordUserId: string;
-    displayName: string;
-    avatarUrl: string;
-    guild: number;
-    isAdmin: boolean;
-    isHead: boolean;
-  };
-};
+import type {
+  MeRes,
+  ClassRow,
+  MemberRow,
+  LeaveMeRes,
+  ClassListRes,
+  UltimateSkillRow,
+  UltimateSkillListRes,
+  MyUltimateRes,
+} from "./_lib/types";
 
-type ClassRow = {
-  id: number;
-  name: string;
-  icon_url: string | null;
-};
+import { bkkDateOf, bkkNowHHMM, bkkDateTimeParts, canCancelLeave } from "./_lib/bkkDate";
 
-type MemberRow = {
-  discord_user_id: string;
-  name: string;
-  power: number;
-  is_special: boolean;
-  guild: number;
-  update_date:string;
+import { ProfileTab } from "./_components/ProfileTab";
+import { LeavesTab } from "./_components/LeavesTab";
 
-  class?: string; // legacy
-  class_id?: number; // preferred
-};
+type TabKey = "profile" | "leaves";
 
-const BKK_TZ = "Asia/Bangkok";
-
-const bkkDateFmt = new Intl.DateTimeFormat("en-CA", {
-  timeZone: BKK_TZ,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-function bkkDateOf(date: Date) {
-  return bkkDateFmt.format(date); // YYYY-MM-DD
-}
-
-const bkkDateTimeFmt = new Intl.DateTimeFormat("en-CA", {
-  timeZone: BKK_TZ,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
-function bkkDateTimeParts(dt: string) {
-  const parts = bkkDateTimeFmt.formatToParts(new Date(dt));
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  const date = `${get("year")}-${get("month")}-${get("day")}`;
-  const time = `${get("hour")}:${get("minute")}`;
-  return { date, time };
-}
-
-function isSaturday(dateStr: string) {
-  const d = new Date(`${dateStr}T00:00:00+07:00`);
-  return d.getDay() === 6;
-}
-
-function prettyDate(dateStr: string) {
-  const dt = new Date(`${dateStr}T00:00:00+07:00`);
-  return dt.toLocaleDateString("th-TH", {
-    timeZone: BKK_TZ,
-    weekday: "long",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-// HH:MM (Bangkok)
-const bkkTimeFmt = new Intl.DateTimeFormat("en-GB", {
-  timeZone: BKK_TZ,
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
-function bkkNowHHMM() {
-  return bkkTimeFmt.format(new Date()); // "20:05"
-}
-
-// rule: อดีตห้าม, อนาคตได้, วันนี้ได้ก่อน 20:00
-function canCancelLeave(dateYYYYMMDD: string) {
-  const today = bkkDateOf(new Date());
-  if (dateYYYYMMDD < today) return false;
-  if (dateYYYYMMDD > today) return true;
-  return bkkNowHHMM() < "20:00";
-}
-
-type LeaveMeRes = { ok: true; leaves: DbLeave[] } | { ok: false; error?: string };
-type ClassListRes = { ok: true; classes: ClassRow[] } | { ok: false; error?: string };
+const tabBase =
+  "px-4 py-2 text-sm rounded-lg transition whitespace-nowrap";
+const tabIdle =
+  "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100";
+const tabActive =
+  "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow";
 
 export default function MePage() {
   const { theme, toggleTheme } = useTheme();
+
+  const [tab, setTab] = useState<TabKey>("profile");
 
   const [me, setMe] = useState<MeRes | null>(null);
   const [member, setMember] = useState<MemberRow | null>(null);
@@ -115,6 +46,10 @@ export default function MePage() {
   const [classId, setClassId] = useState<string>("0");
 
   const [myLeaves, setMyLeaves] = useState<DbLeave[]>([]);
+
+  // ✅ ultimate
+  const [ultimateSkills, setUltimateSkills] = useState<UltimateSkillRow[]>([]);
+  const [selectedUltimateIds, setSelectedUltimateIds] = useState<number[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
@@ -135,11 +70,20 @@ export default function MePage() {
 
   const todayBkk = useMemo(() => bkkDateOf(new Date()), []);
 
-  // ✅ ใช้เฉพาะใบลาที่ "ยัง Active" สำหรับ logic/disable/ตาราง
+  const canAdmin = !!me?.user?.isAdmin;
+  const canAccessAdmin = !!(me?.user?.isAdmin || me?.user?.isHead);
+
+  // ✅ ใช้เฉพาะใบลาที่ "ยัง Active"
   const activeLeaves = useMemo(
     () => (myLeaves ?? []).filter((l) => String(l.status ?? "Active") !== "Cancel"),
     [myLeaves]
   );
+
+  useEffect(() => {
+    if (!saveOk) return;
+    const t = setTimeout(() => setSaveOk(false), 2000);
+    return () => clearTimeout(t);
+  }, [saveOk]);
 
   async function reloadLeaves() {
     const r = await fetch("/api/leave/me", { cache: "no-store" });
@@ -156,16 +100,37 @@ export default function MePage() {
     const normalized = Array.isArray(j.classes) ? j.classes : [];
     const hasZero = normalized.some((c) => c.id === 0);
     const withZero = hasZero ? normalized : [{ id: 0, name: "ยังไม่เลือกอาชีพ", icon_url: null }, ...normalized];
-
     withZero.sort((a, b) => a.id - b.id);
     setClasses(withZero);
   }
 
-  useEffect(() => {
-    if (!saveOk) return;
-    const t = setTimeout(() => setSaveOk(false), 2000);
-    return () => clearTimeout(t);
-  }, [saveOk]);
+  async function loadUltimateMaster() {
+    const r = await fetch("/api/ultimate-skill", { cache: "no-store" });
+    const j = (await r.json()) as UltimateSkillListRes;
+    if (!j.ok) throw new Error(j.error ?? "load_ultimate_failed");
+    setUltimateSkills(Array.isArray(j.skills) ? j.skills : []);
+  }
+
+  async function loadMyUltimate() {
+    const r = await fetch("/api/member/me/ultimate", { cache: "no-store" });
+    const j = (await r.json()) as MyUltimateRes;
+    if (!j.ok) throw new Error(j.error ?? "load_my_ultimate_failed");
+    setSelectedUltimateIds(Array.isArray(j.ultimate_skill_ids) ? j.ultimate_skill_ids : []);
+  }
+
+  async function saveMyUltimate(ids: number[]) {
+    const res = await fetch("/api/member/me/ultimate", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ultimate_skill_ids: ids }),
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error ?? "save_my_ultimate_failed");
+  }
+
+  function getAuthDisplayName(): string {
+    return String(me?.user?.displayName ?? "").trim();
+  }
 
   useEffect(() => {
     (async () => {
@@ -183,11 +148,14 @@ export default function MePage() {
         })(),
         loadClassMaster(),
         reloadLeaves(),
+        loadUltimateMaster(),
+        loadMyUltimate(),
       ]);
     })().catch(() => setErr("โหลดข้อมูลไม่สำเร็จ"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // sync classId with member
   useEffect(() => {
     if (!member) return;
 
@@ -207,19 +175,6 @@ export default function MePage() {
     else setClassId("0");
   }, [member, classes]);
 
-  const selectedClassIconUrl = useMemo(() => {
-    const cid = Number(classId) || 0;
-    const row = classes.find((c) => c.id === cid);
-    return row?.icon_url ?? null;
-  }, [classes, classId]);
-
-  const canAdmin = !!me?.user?.isAdmin;
-  const canAccessAdmin = !!(me?.user?.isAdmin || me?.user?.isHead);
-
-  function getAuthDisplayName(): string {
-    return String(me?.user?.displayName ?? "").trim();
-  }
-
   async function onSaveProfile() {
     if (!member) return;
     setSaving(true);
@@ -231,14 +186,12 @@ export default function MePage() {
 
       const authName = getAuthDisplayName();
       const finalName = authName || String(member.name ?? "").trim();
-      const nowIso = new Date().toISOString();
 
       const nextMember: MemberRow = {
         ...member,
         name: finalName,
         class_id: selectedClassId,
         class: selectedClassName,
-        update_date: nowIso,
       };
       setMember(nextMember);
 
@@ -250,13 +203,16 @@ export default function MePage() {
           power: nextMember.power,
           class_id: nextMember.class_id,
           class: nextMember.class,
-          update_date:nextMember.update_date
         }),
       });
 
       const j = await res.json();
       if (!j.ok) throw new Error(j.error ?? "save_failed");
+
       setMember(j.member as MemberRow);
+
+      // ✅ save ultimate after member save success
+      await saveMyUltimate(selectedUltimateIds);
     } catch (e: any) {
       setErr(String(e.message ?? e));
     } finally {
@@ -277,7 +233,6 @@ export default function MePage() {
     await reloadLeaves();
   }
 
-  // ✅ PATCH (soft-cancel)
   async function cancelMyLeave(id: number) {
     setLeaveErr(null);
     setCanceling(id);
@@ -313,10 +268,9 @@ export default function MePage() {
       .map((l) => ({ l, ...bkkDateTimeParts(String(l.date_time ?? "")) }))
       .filter((x) => {
         if (!x.date) return false;
-
         if (x.date > todayBkk) return true;
-        if (x.date === todayBkk) return nowHHMM < "20:00"; // หลัง 20:00 ไม่เห็นของวันนี้
-        return false; // อดีตไม่แสดง
+        if (x.date === todayBkk) return nowHHMM < "20:00";
+        return false;
       })
       .sort((a, b) => {
         if (a.date !== b.date) return a.date.localeCompare(b.date);
@@ -357,184 +311,119 @@ export default function MePage() {
           <div
             role="status"
             aria-live="polite"
-            className="fixed top-4 right-4 z-50 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-lg
+            className="fixed top-4 right-4 z-[60] rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-lg
                       dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200"
           >
             บันทึกสำเร็จ
           </div>
         )}
 
-        <Card>
-          <div className="flex items-center gap-4">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={me.user?.avatarUrl}
-              alt="avatar"
-              className="h-14 w-14 rounded-2xl border border-zinc-200 dark:border-zinc-800"
-            />
+        {/* ✅ STICKY HEADER */}
+        <div className="sticky top-3 z-50">
+          <div className="space-y-3">
+            {/* Header card */}
+            <Card>
+              <div className="flex items-center gap-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={me.user?.avatarUrl}
+                  alt="avatar"
+                  className="h-14 w-14 rounded-2xl border border-zinc-200 dark:border-zinc-800"
+                />
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                  {me.user?.displayName}
+                <div className="flex-1 min-w-0">
+                  <div className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                    {me.user?.displayName}
+                  </div>
+                  <div className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Guild: {me.user?.guild} • {canAdmin ? "Admin" : "Member"}
+                  </div>
                 </div>
 
-                {selectedClassIconUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={selectedClassIconUrl}
-                    alt="class icon"
-                    className="h-6 w-6 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 object-contain"
-                  />
-                ) : null}
+                {canAccessAdmin && (
+                  <a href="/admin" className="text-sm underline text-red-600 whitespace-nowrap">
+                    ไป Admin
+                  </a>
+                )}
+
+                <Button variant="outline" onClick={toggleTheme}>
+                  {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  สลับธีม
+                </Button>
+
+                <Button variant="outline" onClick={onLogout} disabled={loggingOut}>
+                  <LogOut className="w-4 h-4 text-rose-600" />
+                  {loggingOut ? "กำลังออก..." : "Logout"}
+                </Button>
               </div>
+            </Card>
 
-              <div className="text-sm text-zinc-500 dark:text-zinc-400">
-                Guild: {me.user?.guild} • {canAdmin ? "Admin" : "Member"}
-              </div>
-            </div>
-
-            {canAccessAdmin && (
-              <a href="/admin" className="text-sm underline text-red-600">
-                ไป Admin
-              </a>
-            )}
-
-            <Button variant="outline" onClick={toggleTheme}>
-              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              สลับธีม
-            </Button>
-
-            <Button variant="outline" onClick={onLogout} disabled={loggingOut}>
-              <LogOut className="w-4 h-4 text-rose-600" />
-              {loggingOut ? "กำลังออก..." : "Logout"}
-            </Button>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">โปรไฟล์</div>
-
-            {!member?.is_special ? (
-              <LeaveRequestButton
-                memberName={member?.name ?? "ฉัน"}
-                // ✅ สำคัญ: ส่งเฉพาะ Active ไม่งั้นวันเดิมจะถูก disable ทั้งที่เคย Cancel แล้ว
-                existingLeaves={activeLeaves}
-                onCreate={createMyLeave}
-              />
-            ) : null}
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs text-zinc-500 mb-1">Power</div>
-              <Input
-                type="number"
-                value={member?.power ?? 0}
-                onChange={(e) => setMember((m) => (m ? { ...m, power: Number(e.target.value) } : m))}
-              />
-            </div>
-
-            <div>
-              <div className="text-xs text-zinc-500 mb-1">อาชีพ</div>
-              <Select value={classId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setClassId(e.target.value)}>
-                {classes.map((c) => (
-                  <option key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-
-          {err && <div className="mt-3 text-sm text-rose-600">Error: {err}</div>}
-
-          <div className="mt-5 flex items-center justify-end gap-2">
-            <Button onClick={onSaveProfile} disabled={saving}>
-              {saving ? "กำลังบันทึก..." : "บันทึก"}
-            </Button>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-center gap-2">
-            <CalendarDays className="w-5 h-5" />
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">การลาของฉัน</div>
-          </div>
-          <div className="mt-1 text-xs text-zinc-500">ยกเลิกได้เฉพาะ “วันนี้” ก่อน 20:00 และ “อนาคต” เท่านั้น (ตามเวลาไทย)</div>
-
-          {leaveErr ? <div className="mt-3 text-sm text-rose-600">Error: {leaveErr}</div> : null}
-
-          <div className="mt-4 space-y-3">
-            {Array.from(upcomingGrouped.entries()).length === 0 ? (
-              <div className="text-sm text-zinc-500">ยังไม่มีการลาในอนาคต</div>
-            ) : (
-              Array.from(upcomingGrouped.entries()).map(([date, items]) => {
-                const saturday = isSaturday(date);
-
-                return (
-                  <div
-                    key={date}
-                    className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-4"
+            {/* Tabs + Actions (responsive) */}
+            <Card>
+              {/* ✅ Mobile: stack, Desktop: row */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {/* Tabs group */}
+                <div className="inline-flex max-w-full overflow-x-auto rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setTab("profile")}
+                    className={`${tabBase} ${tab === "profile" ? tabActive : tabIdle}`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-semibold text-zinc-900 dark:text-zinc-100">{prettyDate(date)}</div>
-                        <div className="text-xs text-zinc-500">{saturday ? "วันวอ (เสาร์)" : "ลากิจ"}</div>
-                      </div>
-                      <div className="text-xs text-zinc-500">{date}</div>
-                    </div>
+                    โปรไฟล์
+                  </button>
 
-                    <div className="mt-3 space-y-2">
-                      {items.map(({ leave, time }) => {
-                        const label = saturday
-                          ? time === "20:00"
-                            ? "ลาวอ 20:00"
-                            : time === "20:30"
-                            ? "ลาวอ 20:30"
-                            : "ลาวอ"
-                          : "ลากิจ";
+                  <button
+                    type="button"
+                    onClick={() => setTab("leaves")}
+                    className={`${tabBase} ${tab === "leaves" ? tabActive : tabIdle}`}
+                  >
+                    การลาของฉัน
+                  </button>
+                </div>
 
-                        const isCanceled = String(leave.status ?? "Active") === "Cancel";
-                        const canCancel = canCancelLeave(date) && !isCanceled;
-
-                        return (
-                          <div
-                            key={leave.id}
-                            className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 px-3 py-2"
-                          >
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{label}</div>
-                              <div className="text-xs text-zinc-500 truncate">
-                                {leave.reason ? `เหตุผล: ${leave.reason}` : "เหตุผล: -"}
-                              </div>
-                            </div>
-
-                            <Button
-                              variant="outline"
-                              disabled={canceling === leave.id || !canCancel}
-                              onClick={() => {
-                                if (!canCancel) return;
-                                setConfirmTarget({ id: leave.id, date, time, label });
-                                setConfirmOpen(true);
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              {canCancel ? (canceling === leave.id ? "กำลังยกเลิก..." : "ยกเลิก") : "ยกเลิกไม่ได้แล้ว"}
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                {/* ✅ Actions right */}
+                <div className="flex items-center justify-end">
+                  {!member?.is_special ? (
+                    <LeaveRequestButton
+                      memberName={member?.name ?? "ฉัน"}
+                      existingLeaves={activeLeaves}
+                      onCreate={createMyLeave}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </Card>
           </div>
-        </Card>
+        </div>
 
-        {/* ✅ Confirm Cancel */}
+        {/* Content */}
+        {tab === "profile" ? (
+          <ProfileTab
+            member={member}
+            setMember={setMember}
+            classes={classes}
+            classId={classId}
+            setClassId={setClassId}
+            saving={saving}
+            err={err}
+            onSaveProfile={onSaveProfile}
+            ultimateSkills={ultimateSkills}
+            selectedUltimateIds={selectedUltimateIds}
+            setSelectedUltimateIds={setSelectedUltimateIds}
+          />
+        ) : (
+          <LeavesTab
+            leaveErr={leaveErr}
+            upcomingGrouped={upcomingGrouped}
+            canceling={canceling}
+            onAskCancel={(payload) => {
+              setConfirmTarget(payload);
+              setConfirmOpen(true);
+            }}
+          />
+        )}
+
+        {/* Confirm Cancel */}
         <Modal
           open={confirmOpen}
           onClose={() => {

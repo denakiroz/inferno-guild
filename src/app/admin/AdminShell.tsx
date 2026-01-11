@@ -15,6 +15,8 @@ import {
   Calendar,
   Menu,
   X,
+  Database,
+  Trophy,
 } from "lucide-react";
 
 import { Button } from "@/app/components/UI";
@@ -31,6 +33,9 @@ type MeRes = {
     isHead: boolean;
   };
 };
+
+type NavItem = { href: string; label: string; icon: any };
+type NavSection = { title: string; items: NavItem[] };
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -82,13 +87,37 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     }
   }
 
-  const items = useMemo(
+  // ✅ Sections (เพิ่ม Master Data + Guild League)
+  const sections: NavSection[] = useMemo(
     () => [
-      { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/admin/admin", label: "Admin", icon: Settings2 },
-      { href: "/admin/members", label: "Members", icon: Users },
-      { href: "/admin/war-builder", label: "War Builder", icon: Swords },
-      { href: "/admin/leaves", label: "Leaves", icon: Calendar },
+      {
+        title: "Overview",
+        items: [{ href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard }],
+      },
+      {
+        title: "Guild",
+        items: [
+          { href: "/admin/admin", label: "Admin", icon: Settings2 },
+          { href: "/admin/members", label: "Members", icon: Users },
+          { href: "/admin/war-builder", label: "War Builder", icon: Swords },
+          { href: "/admin/leaves", label: "Leaves", icon: Calendar },
+        ],
+      },
+      {
+        title: "Master Data",
+        items: [
+          // ✅ เปลี่ยน href ให้ตรงกับหน้าจริงของคุณ
+          { href: "/admin/master/classes", label: "Classes", icon: Database },
+          { href: "/admin/master/ultimate-skills", label: "Ultimate Skills", icon: Database },
+        ],
+      },
+      {
+        title: "Guild League",
+        items: [
+          // ✅ เปลี่ยน href ให้ตรงกับหน้าจริงของคุณ
+          { href: "/admin/guild-league", label: "Guild League", icon: Trophy },
+        ],
+      },
     ],
     []
   );
@@ -99,6 +128,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   };
 
   const toggleMenu = () => setMenuOpen((v) => !v);
+
+  function isActive(href: string) {
+    if (pathname === href) return true;
+    // highlight nested routes
+    if (href !== "/admin" && pathname?.startsWith(href)) return true;
+    return false;
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -144,28 +180,37 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Inferno Admin</div>
             <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Manage guild data</div>
 
-            <nav className="mt-4 space-y-1">
-              {items.map((it) => {
-                const active =
-                  pathname === it.href || (it.href !== "/admin" && pathname?.startsWith(it.href));
-                const Icon = it.icon;
-                return (
-                  <Link
-                    key={it.href}
-                    href={it.href}
-                    onClick={() => setMenuOpen(false)}
-                    className={[
-                      "flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition",
-                      active
-                        ? "bg-red-600 text-white border-red-600"
-                        : "bg-white/50 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-transparent hover:border-zinc-200 dark:hover:border-zinc-800",
-                    ].join(" ")}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {it.label}
-                  </Link>
-                );
-              })}
+            <nav className="mt-4 space-y-4">
+              {sections.map((sec) => (
+                <div key={sec.title}>
+                  <div className="px-2 pb-2 text-[11px] font-semibold tracking-wide text-zinc-500 dark:text-zinc-400 uppercase">
+                    {sec.title}
+                  </div>
+
+                  <div className="space-y-1">
+                    {sec.items.map((it) => {
+                      const active = isActive(it.href);
+                      const Icon = it.icon;
+                      return (
+                        <Link
+                          key={it.href}
+                          href={it.href}
+                          onClick={() => setMenuOpen(false)}
+                          className={[
+                            "flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition",
+                            active
+                              ? "bg-red-600 text-white border-red-600"
+                              : "bg-white/50 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-transparent hover:border-zinc-200 dark:hover:border-zinc-800",
+                          ].join(" ")}
+                        >
+                          <Icon className="w-4 h-4" />
+                          {it.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </nav>
 
             <div className="mt-6 border-t border-zinc-200 dark:border-zinc-800 pt-4 space-y-2">
@@ -229,7 +274,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <div
         className={[
           "transition-[padding-left] duration-200 ease-out",
-          // ปุ่ม hamburger วางทับอยู่แล้ว เลยเพิ่ม padding-top กันชนิด content ชน
           "pt-14 md:pt-0",
           menuOpen ? "md:pl-64" : "md:pl-0",
         ].join(" ")}
