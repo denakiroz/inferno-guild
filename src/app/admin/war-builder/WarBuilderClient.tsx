@@ -1850,165 +1850,173 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         <div className="mt-3 text-xs text-amber-600">คุณไม่มีสิทธิ์แก้ไข (ต้องเป็น Admin หรือ Head)</div>
       )}
 
-      {/* Class filter panel */}
-      <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/20">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-zinc-500">
-            Filter อาชีพ (Roster):{" "}
-            <span className="font-semibold text-zinc-700 dark:text-zinc-200">
-              {classFilterCount === 0 ? "ทั้งหมด" : `${classFilterCount} อาชีพ`}
-            </span>
-          </div>
+            {/* Filter panels (F1 / F2 / F3) */}
+      <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20">
+        <div className="grid grid-cols-1 divide-y divide-zinc-200 dark:divide-zinc-800 md:grid-cols-3 md:divide-y-0 md:divide-x">
+          {/* F1 */}
+          <div className="p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-zinc-500">
+                Filter อาชีพ (Roster):{" "}
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">
+                  {classFilterCount === 0 ? "ทั้งหมด" : `${classFilterCount} อาชีพ`}
+                </span>
+              </div>
 
-          <button
-            type="button"
-            className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
-            onClick={clearClassFilter}
-            disabled={classFilterCount === 0}
-          >
-            ทั้งหมด
-          </button>
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-2">
-          {classOptions.length === 0 ? (
-            <div className="text-xs text-zinc-400">ยังไม่มีข้อมูลอาชีพ</div>
-          ) : (
-            classOptions.map((c) => {
-              const active = classFilter.has(c.id);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={[
-                    "flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs font-semibold",
-                    active
-                      ? "border-red-300 bg-red-50 text-zinc-800 dark:bg-red-950/20 dark:text-zinc-100"
-                      : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/10 dark:text-zinc-300 dark:hover:bg-zinc-900/40",
-                  ].join(" ")}
-                  onClick={() => toggleClassFilter(c.id)}
-                  aria-pressed={active}
-                  title={c.name}
-                >
-                  <ClassIcon iconUrl={c.icon_url} label={c.name} size={18} />
-                  <span className="truncate max-w-[140px]">{c.name}</span>
-                  <span className="ml-1 rounded-md border border-zinc-200 px-1.5 py-0.5 text-[10px] font-bold text-zinc-500 dark:border-zinc-800 dark:text-zinc-300">
-                    {c.count}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-
-      {/* Party filter panel */}
-      <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/20">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-zinc-500">
-            Filter ปาร์ตี้ (Roster):{" "}
-            <span className="font-semibold text-zinc-700 dark:text-zinc-200">{partyFilterLabel}</span>
-          </div>
-
-          <button
-            type="button"
-            className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
-            onClick={() => setPartyFilter("all")}
-          >
-            ล้าง
-          </button>
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-2">
-          {([
-            { key: "all" as const, label: "ทั้งหมด" },
-            { key: "assigned" as const, label: "มีปาร์ตี้" },
-            { key: "unassigned" as const, label: "ยังไม่มีปาร์ตี้" },
-          ] as const).map((x) => {
-            const active = partyFilter === x.key;
-            return (
               <button
-                key={x.key}
                 type="button"
-                className={[
-                  "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
-                  active
-                    ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
-                ].join(" ")}
-                onClick={() => setPartyFilter(x.key)}
+                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                onClick={clearClassFilter}
+                disabled={classFilterCount === 0}
               >
-                {x.label}
+                ทั้งหมด
               </button>
-            );
-          })}
-        </div>
+            </div>
 
-        <div className="mt-2 text-[11px] text-zinc-500">
-          หมายเหตุ: ใช้อ้างอิงจากการจัดทัพ “ปัจจุบัน” (assigned/unassigned) ไม่ใช่ค่า party ใน DB
-        </div>
-      </div>
-
-      {/* Ultimate filter panel */}
-      <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/20">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-zinc-500">
-            Filter Ultimate (Roster):{" "}
-            <span className="font-semibold text-zinc-700 dark:text-zinc-200">
-              {ultimateFilterCount === 0 ? "ทั้งหมด" : `${ultimateFilterCount} อย่าง`}
-            </span>
+            <div className="mt-2 max-h-[120px] overflow-y-auto pr-1">
+              <div className="flex flex-wrap gap-2">
+                {classOptions.length === 0 ? (
+                  <div className="text-xs text-zinc-400">ยังไม่มีข้อมูลอาชีพ</div>
+                ) : (
+                  classOptions.map((c) => {
+                    const active = classFilter.has(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={[
+                          "flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs font-semibold",
+                          active
+                            ? "border-red-300 bg-red-50 text-zinc-800 dark:bg-red-950/20 dark:text-zinc-100"
+                            : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/10 dark:text-zinc-300 dark:hover:bg-zinc-900/40",
+                        ].join(" ")}
+                        onClick={() => toggleClassFilter(c.id)}
+                        aria-pressed={active}
+                        title={c.name}
+                      >
+                        <ClassIcon iconUrl={c.icon_url} label={c.name} size={18} />
+                        <span className="truncate max-w-[140px]">{c.name}</span>
+                        <span className="ml-1 rounded-md border border-zinc-200 px-1.5 py-0.5 text-[10px] font-bold text-zinc-500 dark:border-zinc-800 dark:text-zinc-300">
+                          {c.count}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
 
-          <button
-            type="button"
-            className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
-            onClick={clearUltimateFilter}
-          >
-            ล้าง
-          </button>
-        </div>
+          {/* F2 */}
+          <div className="p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-zinc-500">
+                Filter ปาร์ตี้ (Roster):{" "}
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">{partyFilterLabel}</span>
+              </div>
 
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={[
-              "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
-              ultimateFilterCount === 0
-                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
-                : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
-            ].join(" ")}
-            onClick={clearUltimateFilter}
-          >
-            ทั้งหมด
-          </button>
+              <button
+                type="button"
+                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                onClick={() => setPartyFilter("all")}
+              >
+                ล้าง
+              </button>
+            </div>
 
-          {ultimateOptions.length === 0 ? (
-            <div className="text-xs text-zinc-400">ยังไม่มีข้อมูล Ultimate</div>
-          ) : (
-            ultimateOptions.map((u) => {
-              const active = ultimateFilter.has(u.id);
-              return (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {([
+                { key: "all" as const, label: "ทั้งหมด" },
+                { key: "assigned" as const, label: "มีปาร์ตี้" },
+                { key: "unassigned" as const, label: "ยังไม่มีปาร์ตี้" },
+              ] as const).map((x) => {
+                const active = partyFilter === x.key;
+                return (
+                  <button
+                    key={x.key}
+                    type="button"
+                    className={[
+                      "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                      active
+                        ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                        : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+                    ].join(" ")}
+                    onClick={() => setPartyFilter(x.key)}
+                  >
+                    {x.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-2 text-[11px] text-zinc-500">
+              หมายเหตุ: ใช้อ้างอิงจากการจัดทัพ “ปัจจุบัน” (assigned/unassigned) ไม่ใช่ค่า party ใน DB
+            </div>
+          </div>
+
+          {/* F3 */}
+          <div className="p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-zinc-500">
+                Filter Ultimate (Roster):{" "}
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">
+                  {ultimateFilterCount === 0 ? "ทั้งหมด" : `${ultimateFilterCount} อย่าง`}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                onClick={clearUltimateFilter}
+              >
+                ล้าง
+              </button>
+            </div>
+
+            <div className="mt-2 max-h-[120px] overflow-y-auto pr-1">
+              <div className="flex flex-wrap gap-2">
                 <button
-                  key={u.id}
                   type="button"
                   className={[
                     "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
-                    active
+                    ultimateFilterCount === 0
                       ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
                       : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
                   ].join(" ")}
-                  onClick={() => toggleUltimateFilter(u.id)}
-                  title={u.name}
+                  onClick={clearUltimateFilter}
                 >
-                  <span className="max-w-[160px] truncate">{u.name}</span>
-                  <span className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums">
-                    {u.count}
-                  </span>
+                  ทั้งหมด
                 </button>
-              );
-            })
-          )}
+
+                {ultimateOptions.length === 0 ? (
+                  <div className="text-xs text-zinc-400">ยังไม่มีข้อมูล Ultimate</div>
+                ) : (
+                  ultimateOptions.map((u) => {
+                    const active = ultimateFilter.has(u.id);
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        className={[
+                          "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                          active
+                            ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                            : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+                        ].join(" ")}
+                        onClick={() => toggleUltimateFilter(u.id)}
+                        title={u.name}
+                      >
+                        <span className="max-w-[160px] truncate">{u.name}</span>
+                        <span className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums">
+                          {u.count}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2545,43 +2553,20 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         {/* Party Pane (grouped) */}
         <div ref={partyScrollRef} className="min-h-0 overflow-y-auto pr-1" style={{ height: paneHeight }}>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
             {groupedPartySections.map((sec, secIdx) => {
               const partyCount = sec.parties.length;
-              const span = Math.min(Math.max(partyCount, 1), 4);
 
-              const xlSpanClass =
-                span === 1
-                  ? "xl:col-span-1"
-                  : span === 2
-                    ? "xl:col-span-2"
-                    : span === 3
-                      ? "xl:col-span-3"
-                      : "xl:col-span-4";
-
-              // inner columns: ทำให้จำนวนคอลัมน์สัมพันธ์กับขนาดกลุ่ม เพื่อให้ 1+3 หรือ 2+2 อยู่แถวเดียวกันได้
-              const innerColsClass =
-                span === 1
-                  ? "xl:grid-cols-1"
-                  : span === 2
-                    ? "xl:grid-cols-2"
-                    : span === 3
-                      ? "xl:grid-cols-3"
-                      : "xl:grid-cols-4";
-
-              // base responsive: ไม่บังคับให้คอลัมน์เยอะเกินในจอเล็ก
-              const innerBase =
-                span === 1
-                  ? "grid-cols-1"
-                  : span === 2
-                    ? "grid-cols-1 sm:grid-cols-2"
-                    : span === 3
-                      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-                      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+              /**
+               * Party grid
+               * ต้องการให้ “1 แถวมี 4 ปาร์ตี้” (สำหรับ desktop)
+               * - มือถือ/จอเล็ก: 1–2 คอลัมน์เพื่อไม่ให้แคบเกิน
+               * - Desktop: 4 คอลัมน์
+               */
+              const partyGridClass = "grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
 
               if (sec.type === "ungrouped") {
                 return (
-                  <div key={`ungrouped-${secIdx}`} className={["space-y-2", xlSpanClass].join(" ")}>
+                  <div key={`ungrouped-${secIdx}`} className="space-y-2">
                     <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20">
                       <div className="flex items-center justify-between p-3">
                         <div className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
@@ -2592,7 +2577,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                       <div className="h-px w-full bg-zinc-100 dark:bg-zinc-900" />
                     </div>
 
-                    <div className={["grid gap-3", innerBase, innerColsClass].join(" ")}>
+                    <div className={partyGridClass}>
                       {sec.parties.map((p) => (
                         <PartyCard
                           key={p.id}
@@ -2625,7 +2610,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               const gColor = g.color ?? null;
 
               return (
-                <div key={`group-${g.id}`} className={["space-y-2", xlSpanClass].join(" ")}>
+                <div key={`group-${g.id}`} className="space-y-2">
                   <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20">
                     <div className="flex items-center justify-between p-3">
                       <div className="min-w-0 flex items-center gap-2">
@@ -2637,9 +2622,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                           <div className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                             {g.name}
                           </div>
-                          <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                            ปาร์ตี้: {g.group}
-                          </div>
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400">ปาร์ตี้: {g.group}</div>
                         </div>
                       </div>
 
@@ -2676,7 +2659,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                     {gColor ? <div className="h-1 w-full" style={{ backgroundColor: gColor, opacity: 0.7 }} /> : null}
                   </div>
 
-                  <div className={["grid gap-3", innerBase, innerColsClass].join(" ")}>
+                  <div className={partyGridClass}>
                     {sec.parties.map((p) => (
                       <PartyCard
                         key={p.id}
@@ -2689,7 +2672,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                         dragOverTarget={dragOverTarget}
                         onDragStart={onDragStart}
                         onDragEnd={onDragEnd}
-                          onDragOverSlot={onDragOverSlot}
+                        onDragOverSlot={onDragOverSlot}
                         onDropOnSlot={onDropOnSlot}
                         onToggleSelect={toggleSelect}
                         onOpenRemark={openRemarkEditor}
@@ -2704,7 +2687,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 </div>
               );
             })}
-          </div>
+
           </div>
         </div>
       </div>
@@ -2766,7 +2749,7 @@ function WarMapPartyCard(props: {
             <div
               key={idx}
               className={[
-                "h-full rounded-lg border px-3 py-2 flex items-start justify-between gap-2",
+                "h-full rounded-lg border px-3 py-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2",
                 leaveThisTime
                   ? "border-red-200 bg-red-50/60 dark:bg-red-950/10 dark:border-red-900/50"
                   : "border-zinc-100 dark:border-zinc-900",
@@ -2849,7 +2832,7 @@ function PartyCard(props: {
   function NameText({ m }: { m: MemberRow }) {
     const style = m.color ? { color: m.color } : undefined;
     return (
-      <span className="truncate" style={style}>
+      <span className="min-w-0 flex-1 truncate" style={style}>
         {m.special_text ? `${m.special_text} ` : ""}
         {m.name}
       </span>
@@ -2868,12 +2851,12 @@ function PartyCard(props: {
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 flex flex-col h-[440px] overflow-hidden">
+    <div className="min-w-0 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 flex flex-col h-[440px] overflow-hidden">
       {/* group color strip */}
       {groupColor ? <div className="h-1 w-full" style={{ backgroundColor: groupColor, opacity: 0.75 }} /> : null}
 
       <div className="flex items-center justify-between border-b border-zinc-200 p-3 dark:border-zinc-800">
-        <div className="font-semibold">{p.name}</div>
+        <div className="min-w-0 font-semibold truncate">{p.name}</div>
         <div className="text-xs text-zinc-500 font-mono">{p.slots.filter((s) => s.memberId).length}/6</div>
       </div>
 
@@ -2894,7 +2877,7 @@ function PartyCard(props: {
             <div
               key={idx}
               className={[
-                "h-full rounded-lg border px-3 py-2 flex items-start justify-between gap-2 select-none",
+                "h-full rounded-lg border px-3 py-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 select-none",
                 isTarget
                   ? "border-red-300 bg-red-50 dark:bg-red-950/20"
                   : isSelected
@@ -2924,7 +2907,7 @@ function PartyCard(props: {
                     <div className="flex items-center gap-2 min-w-0">
                       <PartyCountBadge count={countMemberParties(mem)} />
                       <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={16} />
-                      <div className="text-sm font-semibold truncate flex items-center gap-2">
+                      <div className="min-w-0 flex items-center gap-2 text-sm font-semibold">
                         <NameText m={mem} />
                         {leaveThisTime ? (
                           <span className="shrink-0 rounded-md bg-red-600/15 px-2 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-400">
@@ -2939,7 +2922,7 @@ function PartyCard(props: {
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 items-start gap-1">
+                  <div className="flex shrink-0 flex-col items-end gap-1">
                     <IconButton
                       label="แก้ไข"
                       onClick={(e) => {
