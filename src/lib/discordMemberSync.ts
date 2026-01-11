@@ -31,6 +31,12 @@ function resolveGuildFromRoles(roles: string[]): GuildNo | null {
   return null;
 }
 
+function hasClubRole(roles: string[]): boolean {
+  const clubRole = process.env.DISCORD_CLUB_ROLE_ID;
+  if (!clubRole) return false; // ✅ default false
+  return roles.includes(clubRole);
+}
+
 async function discordFetch(path: string) {
   const token = mustEnv("DISCORD_BOT_TOKEN");
   const res = await fetch(`${DISCORD_API}${path}`, {
@@ -50,9 +56,7 @@ async function listGuildMembersAll(guildId: string) {
   let after = "0";
 
   for (;;) {
-    const page = (await discordFetch(
-      `/guilds/${guildId}/members?limit=1000&after=${after}`
-    )) as any[];
+    const page = (await discordFetch(`/guilds/${guildId}/members?limit=1000&after=${after}`)) as any[];
 
     out.push(...page);
     if (page.length < 1000) break;
@@ -77,11 +81,9 @@ export async function syncDiscordMembers(opts?: {
 
   const guildId = mustEnv("DISCORD_GUILD_ID");
 
-  const supabase = createClient(
-    mustEnv("SUPABASE_URL"),
-    mustEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false } }
-  );
+  const supabase = createClient(mustEnv("SUPABASE_URL"), mustEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false },
+  });
 
   // 1) Pull members from Discord
   const guildMembers = await listGuildMembersAll(guildId);
@@ -90,6 +92,7 @@ export async function syncDiscordMembers(opts?: {
   const eligible = guildMembers
     .map((m) => {
       const roles: string[] = Array.isArray(m.roles) ? m.roles : [];
+
       const resolvedGuild = resolveGuildFromRoles(roles);
       if (!resolvedGuild) return null;
 
@@ -97,14 +100,19 @@ export async function syncDiscordMembers(opts?: {
       const discord_user_id = String(u.id);
       const displayName = m.nick || u.global_name || u.username || "Unknown";
 
-      return { discord_user_id, name: String(displayName), guild: resolvedGuild };
+      return {
+        discord_user_id,
+        name: String(displayName),
+        guild: resolvedGuild,
+        club: hasClubRole(roles), // ✅ role -> member.club
+      };
     })
-    .filter(Boolean) as Array<{ discord_user_id: string; name: string; guild: GuildNo }>;
+    .filter(Boolean) as Array<{ discord_user_id: string; name: string; guild: GuildNo; club: boolean }>;
 
   const eligibleIds = eligible.map((x) => x.discord_user_id);
   const eligibleIdSet = new Set(eligibleIds);
 
-  // 3) Load existing rows for eligible (เพื่อ “ไม่ทับ” class_id/power ของเดิม)
+  // 3) Load existing rows for eligible (เพื่อ “ไม่ทับ” class_id/power/is_special/color ของเดิม)
   const { data: existingRows, error: existErr } = await supabase
     .from("member")
     .select("discord_user_id,class_id,power,is_special,color")
@@ -122,30 +130,18 @@ export async function syncDiscordMembers(opts?: {
   const upsertPayload = eligible.map((x) => {
     const ex = existingMap.get(x.discord_user_id);
 
-    const class_id =
-      ex?.class_id != null
-        ? ex.class_id
-        : 0; // ✅ default 0
-
-    const power =
-      ex?.power != null
-        ? ex.power
-        : 0;
-
-    const is_special =
-      ex?.is_special != null
-        ? ex.is_special
-        : false;
-
-    const color =
-      ex?.color != null
-        ? ex.color
-        : null;
+    const class_id = ex?.class_id != null ? ex.class_id : 0;
+    const power = ex?.power != null ? ex.power : 0;
+    const is_special = ex?.is_special != null ? ex.is_special : false;
+    const color = ex?.color != null ? ex.color : null;
 
     return {
       discord_user_id: x.discord_user_id,
       name: x.name,
       guild: x.guild,
+
+      // ✅ club: default false, true only if has DISCORD_CLUB_ROLE_ID
+      club: !!x.club,
 
       class_id,
       power,
@@ -156,9 +152,7 @@ export async function syncDiscordMembers(opts?: {
     };
   });
 
-  const { error: upsertErr } = await supabase
-    .from("member")
-    .upsert(upsertPayload, { onConflict: "discord_user_id" });
+  const { error: upsertErr } = await supabase.from("member").upsert(upsertPayload, { onConflict: "discord_user_id" });
 
   if (upsertErr) throw new Error(`Supabase upsert error: ${upsertErr.message}`);
 
@@ -176,10 +170,7 @@ export async function syncDiscordMembers(opts?: {
     .map((r) => r.id);
 
   if (toInactivate.length > 0) {
-    const { error: inactErr } = await supabase
-      .from("member")
-      .update({ status: "inactive" })
-      .in("id", toInactivate);
+    const { error: inactErr } = await supabase.from("member").update({ status: "inactive" }).in("id", toInactivate);
 
     if (inactErr) throw new Error(`Supabase inactive update error: ${inactErr.message}`);
   }
@@ -191,6 +182,7 @@ export async function syncDiscordMembers(opts?: {
       eligible: eligible.length,
       inactivated: toInactivate.length,
       default_class_id: 0,
+      club_role_env: "DISCORD_CLUB_ROLE_ID",
     },
   };
 }

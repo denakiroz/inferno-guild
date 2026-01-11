@@ -23,17 +23,16 @@ import type {
 import { bkkDateOf, bkkNowHHMM, bkkDateTimeParts, canCancelLeave } from "./_lib/bkkDate";
 
 import { ProfileTab } from "./_components/ProfileTab";
-import { LeavesTab } from "./_components/LeavesTab";
 import { InternalPowerTab } from "./_components/InternalPowerTab";
+import { SkillStonesTab } from "./_components/SkillStonesTab";
+import { LeavesTab } from "./_components/LeavesTab";
 
-type TabKey = "profile" | "leaves" | "internalPower";
+type TabKey = "profile" | "internalPower" | "skillStones" | "leaves";
 
-const tabBase =
-  "px-4 py-2 text-sm rounded-lg transition whitespace-nowrap";
+const tabBase = "px-4 py-2 text-sm rounded-lg transition whitespace-nowrap";
 const tabIdle =
   "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100";
-const tabActive =
-  "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow";
+const tabActive = "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow";
 
 export default function MePage() {
   const { theme, toggleTheme } = useTheme();
@@ -100,7 +99,9 @@ export default function MePage() {
 
     const normalized = Array.isArray(j.classes) ? j.classes : [];
     const hasZero = normalized.some((c) => c.id === 0);
-    const withZero = hasZero ? normalized : [{ id: 0, name: "ยังไม่เลือกอาชีพ", icon_url: null }, ...normalized];
+    const withZero = hasZero
+      ? normalized
+      : [{ id: 0, name: "ยังไม่เลือกอาชีพ", icon_url: null }, ...normalized];
     withZero.sort((a, b) => a.id - b.id);
     setClasses(withZero);
   }
@@ -375,19 +376,27 @@ export default function MePage() {
 
                   <button
                     type="button"
-                    onClick={() => setTab("leaves")}
-                    className={`${tabBase} ${tab === "leaves" ? tabActive : tabIdle}`}
-                  >
-                    การลาของฉัน
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setTab("internalPower")}
                     className={`${tabBase} ${tab === "internalPower" ? tabActive : tabIdle}`}
                   >
                     กำลังภายใน
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => setTab("skillStones")}
+                    className={`${tabBase} ${tab === "skillStones" ? tabActive : tabIdle}`}
+                  >
+                    หินสกิล
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTab("leaves")}
+                    className={`${tabBase} ${tab === "leaves" ? tabActive : tabIdle}`}
+                  >
+                    การลาของฉัน
+                  </button>
                 </div>
 
                 {/* ✅ Actions right */}
@@ -420,7 +429,11 @@ export default function MePage() {
             selectedUltimateIds={selectedUltimateIds}
             setSelectedUltimateIds={setSelectedUltimateIds}
           />
-        ) : tab === "leaves" ? (
+        ) : tab === "internalPower" ? (
+          <InternalPowerTab />
+        ) : tab === "skillStones" ? (
+          <SkillStonesTab />
+        ) : (
           <LeavesTab
             leaveErr={leaveErr}
             upcomingGrouped={upcomingGrouped}
@@ -430,8 +443,6 @@ export default function MePage() {
               setConfirmOpen(true);
             }}
           />
-        ) : (
-          <InternalPowerTab />
         )}
 
         {/* Confirm Cancel */}

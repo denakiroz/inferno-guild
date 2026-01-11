@@ -48,3 +48,21 @@ export type UltimateSkillListRes =
 export type MyUltimateRes =
   | { ok: true; ultimate_skill_ids: number[] }
   | { ok: false; error?: string };
+
+// --- Skill stones (equipment_create -> member_equipment_create)
+export type EquipmentCreateType = 1 | 2 | 3 | 4;
+
+export type EquipmentCreateRow = {
+  id: number;
+  name: string;
+  image_url: string | null;
+  type: EquipmentCreateType;
+};
+
+export type MySkillStonesRes =
+  | {
+      ok: true;
+      equipment: EquipmentCreateRow[];
+      selected_by_type: Record<EquipmentCreateType, number | null>;
+    }
+  | { ok: false; error?: string };

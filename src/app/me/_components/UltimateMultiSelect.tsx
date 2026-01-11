@@ -69,7 +69,7 @@ export function UltimateMultiSelect(props: {
 
   return (
     <div className="mt-4">
-      <div className="text-xs text-zinc-500 mb-1">Ultimate Skill</div>
+      <div className="text-xs text-zinc-500 mb-1">Ultimate Skill (เลือกเฉพาะอันที่เลเวลเต็ม)</div>
 
       {/* Selected preview (chips with image) */}
       {selectedRows.length === 0 ? (
@@ -139,7 +139,7 @@ export function UltimateMultiSelect(props: {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="เลือก Ultimate Skill"
+        title="เลือก Ultimate Skill (ที่ขั้นเต็ม)"
       >
         <div className="space-y-3">
           {/* Search */}

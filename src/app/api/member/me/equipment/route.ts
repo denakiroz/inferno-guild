@@ -57,7 +57,6 @@ async function requireSession() {
 }
 
 async function getMyMember(discordUserId: string, guild: number) {
-  // discord_user_id เป็น int8 ใน supabase => ส่งเป็น string ได้
   const discord_user_id = BigInt(discordUserId).toString();
 
   const { data, error } = await supabaseAdmin
@@ -78,7 +77,6 @@ async function ensureMember(session: any) {
   const exist = await getMyMember(session.discordUserId, guild);
   if (exist) return exist;
 
-  // create placeholder member (เหมือน /member/me)
   const payload = {
     discord_user_id,
     name: session.displayName ?? "Member",
@@ -98,6 +96,12 @@ async function ensureMember(session: any) {
   return ins.data as { id: number; discord_user_id: string; guild: number };
 }
 
+function asUrlOrNull(v: any): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  return s ? s : null;
+}
+
 export async function GET() {
   try {
     const session = await requireSession();
@@ -107,7 +111,7 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("member_equipment")
-      .select("id, member_id, element, image, created_at")
+      .select("id, member_id, element, image, image_2, created_at")
       .eq("member_id", me.id)
       .order("created_at", { ascending: true });
 
@@ -129,7 +133,6 @@ export async function POST(req: Request) {
 
     const me = await ensureMember(session);
 
-    // max 2 sets per member
     const exist = await supabaseAdmin.from("member_equipment").select("id").eq("member_id", me.id);
     if (exist.error) return NextResponse.json({ ok: false, error: exist.error.message }, { status: 500 });
 
@@ -140,16 +143,18 @@ export async function POST(req: Request) {
     const v = validateElement(body.element);
     if (!v.ok) return NextResponse.json({ ok: false, error: v.error }, { status: 400 });
 
-    const image = typeof body.image === "string" ? body.image.trim() : null;
+    const image = asUrlOrNull(body.image);
+    const image_2 = asUrlOrNull(body.image_2);
 
     const { data, error } = await supabaseAdmin
       .from("member_equipment")
       .insert({
         member_id: me.id,
         element: v.value,
-        image: image || null,
+        image,
+        image_2,
       })
-      .select("id, member_id, element, image, created_at")
+      .select("id, member_id, element, image, image_2, created_at")
       .single();
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -182,8 +187,12 @@ export async function PUT(req: Request) {
     }
 
     if (body.image !== undefined) {
-      const image = typeof body.image === "string" ? body.image.trim() : "";
-      patch.image = image ? image : null;
+      patch.image = asUrlOrNull(body.image);
+    }
+
+    // ✅ image_2
+    if (body.image_2 !== undefined) {
+      patch.image_2 = asUrlOrNull(body.image_2);
     }
 
     if (Object.keys(patch).length === 0) {
@@ -195,7 +204,7 @@ export async function PUT(req: Request) {
       .update(patch)
       .eq("id", id)
       .eq("member_id", me.id)
-      .select("id, member_id, element, image, created_at")
+      .select("id, member_id, element, image, image_2, created_at")
       .single();
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

@@ -8,6 +8,7 @@ export type EquipmentSetRow = {
   id: number | null;
   element: ElementLevels;
   image: string | null;
+  image_2: string | null;
   created_at: string | null;
 };
 

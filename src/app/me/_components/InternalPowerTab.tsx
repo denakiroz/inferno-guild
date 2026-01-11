@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { Trash2, Plus, Save } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Trash2, Plus, Save, Upload } from "lucide-react";
 import { Button, Card } from "@/app/components/UI";
-import type { EquipmentSetRow, ElementKey, ElementLevels } from "../_lib/internalPowerTypes";
+import type { EquipmentSetRow, ElementKey } from "../_lib/internalPowerTypes";
 import { defaultLevels, sumLevels, validateLevels } from "../_lib/internalPowerTypes";
 
 const ELEMENTS: Array<{ key: ElementKey; label: string }> = [
@@ -17,6 +17,10 @@ const ELEMENTS: Array<{ key: ElementKey; label: string }> = [
 type DraftSet = EquipmentSetRow & {
   pendingFile?: File | null;
   pendingPreviewUrl?: string | null;
+
+  pendingFile2?: File | null;
+  pendingPreviewUrl2?: string | null;
+
   saving?: boolean;
   err?: string | null;
 };
@@ -26,9 +30,15 @@ function createEmptyDraft(): DraftSet {
     id: null,
     element: { ...defaultLevels },
     image: null,
+    image_2: null,
     created_at: null,
+
     pendingFile: null,
     pendingPreviewUrl: null,
+
+    pendingFile2: null,
+    pendingPreviewUrl2: null,
+
     saving: false,
     err: null,
   };
@@ -50,6 +60,65 @@ async function uploadToBucket(file: File): Promise<string> {
   return String(j.url);
 }
 
+function ImageBox(props: {
+  label: string;
+  preview: string | null;
+  disabled?: boolean;
+  onPick: (file: File | null) => void;
+}) {
+  const { label, preview, disabled, onPick } = props;
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <div>
+      <div className="text-xs text-zinc-500 mb-1">{label}</div>
+
+      <div className="h-40 w-full rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/50">
+        {preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={preview} alt={label} className="h-full w-full object-cover" />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center text-xs text-zinc-500">No Image</div>
+        )}
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        disabled={disabled}
+        onChange={(e) => {
+          const f = e.target.files?.[0] ?? null;
+          onPick(f);
+          e.currentTarget.value = "";
+        }}
+      />
+
+      <div className="mt-2 flex items-center gap-2">
+        <Button
+          variant="outline"
+          disabled={disabled}
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload className="w-4 h-4" />
+          {preview ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+        </Button>
+
+        {preview ? (
+          <Button
+            variant="outline"
+            disabled={disabled}
+            onClick={() => onPick(null)}
+          >
+            ล้างรูป
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function InternalPowerTab() {
   const [loading, setLoading] = useState(true);
   const [sets, setSets] = useState<DraftSet[]>([]);
@@ -67,8 +136,11 @@ export function InternalPowerTab() {
       setSets(
         rows.map((x) => ({
           ...x,
+          image_2: (x as any).image_2 ?? null,
           pendingFile: null,
           pendingPreviewUrl: null,
+          pendingFile2: null,
+          pendingPreviewUrl2: null,
           saving: false,
           err: null,
         }))
@@ -95,6 +167,7 @@ export function InternalPowerTab() {
       const copy = [...prev];
       const it = copy[i];
       if (it?.pendingPreviewUrl) URL.revokeObjectURL(it.pendingPreviewUrl);
+      if (it?.pendingPreviewUrl2) URL.revokeObjectURL(it.pendingPreviewUrl2);
       copy.splice(i, 1);
       return copy;
     });
@@ -131,10 +204,16 @@ export function InternalPowerTab() {
         imageUrl = await uploadToBucket(current.pendingFile);
       }
 
+      let image2Url = (current as any).image_2 ?? null;
+      if (current.pendingFile2) {
+        image2Url = await uploadToBucket(current.pendingFile2);
+      }
+
       const payload = {
         id: current.id,
         element: current.element,
         image: imageUrl,
+        image_2: image2Url,
       };
 
       const method = current.id ? "PUT" : "POST";
@@ -149,11 +228,7 @@ export function InternalPowerTab() {
 
       await load();
     } catch (e: any) {
-      setSets((prev) =>
-        prev.map((x, idx) =>
-          idx === i ? { ...x, err: String(e.message ?? e) } : x
-        )
-      );
+      setSets((prev) => prev.map((x, idx) => (idx === i ? { ...x, err: String(e.message ?? e) } : x)));
     } finally {
       setSets((prev) => prev.map((x, idx) => (idx === i ? { ...x, saving: false } : x)));
     }
@@ -168,15 +243,20 @@ export function InternalPowerTab() {
     );
   }
 
-  function onPickFile(i: number, file: File | null) {
+  function onPickFile(i: number, slot: 1 | 2, file: File | null) {
     setSets((prev) =>
       prev.map((s, idx) => {
         if (idx !== i) return s;
 
-        if (s.pendingPreviewUrl) URL.revokeObjectURL(s.pendingPreviewUrl);
+        if (slot === 1) {
+          if (s.pendingPreviewUrl) URL.revokeObjectURL(s.pendingPreviewUrl);
+          const nextPreview = file ? URL.createObjectURL(file) : null;
+          return { ...s, pendingFile: file, pendingPreviewUrl: nextPreview };
+        }
 
-        const nextPreview = file ? URL.createObjectURL(file) : null;
-        return { ...s, pendingFile: file, pendingPreviewUrl: nextPreview };
+        if (s.pendingPreviewUrl2) URL.revokeObjectURL(s.pendingPreviewUrl2);
+        const nextPreview2 = file ? URL.createObjectURL(file) : null;
+        return { ...s, pendingFile2: file, pendingPreviewUrl2: nextPreview2 };
       })
     );
   }
@@ -189,7 +269,7 @@ export function InternalPowerTab() {
         <div>
           <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">กำลังภายใน</div>
           <div className="mt-1 text-xs text-zinc-500">
-            เพิ่มได้สูงสุด 2 เซ็ต • แต่ละเซ็ตเลือกธาตุ (0–3 ขั้น) รวมกันต้องไม่เกิน 7 ขั้น • อัปโหลดรูปได้ 1 รูปต่อเซ็ต
+            เพิ่มได้สูงสุด 2 เซ็ต • แต่ละเซ็ตเลือกธาตุ (0–3 ขั้น) รวมกันต้องไม่เกิน 7 ขั้น • อัปโหลดรูปได้ 2 รูปต่อเซ็ต
           </div>
         </div>
 
@@ -211,7 +291,8 @@ export function InternalPowerTab() {
             const total = sumLevels(s.element);
             const over = total > 7;
 
-            const preview = s.pendingPreviewUrl || s.image || null;
+            const preview1 = s.pendingPreviewUrl || s.image || null;
+            const preview2 = s.pendingPreviewUrl2 || (s as any).image_2 || null;
 
             return (
               <div
@@ -223,20 +304,12 @@ export function InternalPowerTab() {
 
                   <div className="flex items-center gap-2">
                     {s.id ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => deleteSet(s.id as number)}
-                        disabled={s.saving}
-                      >
+                      <Button variant="outline" onClick={() => deleteSet(s.id as number)} disabled={s.saving}>
                         <Trash2 className="w-4 h-4 text-rose-600" />
                         ลบ
                       </Button>
                     ) : (
-                      <Button
-                        variant="outline"
-                        onClick={() => removeDraftAt(idx)}
-                        disabled={s.saving}
-                      >
+                      <Button variant="outline" onClick={() => removeDraftAt(idx)} disabled={s.saving}>
                         <Trash2 className="w-4 h-4 text-rose-600" />
                         ลบ
                       </Button>
@@ -244,31 +317,24 @@ export function InternalPowerTab() {
                   </div>
                 </div>
 
-                {/* Image */}
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-4">
-                  <div>
-                    <div className="text-xs text-zinc-500 mb-1">รูป (1 รูป)</div>
-                    <div className="h-40 w-40 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/50">
-                      {preview ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={preview} alt="equipment" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center text-xs text-zinc-500">
-                          No Image
-                        </div>
-                      )}
-                    </div>
-
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="mt-2 block w-full text-xs text-zinc-500"
-                      onChange={(e) => onPickFile(idx, e.target.files?.[0] ?? null)}
+                <div className="mt-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
+                  {/* ✅ Images (ซ้าย-ขวา) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <ImageBox
+                      label="รูปที่ 1"
+                      preview={preview1}
                       disabled={s.saving}
+                      onPick={(f) => onPickFile(idx, 1, f)}
+                    />
+                    <ImageBox
+                      label="รูปที่ 2"
+                      preview={preview2}
+                      disabled={s.saving}
+                      onPick={(f) => onPickFile(idx, 2, f)}
                     />
                   </div>
 
-                  {/* Elements */}
+                  {/* ✅ Elements (ชิดกับปุ่ม) */}
                   <div className="min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="text-xs text-zinc-500">ธาตุ</div>
@@ -277,17 +343,17 @@ export function InternalPowerTab() {
                       </div>
                     </div>
 
-                    <div className="mt-2 space-y-3">
+                    <div className="mt-3 space-y-3">
                       {ELEMENTS.map((el) => {
-                        const val = Number(s.element?.[el.key] ?? 0);
+                        const val = Number((s.element as any)?.[el.key] ?? 0);
 
                         return (
-                          <div key={el.key} className="flex items-center justify-between gap-3">
-                            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 w-24">
+                          <div key={el.key} className="grid grid-cols-[70px_1fr] items-center gap-3">
+                            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                               {el.label}
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 justify-start">
                               {[0, 1, 2, 3].map((lvl) => {
                                 const active = lvl === val;
                                 return (
@@ -297,7 +363,7 @@ export function InternalPowerTab() {
                                     onClick={() => setElementLevel(idx, el.key, lvl)}
                                     disabled={s.saving}
                                     className={
-                                      "px-3 py-1 text-sm rounded-xl border transition " +
+                                      "w-9 h-9 text-sm rounded-xl border transition " +
                                       (active
                                         ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
                                         : "border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/50 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-950/30")
@@ -315,14 +381,12 @@ export function InternalPowerTab() {
                     </div>
 
                     {over ? (
-                      <div className="mt-3 text-sm text-rose-600">
-                        รวมขั้นเกิน 7 ขั้น กรุณาลดระดับธาตุในเซ็ตนี้
-                      </div>
+                      <div className="mt-3 text-sm text-rose-600">รวมขั้นเกิน 7 ขั้น กรุณาลดระดับธาตุในเซ็ตนี้</div>
                     ) : null}
 
                     {s.err ? <div className="mt-3 text-sm text-rose-600">Error: {s.err}</div> : null}
 
-                    <div className="mt-4 flex items-center justify-end">
+                    <div className="mt-5 flex items-center justify-end">
                       <Button onClick={() => saveSet(idx)} disabled={s.saving || over}>
                         <Save className="w-4 h-4" />
                         {s.saving ? "กำลังบันทึก..." : "บันทึกเซ็ต"}

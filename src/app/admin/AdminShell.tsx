@@ -17,6 +17,7 @@ import {
   X,
   Database,
   Trophy,
+  SkipBackIcon,
 } from "lucide-react";
 
 import { Button } from "@/app/components/UI";
@@ -109,13 +110,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           // ✅ เปลี่ยน href ให้ตรงกับหน้าจริงของคุณ
           { href: "/admin/master/classes", label: "Classes", icon: Database },
           { href: "/admin/master/ultimate-skills", label: "Ultimate Skills", icon: Database },
+          { href: "/admin/master/skill-stones", label: "Skill Stones", icon: Database },
         ],
       },
       {
-        title: "Guild League",
+        title: "CLUB",
         items: [
           // ✅ เปลี่ยน href ให้ตรงกับหน้าจริงของคุณ
-          { href: "/admin/guild-league", label: "Guild League", icon: Trophy },
+          { href: "/admin/club", label: "CLUB MEMBER", icon: Trophy },
         ],
       },
     ],
