@@ -24,8 +24,9 @@ import { bkkDateOf, bkkNowHHMM, bkkDateTimeParts, canCancelLeave } from "./_lib/
 
 import { ProfileTab } from "./_components/ProfileTab";
 import { LeavesTab } from "./_components/LeavesTab";
+import { InternalPowerTab } from "./_components/InternalPowerTab";
 
-type TabKey = "profile" | "leaves";
+type TabKey = "profile" | "leaves" | "internalPower";
 
 const tabBase =
   "px-4 py-2 text-sm rounded-lg transition whitespace-nowrap";
@@ -379,6 +380,14 @@ export default function MePage() {
                   >
                     การลาของฉัน
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setTab("internalPower")}
+                    className={`${tabBase} ${tab === "internalPower" ? tabActive : tabIdle}`}
+                  >
+                    กำลังภายใน
+                  </button>
+
                 </div>
 
                 {/* ✅ Actions right */}
@@ -411,7 +420,7 @@ export default function MePage() {
             selectedUltimateIds={selectedUltimateIds}
             setSelectedUltimateIds={setSelectedUltimateIds}
           />
-        ) : (
+        ) : tab === "leaves" ? (
           <LeavesTab
             leaveErr={leaveErr}
             upcomingGrouped={upcomingGrouped}
@@ -421,6 +430,8 @@ export default function MePage() {
               setConfirmOpen(true);
             }}
           />
+        ) : (
+          <InternalPowerTab />
         )}
 
         {/* Confirm Cancel */}

@@ -17,9 +17,21 @@ async function requireAdmin() {
   return session;
 }
 
+
+async function requireStaff() {
+  const cookieStore = await cookies();
+  const sid = cookieStore.get(env.AUTH_COOKIE_NAME)?.value;
+  if (!sid) return null;
+
+  const session = await getSession(sid);
+  if (!session?.isAdmin && !session?.isHead) return null;
+
+  return session;
+}
+
 export async function GET() {
   try {
-    const session = await requireAdmin();
+    const session = await requireStaff();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
     const { data, error } = await supabaseAdmin
@@ -37,7 +49,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const session = await requireAdmin();
+    const session = await requireStaff();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
     const body = (await req.json().catch(() => null)) as any;
@@ -64,7 +76,7 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const session = await requireAdmin();
+    const session = await requireStaff();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
     const body = (await req.json().catch(() => null)) as any;

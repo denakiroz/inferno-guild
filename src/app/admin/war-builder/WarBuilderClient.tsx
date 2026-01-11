@@ -19,6 +19,12 @@ type MemberRow = {
    */
   is_special?: boolean | null;
 
+  /**
+   * Ultimate ที่สมาชิก add ไว้ (ถ้ามี)
+   * แนะนำให้ /api/admin/members ส่งมาเป็น array ของ id (จาก table member_ultimate_skill)
+   */
+  ultimate_skill_ids?: number[] | null;
+
   party: number | null;
   party_2: number | null;
 
@@ -41,6 +47,13 @@ type DbClass = {
   id: number;
   name: string;
   icon_url: string | null;
+};
+
+// table: ultimate_skill (id, name, ultimate_skill_url)
+type DbUltimateSkill = {
+  id: number;
+  name: string;
+  ultimate_skill_url: string | null;
 };
 
 // table: group (id, name, group, color, order_by, guild)
@@ -363,6 +376,13 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
 
   // class filter (multi-select) — empty = all
   const [classFilter, setClassFilter] = useState<Set<number>>(new Set());
+
+  // party filter (roster) — all / assigned / unassigned (based on current layout)
+  const [partyFilter, setPartyFilter] = useState<"all" | "assigned" | "unassigned">("all");
+
+  // ultimate filter (multi-select) — empty = all
+  const [ultimateSkills, setUltimateSkills] = useState<DbUltimateSkill[]>([]);
+  const [ultimateFilter, setUltimateFilter] = useState<Set<number>>(new Set());
 
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<DragTarget>(null);
@@ -748,6 +768,34 @@ useEffect(() => {
     return { next, changed };
   }
 
+
+  async function loadUltimateSkills() {
+    // Use API as source of truth (avoid RLS issues on client-side select).
+    try {
+      const r = await fetch("/api/admin/ultimate-skills", { cache: "no-store" });
+      if (!r.ok) return;
+
+      const j = (await r.json()) as any;
+      const list = Array.isArray(j?.skills)
+        ? j.skills
+        : Array.isArray(j?.data)
+          ? j.data
+          : Array.isArray(j)
+            ? j
+            : [];
+
+      setUltimateSkills(
+        (list ?? []).map((x: any) => ({
+          id: Number(x.id),
+          name: String(x.name ?? ""),
+          ultimate_skill_url: x.ultimate_skill_url ?? x.url ?? null,
+        })),
+      );
+    } catch {
+      // ignore
+    }
+  }
+
   async function loadGroups() {
     if (!guild) return;
 
@@ -823,6 +871,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         );
       }
 
+      await loadUltimateSkills();
+
       await loadGroups();
 
       dirtyColorsRef.current = new Map();
@@ -856,6 +906,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     setSelectedIds(new Set());
     setPaletteForLineId(null);
     setClassFilter(new Set());
+    setPartyFilter("all");
+    setUltimateFilter(new Set());
 
     setRemarkOpen(false);
     setEditingRemarkMemberId(null);
@@ -943,18 +995,92 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     return base.sort((a, b) => a.id - b.id);
   }, [classes, classCounts, classById]);
 
-  const roster = useMemo(() => {
-    let base = [...activeInGuild].sort((a, b) => (b.power ?? 0) - (a.power ?? 0));
-    if (classFilter.size > 0) {
-      base = base.filter((m) => {
-        const cid = typeof m.class_id === "number" ? Number(m.class_id) : null;
-        if (cid === null) return false;
-        if (cid === 0) return false;
-        return classFilter.has(cid);
-      });
+
+  const ultimateCounts = useMemo(() => {
+  const m = new Map<number, number>();
+  for (const mem of activeInGuild) {
+    const ids = (mem as any)?.ultimate_skill_ids;
+    if (!Array.isArray(ids)) continue;
+
+    // count per member (unique)
+    const uniq = new Set<number>();
+    for (const raw of ids) {
+      const id = Number(raw);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      uniq.add(id);
     }
-    return base;
-  }, [activeInGuild, classFilter]);
+    for (const id of uniq.values()) {
+      m.set(id, (m.get(id) ?? 0) + 1);
+    }
+  }
+  return m;
+}, [activeInGuild]);
+
+
+  const ultimateOptions = useMemo(() => {
+  const base = (ultimateSkills ?? [])
+    .map((u) => {
+      const id = Number(u.id);
+      return {
+        id,
+        name: u.name ?? `Ultimate ${id}`,
+        ultimate_skill_url: u.ultimate_skill_url ?? null,
+        count: ultimateCounts.get(id) ?? 0,
+      };
+    })
+    .filter((x) => x.id !== 0);
+
+  const known = new Set(base.map((x) => x.id));
+  for (const [uid, count] of ultimateCounts.entries()) {
+    if (uid === 0) continue;
+    if (known.has(uid)) continue;
+    base.push({
+      id: uid,
+      name: `Ultimate ${uid}`,
+      ultimate_skill_url: null,
+      count,
+    });
+  }
+
+  return base.sort((a, b) => a.id - b.id);
+}, [ultimateSkills, ultimateCounts]);
+
+
+  const roster = useMemo(() => {
+  let base = [...activeInGuild].sort((a, b) => (b.power ?? 0) - (a.power ?? 0));
+
+  // class filter
+  if (classFilter.size > 0) {
+    base = base.filter((m) => {
+      const cid = typeof m.class_id === "number" ? Number(m.class_id) : null;
+      if (cid === null || cid === 0) return false;
+      return classFilter.has(cid);
+    });
+  }
+
+  // party filter (based on current layout)
+    if (partyFilter !== "all") {
+    base = base.filter((m) => {
+      const hasParty = assignedIds.has(m.id);
+      return partyFilter === "assigned" ? hasParty : !hasParty;
+    });
+  }
+
+  // ultimate filter (match ANY selected ultimate)
+  if (ultimateFilter.size > 0) {
+    base = base.filter((m) => {
+      const ids = (m as any)?.ultimate_skill_ids;
+      if (!Array.isArray(ids) || ids.length === 0) return false;
+      for (const raw of ids) {
+        const id = Number(raw);
+        if (ultimateFilter.has(id)) return true;
+      }
+      return false;
+    });
+  }
+
+  return base;
+}, [activeInGuild, classFilter, partyFilter, assignedIds, ultimateFilter]);
 
   // ---------- Grouped party view ----------
   const partiesById = useMemo(() => new Map<number, Party>(parties.map((p) => [p.id, p])), [parties]);
@@ -1134,6 +1260,21 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
   function clearClassFilter() {
     setClassFilter(new Set());
+  }
+
+  // ---------- Ultimate filter ----------
+  function toggleUltimateFilter(uid: number) {
+    if (!uid) return;
+    setUltimateFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  }
+
+  function clearUltimateFilter() {
+    setUltimateFilter(new Set());
   }
 
   // ---------- Remark modal ----------
@@ -1500,6 +1641,16 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
   const selectedCount = selectedIds.size;
   const classFilterCount = classFilter.size;
 
+
+  const partyFilterLabel = useMemo(() => {
+    if (partyFilter === "assigned") return "มีปาร์ตี้";
+    if (partyFilter === "unassigned") return "ยังไม่มีปาร์ตี้";
+    return "ทั้งหมด";
+  }, [partyFilter]);
+
+
+  const ultimateFilterCount = ultimateFilter.size;
+
   const copyLabel = useMemo(() => {
     const from = warTime === "20:00" ? "20.30" : "20.00";
     return `คัดลอกปาร์ตี้จาก ${from}`;
@@ -1750,6 +1901,117 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
           )}
         </div>
       </div>
+
+
+      {/* Party filter panel */}
+      <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/20">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-zinc-500">
+            Filter ปาร์ตี้ (Roster):{" "}
+            <span className="font-semibold text-zinc-700 dark:text-zinc-200">{partyFilterLabel}</span>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+            onClick={() => setPartyFilter("all")}
+          >
+            ล้าง
+          </button>
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {([
+            { key: "all" as const, label: "ทั้งหมด" },
+            { key: "assigned" as const, label: "มีปาร์ตี้" },
+            { key: "unassigned" as const, label: "ยังไม่มีปาร์ตี้" },
+          ] as const).map((x) => {
+            const active = partyFilter === x.key;
+            return (
+              <button
+                key={x.key}
+                type="button"
+                className={[
+                  "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                  active
+                    ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+                ].join(" ")}
+                onClick={() => setPartyFilter(x.key)}
+              >
+                {x.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-2 text-[11px] text-zinc-500">
+          หมายเหตุ: ใช้อ้างอิงจากการจัดทัพ “ปัจจุบัน” (assigned/unassigned) ไม่ใช่ค่า party ใน DB
+        </div>
+      </div>
+
+      {/* Ultimate filter panel */}
+      <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/20">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-zinc-500">
+            Filter Ultimate (Roster):{" "}
+            <span className="font-semibold text-zinc-700 dark:text-zinc-200">
+              {ultimateFilterCount === 0 ? "ทั้งหมด" : `${ultimateFilterCount} อย่าง`}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+            onClick={clearUltimateFilter}
+          >
+            ล้าง
+          </button>
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={[
+              "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+              ultimateFilterCount === 0
+                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+            ].join(" ")}
+            onClick={clearUltimateFilter}
+          >
+            ทั้งหมด
+          </button>
+
+          {ultimateOptions.length === 0 ? (
+            <div className="text-xs text-zinc-400">ยังไม่มีข้อมูล Ultimate</div>
+          ) : (
+            ultimateOptions.map((u) => {
+              const active = ultimateFilter.has(u.id);
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  className={[
+                    "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                    active
+                      ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+                  ].join(" ")}
+                  onClick={() => toggleUltimateFilter(u.id)}
+                  title={u.name}
+                >
+                  <span className="max-w-[160px] truncate">{u.name}</span>
+                  <span className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums">
+                    {u.count}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+
     </div>
   );
 

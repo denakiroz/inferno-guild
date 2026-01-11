@@ -41,16 +41,6 @@ export function ProfileTab(props: {
       </div>
 
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <div className="text-xs text-zinc-500 mb-1">Power</div>
-          <Input
-            type="number"
-            value={member?.power ?? 0}
-            onChange={(e) =>
-              setMember((m) => (m ? { ...m, power: Math.max(0, Number(e.target.value)) } : m))
-            }
-          />
-        </div>
 
         <div>
           <div className="text-xs text-zinc-500 mb-1">อาชีพ</div>
