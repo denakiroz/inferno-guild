@@ -101,6 +101,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           { href: "/admin/admin", label: "Admin", icon: Settings2 },
           { href: "/admin/members", label: "Members", icon: Users },
           { href: "/admin/war-builder", label: "War Builder", icon: Swords },
+          { href: "/admin/club-war-builder", label: "Club Builder", icon: Swords },
           { href: "/admin/leaves", label: "Leaves", icon: Calendar },
         ],
       },
