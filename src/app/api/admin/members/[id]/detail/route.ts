@@ -30,9 +30,6 @@ type UltimateSkillRow = {
 
 type MemberUltimateRow = {
   ultimate_skill_id: number;
-  // NOTE: In some Supabase setups, the relationship can be inferred as one-to-many
-  // (e.g., missing/undetected FK), causing this field to come back as an array.
-  // We support both shapes and normalize later.
   ultimate_skill: UltimateSkillRow | UltimateSkillRow[] | null;
 };
 
@@ -49,7 +46,9 @@ type MemberSkillStoneRow = {
   equipment_create_id: number;
   color: string | null;
   created_at: string | null;
-  equipment_create: EquipmentCreateRow | null;
+
+  // IMPORTANT: Supabase can return relationship as array if FK is not detected/inferred as 1-1.
+  equipment_create: EquipmentCreateRow | EquipmentCreateRow[] | null;
 };
 
 type MemberEquipmentSetRow = {
@@ -154,21 +153,29 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
       update_date: (x as any).update_date ?? null,
     }));
 
-    const skillStones = ((stoneR.data ?? []) as MemberSkillStoneRow[]).map((x) => ({
-      id: Number(x.id),
-      member_id: Number(x.member_id),
-      equipment_create_id: Number(x.equipment_create_id),
-      color: x.color ?? null,
-      created_at: x.created_at ?? null,
-      equipment_create: x.equipment_create
-        ? {
-            id: Number(x.equipment_create.id),
-            name: String(x.equipment_create.name ?? ""),
-            image_url: x.equipment_create.image_url ?? null,
-            type: Number(x.equipment_create.type ?? 0),
-          }
-        : null,
-    }));
+    // Normalize equipment_create to single object (or null)
+    const stoneRows = (Array.isArray(stoneR.data) ? stoneR.data : []) as MemberSkillStoneRow[];
+
+    const skillStones = stoneRows.map((x) => {
+      const ecRaw = (x as any).equipment_create as EquipmentCreateRow | EquipmentCreateRow[] | null | undefined;
+      const ec = Array.isArray(ecRaw) ? ecRaw[0] ?? null : ecRaw ?? null;
+
+      return {
+        id: Number(x.id),
+        member_id: Number(x.member_id),
+        equipment_create_id: Number(x.equipment_create_id),
+        color: x.color ?? null,
+        created_at: x.created_at ?? null,
+        equipment_create: ec
+          ? {
+              id: Number(ec.id),
+              name: String((ec as any).name ?? ""),
+              image_url: (ec as any).image_url ?? null,
+              type: Number((ec as any).type ?? 0),
+            }
+          : null,
+      };
+    });
 
     return NextResponse.json({
       ok: true,
