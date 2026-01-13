@@ -1,4 +1,4 @@
-// src/app/api/club/members/route.ts
+// src/app/api/admin/club-members/route.ts
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
@@ -39,18 +39,21 @@ const SELECT_LEAVE = `
   update_date
 `;
 
-async function requireSession() {
+async function requireAdmin() {
   const cookieStore = await cookies();
   const sid = cookieStore.get(env.AUTH_COOKIE_NAME)?.value;
   if (!sid) return null;
+
   const session = await getSession(sid);
-  return session ?? null;
+  if (!session?.isAdmin) return null;
+
+  return session;
 }
 
 export async function GET() {
   try {
-    const session = await requireSession();
-    if (!session) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    const session = await requireAdmin();
+    if (!session) return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
 
     const { data: members, error: memErr } = await supabaseAdmin
       .from("member")
@@ -69,10 +72,11 @@ export async function GET() {
       .in("member_id", ids.length ? ids : [0])
       .order("date_time", { ascending: false });
 
+    // leaves ผิดพลาดให้ fallback เป็น []
     const safeLeaves = leaveErr ? [] : (leaves ?? []);
 
-    return NextResponse.json({ ok: true, members: members ?? [], leaves: safeLeaves }, { status: 200 });
+    return NextResponse.json({ ok: true, members: members ?? [], leaves: safeLeaves });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || "Unknown error" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
   }
 }

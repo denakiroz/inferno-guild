@@ -40,6 +40,9 @@ type Props = {
   lockedGuild?: GuildNo | null;
   /** admin เท่านั้น */
   canViewAllGuilds?: boolean;
+
+  /** guild = แยกกิลด์ / club = ซ่อนแท็บกิลด์ (ใช้ในหน้า Club) */
+  tabMode?: "guild" | "club";
 };
 
 const BKK_TZ = "Asia/Bangkok";
@@ -200,6 +203,7 @@ export default function Members({
   onReload,
   lockedGuild = null,
   canViewAllGuilds = false,
+  tabMode = "guild",
 }: Props) {
   // บางโปรเจกต์ Modal component อาจไม่ได้ประกาศ prop สำหรับ size/className ใน typings
   // เราจึง cast เป็น any เพื่อให้สามารถส่ง className เพื่อขยาย modal ได้โดยไม่ชน TypeScript
@@ -337,6 +341,7 @@ export default function Members({
     return members
       .filter((m) => (m.status ?? "active") === "active")
       .filter((m) => {
+        if (tabMode === "club") return true;
         if (tab === "all") return canViewAllGuilds;
         return m.guild === tab;
       })
@@ -509,8 +514,15 @@ export default function Members({
         <div className="p-4 bg-white/70 dark:bg-zinc-950/50 backdrop-blur rounded-2xl border border-zinc-200 dark:border-zinc-800">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex gap-2 flex-wrap">
-              {lockedGuild ? (
-                <TabButton value={lockedGuild} label={lockedGuild === 1 ? "Inferno-1" : lockedGuild === 2 ? "Inferno-2" : "Inferno-3"} />
+              {tabMode === "club" ? (
+                <div className="px-4 py-2 rounded-xl text-sm font-semibold border bg-white/60 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-800">
+                  Club
+                </div>
+              ) : lockedGuild ? (
+                <TabButton
+                  value={lockedGuild}
+                  label={lockedGuild === 1 ? "Inferno-1" : lockedGuild === 2 ? "Inferno-2" : "Inferno-3"}
+                />
               ) : (
                 <>
                   {canViewAllGuilds ? <TabButton value="all" label="ทั้งหมด" /> : null}
@@ -518,8 +530,7 @@ export default function Members({
                   <TabButton value={2} label="Inferno-2" />
                   <TabButton value={3} label="Inferno-3" />
                 </>
-              )}
-            </div>
+              )}</div>
 
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
               <Button variant="secondary" className="flex-1 md:flex-none" onClick={onReload}>
