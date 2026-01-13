@@ -113,13 +113,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           { href: "/admin/master/skill-stones", label: "Skill Stones", icon: Database },
         ],
       },
-      {
-        title: "CLUB",
-        items: [
-          // ✅ เปลี่ยน href ให้ตรงกับหน้าจริงของคุณ
-          { href: "/admin/club", label: "CLUB MEMBER", icon: Trophy },
-        ],
-      },
     ],
     []
   );
