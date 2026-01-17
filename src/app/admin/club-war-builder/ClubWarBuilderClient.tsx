@@ -28,8 +28,14 @@ type LeaveRow = {
   status?: string | null;
 };
 
-type Slot = { memberId: number | null };
-type Party = { id: number; name: string; slots: Slot[] };
+type Slot = {
+  memberId: number | null;
+  /** Per-person (assignment) name color. Stored on slot to be saved with plan. */
+  nameColor?: string | null;
+  /** Optional per-person note, shown in war map. */
+  note?: string | null;
+};
+type Party = { id: number; name: string; color?: string | null; slots: Slot[] };
 
 type PlanRow = {
   id: string;
@@ -72,9 +78,35 @@ function createDefaultParties(): Party[] {
   return Array.from({ length: 10 }, (_, i) => ({
     id: i + 1,
     name: `ปาร์ตี้ ${i + 1}`,
-    slots: Array.from({ length: 6 }, () => ({ memberId: null })),
+    color: null,
+    slots: Array.from({ length: 6 }, () => ({ memberId: null, nameColor: null, note: null })),
   }));
 }
+
+const PARTY_COLOR_PRESETS: Array<{ label: string; value: string | null }> = [
+  { label: "ไม่ใช้สี", value: null },
+  { label: "แดง", value: "#ef4444" },
+  { label: "ส้ม", value: "#f59e0b" },
+  { label: "เขียว", value: "#22c55e" },
+  { label: "ฟ้า", value: "#3b82f6" },
+  { label: "ม่วง", value: "#a855f7" },
+  { label: "ฟ้าเขียว", value: "#14b8a6" },
+  { label: "เทา", value: "#64748b" },
+];
+
+// Per-person name colors (used in party slots)
+const NAME_COLOR_PRESETS: Array<{ label: string; value: string | null }> = [
+  { label: "ไม่ใช้สี", value: null },
+  { label: "แดง", value: "#ef4444" },
+  { label: "ส้ม", value: "#f59e0b" },
+  { label: "เขียว", value: "#22c55e" },
+  { label: "ฟ้า", value: "#3b82f6" },
+  { label: "ม่วง", value: "#a855f7" },
+  { label: "ชมพู", value: "#ec4899" },
+  { label: "เหลือง", value: "#eab308" },
+  { label: "เทา", value: "#64748b" },
+  { label: "ดำ", value: "#111827" },
+];
 
 export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) {
   const [loading, setLoading] = useState(true);
@@ -125,6 +157,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
   // Roster UI
   const [q, setQ] = useState("");
   const [showLeft, setShowLeft] = useState(true);
+  const [showRight, setShowRight] = useState(true);
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("unassigned");
 
   // Filters: class + ultimate (multi-select)
@@ -334,8 +367,18 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
       const next = prev.map((p) => ({ ...p, slots: p.slots.map((s) => ({ ...s })) }));
       const findParty = (partyId: number) => next.find((x) => x.id === partyId) ?? null;
 
+      const clearSlot = (sl: Slot) => {
+        sl.memberId = null;
+        sl.nameColor = null;
+        sl.note = null;
+      };
+
       const removeMember = (memberId: number) => {
-        for (const p of next) for (const sl of p.slots) if (sl.memberId === memberId) sl.memberId = null;
+        for (const p of next) {
+          for (const sl of p.slots) {
+            if (sl.memberId === memberId) clearSlot(sl);
+          }
+        }
       };
 
       if (target.type === "ROSTER_BIN") {
@@ -343,7 +386,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
           const p = findParty(item.partyId);
           if (!p) return prev;
           if (item.index < 0 || item.index >= p.slots.length) return prev;
-          p.slots[item.index].memberId = null;
+          clearSlot(p.slots[item.index]);
         }
         return next;
       }
@@ -356,7 +399,8 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
 
       if (item.type === "ROSTER") {
         removeMember(item.memberId);
-        destP.slots[target.index].memberId = item.memberId;
+        // Replace assignment in destination slot
+        destP.slots[target.index] = { memberId: item.memberId, nameColor: null, note: null };
         return next;
       }
 
@@ -364,9 +408,23 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
       if (!srcP) return prev;
       if (item.partyId === target.partyId && item.index === target.index) return prev;
 
-      // swap
-      srcP.slots[item.index].memberId = destMid ?? null;
-      destP.slots[target.index].memberId = item.memberId;
+      // swap whole assignment so per-person metadata moves with the member
+      const srcSlot = srcP.slots[item.index];
+      const dstSlot = destP.slots[target.index];
+
+      const tmp: Slot = {
+        memberId: srcSlot.memberId ?? null,
+        nameColor: srcSlot.nameColor ?? null,
+        note: srcSlot.note ?? null,
+      };
+
+      srcSlot.memberId = dstSlot.memberId ?? null;
+      srcSlot.nameColor = dstSlot.nameColor ?? null;
+      srcSlot.note = dstSlot.note ?? null;
+
+      dstSlot.memberId = tmp.memberId ?? null;
+      dstSlot.nameColor = tmp.nameColor ?? null;
+      dstSlot.note = tmp.note ?? null;
       return next;
     });
 
@@ -428,7 +486,20 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
     setOurName(p.our_name || "Inferno");
     setOpponentName(p.opponent_name || "");
     setMatchDateISO(p.match_date || todayISO());
-    setParties(p.parties ?? createDefaultParties());
+    const raw = (p.parties ?? createDefaultParties()) as any[];
+    const normalized: Party[] = raw.map((x, idx) => {
+      const id = Number(x?.id ?? idx + 1);
+      const name = String(x?.name ?? `ปาร์ตี้ ${idx + 1}`);
+      const color = (x?.color ?? null) as string | null;
+      const slotsRaw = Array.isArray(x?.slots) ? x.slots : [];
+      const slots: Slot[] = Array.from({ length: 6 }, (_, i) => ({
+        memberId: slotsRaw?.[i]?.memberId != null ? Number(slotsRaw[i].memberId) : null,
+        nameColor: (slotsRaw?.[i]?.nameColor ?? null) as string | null,
+        note: (slotsRaw?.[i]?.note ?? null) as string | null,
+      }));
+      return { id, name, color, slots };
+    });
+    setParties(normalized);
     setPlanModalOpen(false);
   }, []);
 
@@ -466,7 +537,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
     const reason = onLeave ? (leaveReasonByMemberRef.current.get(m.id) ?? null) : null;
 
     return (
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-start gap-2 min-w-0">
         {cls?.icon_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -479,8 +550,10 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="text-sm font-semibold truncate">{m.name}</div>
+          <div className="flex items-start gap-2 min-w-0">
+            <div className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-5 text-zinc-900 dark:text-zinc-100">
+              {m.name}
+            </div>
             {onLeave ? (
               <span
                 className="shrink-0 rounded-full border border-red-600/50 bg-red-600/10 px-2 py-0.5 text-[10px] text-red-700 dark:text-red-300"
@@ -494,6 +567,45 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
           <div className="text-[11px] text-zinc-500 truncate">
             {tag}
             {onLeave && reason ? ` • ${reason}` : ""}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+    
+
+  const renderMemberInline = (m: MemberRow) => {
+    const cls = m.class_id ? classById.get(Number(m.class_id)) : null;
+    const onLeave = leaveSet.has(m.id);
+    const reason = onLeave ? (leaveReasonByMemberRef.current.get(m.id) ?? null) : null;
+
+    return (
+      <div className="flex items-start gap-2 min-w-0">
+        {cls?.icon_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={cls.icon_url}
+            alt={cls.name}
+            className="h-5 w-5 rounded-md object-cover border border-zinc-200 dark:border-zinc-800"
+          />
+        ) : (
+          <div className="h-5 w-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-2 min-w-0">
+            <div className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-zinc-900 dark:text-zinc-100">
+              {m.name}
+            </div>
+            {onLeave ? (
+              <span
+                className="shrink-0 rounded-full border border-red-600/50 bg-red-600/10 px-2 py-0.5 text-[10px] text-red-700 dark:text-red-300"
+                title={reason ? `ลา: ${reason}` : "ลา"}
+              >
+                ลา
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -544,9 +656,43 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
     ctx.closePath();
   };
 
-  const drawWarMap = useCallback(() => {
+  // --------- War map icon cache (class icons) ---------
+  const warMapIconCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
+  const toImgProxyUrl = useCallback((url: string) => {
+    const u = String(url || "").trim();
+    if (!u) return "";
+    // same-origin proxy to avoid CORS taint (required for canvas export)
+    return `/api/admin/img-proxy?url=${encodeURIComponent(u)}`;
+  }, []);
+
+  const loadIcon = useCallback(async (url: string) => {
+    const u = toImgProxyUrl(url);
+    if (!u) return null;
+    const cache = warMapIconCacheRef.current;
+    const hit = cache.get(u);
+    if (hit) return hit;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.decoding = "async";
+
+    await new Promise<void>((resolve) => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+      img.src = u;
+    });
+
+    // cache even if failed (img.complete may be false but prevents infinite reload loops)
+    cache.set(u, img);
+    return img;
+  }, [toImgProxyUrl]);
+
+  const drawWarMap = useCallback(async (opts?: { withIcons?: boolean }) => {
     const canvas = warMapCanvasRef.current;
     if (!canvas) return;
+
+    const withIcons = opts?.withIcons !== false;
 
     const DPR = Math.min(2, Math.max(1, Math.floor(window.devicePixelRatio || 1)));
     const COLS = 5;
@@ -591,6 +737,21 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
     ctx.font = "400 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
     ctx.fillText("Generated from Club War Builder", PAD, PAD + 72);
 
+    // pre-load used class icons (best-effort)
+    if (withIcons) {
+      const iconUrls = new Set<string>();
+      for (const p of parties ?? []) {
+        for (const sl of p.slots ?? []) {
+          const mid = sl?.memberId ?? null;
+          const mem = mid ? memberById.get(Number(mid)) : null;
+          if (!mem) continue;
+          const cls = mem.class_id != null ? classById.get(Number(mem.class_id)) : null;
+          if (cls?.icon_url) iconUrls.add(String(cls.icon_url));
+        }
+      }
+      await Promise.all(Array.from(iconUrls).map((u) => loadIcon(u)));
+    }
+
     // parties grid
     const list = parties ?? [];
     for (let i = 0; i < list.length; i++) {
@@ -611,10 +772,20 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
       ctx.stroke();
       ctx.restore();
 
-      // party title
+      // party color strip (if any)
+      if (p.color) {
+        ctx.save();
+        roundRect(ctx, x, y, PARTY_W, PARTY_H, 16);
+        ctx.clip();
+        ctx.fillStyle = String(p.color);
+        ctx.fillRect(x, y, PARTY_W, 10);
+        ctx.restore();
+      }
+
+      // party title (no #)
       ctx.fillStyle = "#111827";
       ctx.font = "700 16px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-      ctx.fillText(truncateText(ctx, `#${p.id} ${p.name}`, PARTY_W - 18), x + 12, y + 26);
+      ctx.fillText(truncateText(ctx, `${p.name}`, PARTY_W - 18), x + 12, y + 26);
 
       // slots
       const baseY = y + 50;
@@ -622,7 +793,8 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
       const maxTextW = PARTY_W - 24;
 
       for (let s = 0; s < 6; s++) {
-        const mid = p.slots?.[s]?.memberId ?? null;
+        const sl = (p.slots?.[s] ?? { memberId: null, nameColor: null, note: null }) as Slot;
+        const mid = sl.memberId ?? null;
         const mem = mid ? memberById.get(Number(mid)) : null;
 
         const yy = baseY + s * lineH;
@@ -644,7 +816,9 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
         ctx.fillText(slotNo, left, yy);
 
         const nameX = left + 22;
-        const nameMax = maxTextW - 44;
+        const ICON = 18;
+        const iconPad = 6;
+        const nameMax = maxTextW - 44 - (ICON + iconPad);
 
         if (!mem) {
           ctx.fillStyle = "#9ca3af";
@@ -654,14 +828,45 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
         }
 
         const onLeave = leaveSet.has(Number(mem.id));
-        const text = `${mem.name}${onLeave ? " • ลา" : ""}`;
+        const cls = mem.class_id != null ? classById.get(Number(mem.class_id)) : null;
 
-        ctx.fillStyle = onLeave ? "#b91c1c" : "#111827";
+        // class icon (always reserve space, best-effort draw image)
+        const iconY = yy - 15;
+        ctx.save();
+        roundRect(ctx, nameX, iconY, ICON, ICON, 5);
+        ctx.fillStyle = "#e5e7eb";
+        ctx.fill();
+        ctx.strokeStyle = "#d1d5db";
+        ctx.stroke();
+        ctx.restore();
+
+        if (withIcons && cls?.icon_url) {
+          const img = warMapIconCacheRef.current.get(toImgProxyUrl(String(cls.icon_url)));
+          if (img && img.complete && (img.naturalWidth || img.width)) {
+            try {
+              ctx.save();
+              roundRect(ctx, nameX, iconY, ICON, ICON, 5);
+              ctx.clip();
+              ctx.drawImage(img, nameX, iconY, ICON, ICON);
+              ctx.restore();
+            } catch {
+              // ignore draw errors
+            }
+          }
+        }
+
+        const textX = nameX + ICON + iconPad;
+        const note = (sl.note ?? "").trim();
+        const baseName = mem.name;
+        const text = `${baseName}${note ? ` • ${note}` : ""}${onLeave ? " • ลา" : ""}`;
+
+        const nameColor = (sl.nameColor ?? null) as string | null;
+        ctx.fillStyle = onLeave ? "#b91c1c" : nameColor ? String(nameColor) : "#111827";
         ctx.font = "500 13px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-        ctx.fillText(truncateText(ctx, text, nameMax), nameX, yy);
+        ctx.fillText(truncateText(ctx, text, nameMax), textX, yy);
       }
     }
-  }, [leaveSet, matchDateISO, memberById, opponentName, ourName, parties]);
+  }, [classById, leaveSet, loadIcon, matchDateISO, memberById, opponentName, ourName, parties, toImgProxyUrl]);
 
   useEffect(() => {
     if (!warMapOpen) return;
@@ -722,18 +927,31 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
 
     setCaptureBusy(true);
     try {
-      drawWarMap();
-      const blob = await canvasToBlob(canvas);
+      // Prefer embedding class icons; if blocked by browser/CORS, retry without icons to avoid blank/failed export.
+      let blob: Blob;
+      let usedIcons = true;
+      try {
+        await drawWarMap({ withIcons: true });
+        blob = await canvasToBlob(canvas);
+      } catch (e) {
+        usedIcons = false;
+        await drawWarMap({ withIcons: false });
+        blob = await canvasToBlob(canvas);
+      }
 
       const ClipboardItemCtor = (window as any).ClipboardItem;
       if (navigator.clipboard && ClipboardItemCtor) {
         await navigator.clipboard.write([new ClipboardItemCtor({ "image/png": blob })]);
-        alert("คัดลอกภาพผังทัพวอแล้ว");
+        alert(usedIcons ? "คัดลอกภาพผังทัพวอแล้ว" : "คัดลอกภาพผังทัพวอแล้ว (ไม่สามารถฝังไอคอนอาชีพได้ในเบราว์เซอร์นี้)");
         return;
       }
 
       downloadBlob(blob, warMapFilename);
-      alert("เบราว์เซอร์นี้ไม่รองรับคัดลอกภาพ: ดาวน์โหลดไฟล์แทนแล้ว");
+      alert(
+        usedIcons
+          ? "เบราว์เซอร์นี้ไม่รองรับคัดลอกภาพ: ดาวน์โหลดไฟล์แทนแล้ว"
+          : "เบราว์เซอร์นี้ไม่รองรับคัดลอกภาพ: ดาวน์โหลดไฟล์แทนแล้ว (ไม่สามารถฝังไอคอนอาชีพได้)"
+      );
     } catch (e) {
       console.error(e);
       alert("คัดลอกภาพไม่สำเร็จ");
@@ -748,9 +966,20 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
 
     setCaptureBusy(true);
     try {
-      drawWarMap();
-      const blob = await canvasToBlob(canvas);
+      let blob: Blob;
+      let usedIcons = true;
+      try {
+        await drawWarMap({ withIcons: true });
+        blob = await canvasToBlob(canvas);
+      } catch (e) {
+        usedIcons = false;
+        await drawWarMap({ withIcons: false });
+        blob = await canvasToBlob(canvas);
+      }
       downloadBlob(blob, warMapFilename);
+      if (!usedIcons) {
+        alert("ดาวน์โหลดแล้ว (ไม่สามารถฝังไอคอนอาชีพได้ในเบราว์เซอร์นี้)");
+      }
     } catch (e) {
       console.error(e);
       alert("ดาวน์โหลดไม่สำเร็จ");
@@ -800,7 +1029,8 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             />
           </div>
 
-          <div className="xl:col-span-2 flex items-center gap-2 justify-end">
+          {/* Actions: place on its own row on xl+ to avoid overlapping the opponent textbox */}
+          <div className="xl:col-span-12 flex flex-wrap items-center gap-2 justify-end">
             <button
               type="button"
               onClick={() => setShowLeft((v) => !v)}
@@ -809,7 +1039,28 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
               {showLeft ? "ซ่อน Roster" : "แสดง Roster"}
             </button>
 
-            
+            <button
+              type="button"
+              onClick={() => setShowRight((v) => !v)}
+              className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+            >
+              {showRight ? "ซ่อนประวัติ" : "แสดงประวัติ"}
+            </button>
+
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => {
+                if (!confirm("ล้างสมาชิกออกจากทุกปาร์ตี้? (ยังไม่บันทึกจนกด \"บันทึกเป็นการ์ด\")")) return;
+                setParties((prev) =>
+                  prev.map((x) => ({ ...x, slots: x.slots.map(() => ({ memberId: null })) }))
+                );
+              }}
+              className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+              title="ล้างสมาชิกในทุกปาร์ตี้ (ไม่กระทบประวัติการ์ดจนกว่าจะกดบันทึก)"
+            >
+              ล้างปาร์ตี้
+            </button>
 
             <button
               type="button"
@@ -840,7 +1091,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         {showLeft ? (
-          <div className="lg:col-span-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3">
+          <div className="lg:col-span-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3">
             <div className="flex items-center gap-2">
               <div className="font-semibold">Roster (Club)</div>
               <div className="ml-auto text-xs text-zinc-500">{roster.length}</div>
@@ -1040,7 +1291,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
 
         <div
           className={cn(
-            showLeft ? "lg:col-span-6" : "lg:col-span-9",
+            showLeft && showRight ? "lg:col-span-8" : showLeft || showRight ? "lg:col-span-10" : "lg:col-span-12",
             "rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3"
           )}
         >
@@ -1049,11 +1300,13 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             <div className="ml-auto text-xs text-zinc-500">Drag & Drop • ลากลงช่องว่างเพื่อเอาออก</div>
           </div>
 
-          <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
+          {/* Wider cards for readability: reduce columns on large screens */}
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
             {parties.map((p) => (
-              <div key={p.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 p-3">
-                <div className="flex items-center gap-2">
-                  <div className="text-sm font-semibold">#{p.id}</div>
+              <div key={p.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 overflow-hidden">
+                <div className="h-2 w-full" style={{ backgroundColor: p.color ?? "transparent" }} />
+                <div className="p-3">
+                <div className="flex items-center gap-2 flex-wrap">
                   <input
                     value={p.name}
                     onChange={(e) => {
@@ -1063,12 +1316,42 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                     disabled={!canEdit}
                     className="h-8 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-3 text-sm"
                   />
+
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="h-4 w-4 rounded-full border border-zinc-200 dark:border-zinc-800"
+                      style={{ backgroundColor: p.color ?? "transparent" }}
+                      title={p.color ? `สี: ${p.color}` : "ไม่ใช้สี"}
+                    />
+                    <select
+                      value={p.color ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value || null;
+                        setParties((prev) => prev.map((x) => (x.id === p.id ? { ...x, color: v } : x)));
+                      }}
+                      disabled={!canEdit}
+                      className="h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 text-sm"
+                      title="เลือกสีประจำปาร์ตี้ (บันทึกไปกับการ์ด)"
+                    >
+                      {PARTY_COLOR_PRESETS.map((c) => (
+                        <option key={c.label} value={c.value ?? ""}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <button
                     type="button"
                     disabled={!canEdit}
                     onClick={() => {
                       if (!confirm(`ล้างสมาชิกใน ${p.name}?`)) return;
-                      setParties((prev) => prev.map((x) => (x.id === p.id ? { ...x, slots: x.slots.map(() => ({ memberId: null })) } : x)));
+                      setParties((prev) =>
+                        prev.map((x) =>
+                          x.id === p.id
+                            ? { ...x, slots: x.slots.map(() => ({ memberId: null, nameColor: null, note: null })) }
+                            : x
+                        )
+                      );
                     }}
                     className="h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs"
                   >
@@ -1076,62 +1359,173 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                   </button>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="mt-3 space-y-2">
                   {p.slots.map((sl, idx) => {
                     const mid = sl.memberId;
                     const mem = mid ? memberById.get(mid) : null;
+                    const cls = mem?.class_id ? classById.get(Number(mem.class_id)) : null;
+                    const onLeave = mem ? leaveSet.has(mem.id) : false;
+                    const draggable = !!(mem && canEdit && !onLeave);
+                    const nameColor = (sl.nameColor ?? null) as string | null;
+                    const note = (sl.note ?? "") as string;
+
                     return (
                       <div
                         key={idx}
                         className={cn(
-                          "h-16 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-2",
-                          canEdit ? "cursor-pointer" : "opacity-80"
+                  "group flex items-start gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 py-2 min-h-[56px]",
+                          canEdit ? "" : "opacity-90"
                         )}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => handleDrop({ type: "SLOT", partyId: p.id, index: idx })}
                       >
-                        {mem ? (
-                          <div
-                            draggable={canEdit}
-                            onDragStart={() => onDragStartSlot(p.id, idx, mem.id)}
-                            onDragEnd={clearDrag}
-                            className="h-full flex items-center gap-2 cursor-grab active:cursor-grabbing"
-                            title={mem.name}
-                          >
-                            {renderMember(mem)}
-                          </div>
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-xs text-zinc-400">ว่าง</div>
-                        )}
+                        <div className="w-6 shrink-0 pt-1 text-[11px] text-zinc-500 tabular-nums">{idx + 1}</div>
+
+                        <div className="min-w-0 flex-1">
+                          {mem ? (
+                            <div className="min-w-0 w-full">
+                              {/* drag handle (icon + name) */}
+                              <div
+                                draggable={draggable}
+                                onDragStart={() => draggable && onDragStartSlot(p.id, idx, mem.id)}
+                                onDragEnd={clearDrag}
+                                className={cn(
+                                  "flex items-center gap-2 min-w-0",
+                                  draggable ? "cursor-grab active:cursor-grabbing" : "opacity-80 cursor-not-allowed"
+                                )}
+                                title={mem.name}
+                              >
+                                <div className="flex items-start gap-2 min-w-0 w-full">
+                                  {cls?.icon_url ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={cls.icon_url}
+                                      alt={cls.name}
+                                      className="h-5 w-5 rounded-md object-cover border border-zinc-200 dark:border-zinc-800"
+                                    />
+                                  ) : (
+                                    <div className="h-5 w-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+                                  )}
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div
+                                        className={cn(
+                                          "min-w-0 flex-1 truncate text-[14px] font-semibold leading-5",
+                                          onLeave ? "text-red-700 dark:text-red-300" : "text-zinc-900 dark:text-zinc-100"
+                                        )}
+                                        style={!onLeave && nameColor ? { color: nameColor } : undefined}
+                                        title={mem.name}
+                                      >
+                                        {mem.name}
+                                      </div>
+                                      {onLeave ? (
+                                        <span
+                                          className="shrink-0 rounded-full border border-red-600/50 bg-red-600/10 px-2 py-0.5 text-[10px] text-red-700 dark:text-red-300"
+                                          title="ลา"
+                                        >
+                                          ลา
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* per-person color + note */}
+                              <div className="mt-1 flex items-center gap-2">
+                                <select
+                                  value={nameColor ?? ""}
+                                  onChange={(e) => {
+                                    const v = e.target.value || null;
+                                    setParties((prev) =>
+                                      prev.map((x) => {
+                                        if (x.id !== p.id) return x;
+                                        const slots = x.slots.map((s, i) =>
+                                          i === idx ? { ...s, nameColor: v } : s
+                                        );
+                                        return { ...x, slots };
+                                      })
+                                    );
+                                  }}
+                                  disabled={!canEdit}
+                                  className="h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 text-xs"
+                                  title="สีชื่อ (รายคน)"
+                                >
+                                  {NAME_COLOR_PRESETS.map((c) => (
+                                    <option key={c.label} value={c.value ?? ""}>
+                                      {c.label}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <input
+                                  value={note}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setParties((prev) =>
+                                      prev.map((x) => {
+                                        if (x.id !== p.id) return x;
+                                        const slots = x.slots.map((s, i) =>
+                                          i === idx ? { ...s, note: v } : s
+                                        );
+                                        return { ...x, slots };
+                                      })
+                                    );
+                                  }}
+                                  disabled={!canEdit}
+                                  placeholder="Note"
+                                  className="h-8 flex-1 min-w-0 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 text-xs"
+                                  title="โน้ต (แสดงในผังทัพวอ)"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-zinc-400">ว่าง</div>
+                          )}
+                        </div>
 
                         {mem && canEdit ? (
-                          <div className="mt-1 flex justify-end">
-                            <button
-                              type="button"
-                              className="text-[11px] text-zinc-500 underline"
-                              onClick={() => {
-                                setParties((prev) => {
-                                  const next = prev.map((x) => ({ ...x, slots: x.slots.map((s) => ({ ...s })) }));
-                                  const pp = next.find((x) => x.id === p.id)!;
-                                  pp.slots[idx].memberId = null;
-                                  return next;
-                                });
-                              }}
-                            >
-                              เอาออก
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            className="shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-[11px] text-zinc-600 opacity-0 group-hover:opacity-100 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                            onClick={() => {
+                              setParties((prev) => {
+                                const next = prev.map((x) => ({ ...x, slots: x.slots.map((s) => ({ ...s })) }));
+                                const pp = next.find((x) => x.id === p.id)!;
+                                pp.slots[idx].memberId = null;
+                                pp.slots[idx].nameColor = null;
+                                pp.slots[idx].note = null;
+                                return next;
+                              });
+                            }}
+                            title="เอาออกจากช่องนี้"
+                          >
+                            เอาออก
+                          </button>
                         ) : null}
                       </div>
                     );
                   })}
+                </div>
+
+                <div
+                  className="mt-3 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/30 p-3 text-center text-xs text-zinc-500"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleDrop({ type: "ROSTER_BIN" })}
+                  title="ลากสมาชิกจากช่องมาวางที่นี่เพื่อเอาออกจากตี้"
+                >
+                  ลากสมาชิกจากช่องมาวางที่นี่เพื่อเอาออกจากตี้
+                </div>
+
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="lg:col-span-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3">
+        {showRight ? (
+        <div className="lg:col-span-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3">
           <div className="flex items-center gap-2">
             <div className="font-semibold">ประวัติการ์ด</div>
             <div className="ml-auto text-xs text-zinc-500">{plansLoading ? "กำลังโหลด..." : `${plansTotal}`}</div>
@@ -1196,6 +1590,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             </button>
           </div>
         </div>
+      ) : null}
       </div>
 
       
@@ -1224,7 +1619,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 <button
                   type="button"
                   className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
-                  onClick={drawWarMap}
+                  onClick={() => drawWarMap({ withIcons: true })}
                   disabled={captureBusy}
                 >
                   รีเฟรช
