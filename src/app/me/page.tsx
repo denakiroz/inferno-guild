@@ -334,9 +334,29 @@ export default function MePage() {
                 />
 
                 <div className="flex-1 min-w-0">
-                  <div className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                    {me.user?.displayName}
+                  <div className="flex items-center gap-2 min-w-0">
+                    {(() => {
+                      const currentClassId = Number(member?.class_id ?? 0);
+                      const currentClass = classes.find((c) => c.id === currentClassId);
+                      const iconUrl = currentClass?.icon_url;
+
+                      if (!iconUrl) return null;
+
+                      return (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={iconUrl}
+                          alt={currentClass?.name ?? "class icon"}
+                          className="h-6 w-6 rounded-sm object-contain shrink-0"
+                        />
+                      );
+                    })()}
+
+                    <div className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                      {me.user?.displayName}
+                    </div>
                   </div>
+
                   <div className="text-sm text-zinc-500 dark:text-zinc-400">
                     Guild: {me.user?.guild} • {canAdmin ? "Admin" : "Member"}
                   </div>
