@@ -365,6 +365,7 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
   const [groupColorDraft, setGroupColorDraft] = useState<string | null>("#ef4444");
   const [groupSelectedParties, setGroupSelectedParties] = useState<Set<number>>(new Set());
   const [groupSaving, setGroupSaving] = useState(false);
+  const [groupSavedName, setGroupSavedName] = useState<string | null>(null); // feedback หลัง save
 
   // note เป็นรายบรรทัด ใส่สีได้ทีละบรรทัด
   const [noteLines, setNoteLines] = useState<NoteLine[]>([{ id: "L0", color: null, text: "" }]);
@@ -410,7 +411,7 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
       const topDist = y - r.top;
       const bottomDist = r.bottom - y;
 
-      // intensity: 0..1 แล้วเร่งแบบ quadratic ให้รู้สึก “ติดมือ”
+      // intensity: 0..1 แล้วเร่งแบบ quadratic ให้รู้สึก "ติดมือ"
       if (topDist < EDGE_PX) {
         const t = Math.max(0, Math.min(1, 1 - topDist / EDGE_PX));
         el.scrollTop -= Math.round(MAX_SPEED * t * t);
@@ -1366,6 +1367,16 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     setGroupSelectedParties(new Set());
     setGroupNameDraft("");
     setGroupColorDraft("#ef4444");
+    setGroupSavedName(null);
+  }
+
+  /** reset ฟอร์มกลับเป็น create-mode โดย modal ยังเปิดอยู่ */
+  function resetGroupFormToCreate() {
+    setGroupModalMode("create");
+    setEditingGroupId(null);
+    setGroupSelectedParties(new Set());
+    setGroupNameDraft("");
+    setGroupColorDraft("#ef4444");
   }
 
   function isPartyLockedByOtherGroup(pid: number): boolean {
@@ -1437,7 +1448,17 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
       }
 
       await loadGroups();
-      closeGroupModal();
+
+      if (groupModalMode === "create") {
+        // ✅ ไม่ปิด modal — reset ฟอร์มกลับเป็น create ใหม่เลย
+        setGroupSavedName(name);
+        resetGroupFormToCreate();
+        // เคลียร์ feedback หลัง 3 วินาที
+        setTimeout(() => setGroupSavedName((cur) => (cur === name ? null : cur)), 3000);
+      } else {
+        // แก้ไขกลุ่ม → ปิด modal เหมือนเดิม
+        closeGroupModal();
+      }
     } finally {
       setGroupSaving(false);
     }
@@ -1950,7 +1971,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             </div>
 
             <div className="mt-2 text-[11px] text-zinc-500">
-              หมายเหตุ: ใช้อ้างอิงจากการจัดทัพ “ปัจจุบัน” (assigned/unassigned) ไม่ใช่ค่า party ใน DB
+              หมายเหตุ: ใช้อ้างอิงจากการจัดทัพ "ปัจจุบัน" (assigned/unassigned) ไม่ใช่ค่า party ใน DB
             </div>
           </div>
 
@@ -2095,15 +2116,19 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         <div className="w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-semibold">{groupModalMode === "create" ? "เพิ่มกลุ่มปาร์ตี้" : "แก้ไขกลุ่มปาร์ตี้"}</div>
-              <div className="mt-1 text-xs text-zinc-500">
-                เลือกปาร์ตี้ที่จะอยู่ในกลุ่มเดียวกัน และกำหนดสีเพื่อแสดงหัวปาร์ตี้/หัวกลุ่ม
+              <div className="text-sm font-semibold">
+                {groupModalMode === "create" ? "จัดการกลุ่มปาร์ตี้" : "แก้ไขกลุ่มปาร์ตี้"}
+              </div>
+              <div className="mt-0.5 text-xs text-zinc-500">
+                {groupModalMode === "create"
+                  ? "เพิ่มได้หลายกลุ่มต่อเนื่อง — กด \"เพิ่มกลุ่ม\" แล้วฟอร์มจะ reset ให้ใส่กลุ่มถัดไปได้เลย"
+                  : "แก้ไขกลุ่มที่เลือก แล้วกด \"บันทึกการแก้ไข\""}
               </div>
             </div>
 
             <button
               type="button"
-              className="text-xs text-zinc-500 underline underline-offset-2"
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
               onClick={closeGroupModal}
               disabled={groupSaving}
             >
@@ -2111,15 +2136,29 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             </button>
           </div>
 
+          {/* Feedback banner หลัง save กลุ่มใหม่ */}
+          {groupSavedName ? (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 dark:border-green-800/50 dark:bg-green-950/30 dark:text-green-400">
+              <span>✓</span>
+              <span>เพิ่มกลุ่ม &ldquo;{groupSavedName}&rdquo; แล้ว — ใส่กลุ่มถัดไปได้เลย</span>
+            </div>
+          ) : null}
+
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[1fr_320px]">
             {/* left */}
             <div>
-              <div className="text-xs text-zinc-500 mb-1">ชื่อกลุ่ม</div>
+              <div className="text-xs font-medium text-zinc-600 dark:text-zinc-300 mb-1">
+                {groupModalMode === "create" ? `กลุ่มที่ ${groupsSorted.length + 1}` : "ชื่อกลุ่ม"}
+              </div>
               <input
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                autoFocus
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-blue-400"
                 value={groupNameDraft}
                 onChange={(e) => setGroupNameDraft(e.target.value)}
-                placeholder="เช่น กลุ่ม A"
+                placeholder="เช่น กลุ่ม A, B, หรือ ทีมหน้า"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !groupSaving) saveGroupModal();
+                }}
               />
 
               <div className="mt-4 text-xs text-zinc-500 mb-2">เลือกสีหัวกลุ่ม</div>
@@ -2148,139 +2187,160 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 </button>
               </div>
 
-              <div className="mt-4 text-xs text-zinc-500 mb-2">เลือกปาร์ตี้เข้ากลุ่ม</div>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+              <div className="mt-4 flex items-center justify-between mb-2">
+                <div className="text-xs text-zinc-500">เลือกปาร์ตี้เข้ากลุ่ม</div>
+                {groupSelectedParties.size > 0 && (
+                  <div className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                    เลือก {groupSelectedParties.size} ตี้
+                  </div>
+                )}
+              </div>
+              {/* 5×2 toggle grid — เห็นครบ 10 ตี้ */}
+              <div className="grid grid-cols-5 gap-1.5">
                 {Array.from({ length: 10 }, (_, i) => i + 1).map((pid) => {
                   const locked = isPartyLockedByOtherGroup(pid);
                   const checked = groupSelectedParties.has(pid);
                   const lockInfo = partyToGroup.get(pid);
+                  const lockColor = lockInfo?.color ?? null;
 
                   return (
-                    <label
+                    <button
                       key={pid}
+                      type="button"
+                      disabled={locked && !checked}
+                      title={locked && !checked ? `ตี้ ${pid} อยู่ในกลุ่ม "${lockInfo?.name ?? "-"}" แล้ว` : `ปาร์ตี้ ${pid}`}
+                      onClick={() => {
+                        if (locked && !checked) return;
+                        setGroupSelectedParties((prev) => {
+                          const next = new Set(prev);
+                          if (checked) next.delete(pid);
+                          else next.add(pid);
+                          return next;
+                        });
+                      }}
                       className={[
-                        "flex items-center gap-2 rounded-lg border px-2 py-2 text-xs font-semibold",
-                        locked && !checked
-                          ? "border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-500"
-                          : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/10 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+                        "relative flex flex-col items-center justify-center rounded-xl border py-2.5 text-xs font-bold transition-all",
+                        checked
+                          ? "border-blue-400 bg-blue-50 text-blue-700 ring-2 ring-blue-300 dark:border-blue-600 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-700"
+                          : locked
+                          ? "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/20 dark:text-zinc-600"
+                          : "border-zinc-200 bg-white text-zinc-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 dark:border-zinc-700 dark:bg-zinc-900/20 dark:text-zinc-400 dark:hover:border-blue-600 dark:hover:text-blue-400",
                       ].join(" ")}
-                      title={locked && !checked ? `ปาร์ตี้นี้อยู่ในกลุ่ม "${lockInfo?.name ?? "-"}" แล้ว` : `ปาร์ตี้ ${pid}`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={locked && !checked}
-                        onChange={(e) => {
-                          const on = e.target.checked;
-                          setGroupSelectedParties((prev) => {
-                            const next = new Set(prev);
-                            if (on) next.add(pid);
-                            else next.delete(pid);
-                            return next;
-                          });
-                        }}
-                      />
-                      <span>ปาร์ตี้ {pid}</span>
-                    </label>
+                      {/* ถ้า locked แสดงจุดสีของกลุ่ม */}
+                      {locked && !checked && lockColor && (
+                        <span
+                          className="absolute top-1 right-1 h-2 w-2 rounded-full"
+                          style={{ background: lockColor }}
+                          title={`กลุ่ม: ${lockInfo?.name ?? "-"}`}
+                        />
+                      )}
+                      <span className="text-base leading-none">{pid}</span>
+                      <span className="mt-0.5 text-[9px] font-medium leading-none opacity-60">
+                        {checked ? "✓" : locked ? lockInfo?.name?.slice(0, 4) ?? "—" : "ตี้"}
+                      </span>
+                    </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* right: manage order + existing groups */}
+            {/* right: กลุ่มที่มีอยู่ — รวม order + edit/delete ในบรรทัดเดียว */}
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/30">
-              <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">ลำดับแสดงผลกลุ่ม</div>
-              <div className="mt-1 text-[11px] text-zinc-500">
-                ปรับได้จากหัวกลุ่มในหน้าปาร์ตี้ (ปุ่ม ↑ ↓) หรือดูรายการด้านล่าง
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                  กลุ่มที่มีอยู่
+                  {groupsSorted.length > 0 && (
+                    <span className="ml-1.5 rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                      {groupsSorted.length}
+                    </span>
+                  )}
+                </div>
+                {groupsSorted.length > 0 && (
+                  <div className="text-[10px] text-zinc-400">↑↓ = เรียงลำดับ</div>
+                )}
               </div>
 
-              <div className="mt-3 space-y-2">
+              <div className="mt-2 max-h-72 overflow-y-auto space-y-1.5 pr-0.5">
                 {groupsSorted.length === 0 ? (
-                  <div className="text-xs text-zinc-400">ยังไม่มีการจัดกลุ่ม</div>
+                  <div className="rounded-lg border border-dashed border-zinc-200 py-4 text-center text-xs text-zinc-400 dark:border-zinc-700">
+                    ยังไม่มีกลุ่ม — เพิ่มจากฟอร์มทางซ้าย
+                  </div>
                 ) : (
                   groupsSorted.map((g, idx) => (
                     <div
                       key={g.id}
-                      className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-950/30"
+                      className={[
+                        "flex items-center justify-between rounded-lg border bg-white px-2 py-1.5 text-xs dark:bg-zinc-950/30",
+                        groupModalMode === "edit" && editingGroupId === g.id
+                          ? "border-blue-400 ring-1 ring-blue-300 dark:border-blue-600"
+                          : "border-zinc-200 dark:border-zinc-800",
+                      ].join(" ")}
                     >
-                      <div className="min-w-0 flex items-center gap-2">
+                      <div className="min-w-0 flex items-center gap-1.5 flex-1">
                         <ColorDot value={g.color ?? null} />
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="truncate font-semibold text-zinc-700 dark:text-zinc-200">{g.name}</div>
-                          <div className="truncate text-[11px] text-zinc-500">{g.group}</div>
+                          <div className="truncate text-[10px] text-zinc-400">ปาร์ตี้ {g.group}</div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5 ml-1 shrink-0">
                         <button
                           type="button"
-                          className="rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 dark:border-zinc-700 dark:hover:bg-zinc-800"
                           disabled={idx === 0}
                           onClick={() => moveGroup(g.id, -1)}
                           title="เลื่อนขึ้น"
-                        >
-                          ↑
-                        </button>
+                        >↑</button>
                         <button
                           type="button"
-                          className="rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 dark:border-zinc-700 dark:hover:bg-zinc-800"
                           disabled={idx === groupsSorted.length - 1}
                           onClick={() => moveGroup(g.id, 1)}
                           title="เลื่อนลง"
-                        >
-                          ↓
-                        </button>
+                        >↓</button>
+                        <button
+                          type="button"
+                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:border-zinc-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                          onClick={() => openEditGroupModal(g)}
+                          title="แก้ไขกลุ่มนี้"
+                        >แก้</button>
+                        <button
+                          type="button"
+                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-red-500 hover:bg-red-50 dark:border-zinc-700 dark:text-red-400 dark:hover:bg-red-950/30"
+                          onClick={() => deleteGroup(g)}
+                          title="ลบกลุ่มนี้"
+                        >ลบ</button>
                       </div>
                     </div>
                   ))
                 )}
               </div>
-
-              <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-                <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">จัดการกลุ่มที่มีอยู่</div>
-                <div className="mt-2 space-y-2">
-                  {groupsSorted.map((g) => (
-                    <div key={g.id} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-950/30">
-                      <div className="min-w-0 flex items-center gap-2">
-                        <ColorDot value={g.color ?? null} />
-                        <span className="truncate font-semibold text-zinc-700 dark:text-zinc-200">{g.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
-                          onClick={() => openEditGroupModal(g)}
-                        >
-                          แก้ไข
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-md border border-zinc-200 px-2 py-1 text-[11px] font-semibold text-zinc-500 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
-                          onClick={() => deleteGroup(g)}
-                        >
-                          ลบ
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {groupsSorted.length === 0 ? <div className="text-xs text-zinc-400">—</div> : null}
-                </div>
-              </div>
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <Button onClick={closeGroupModal} type="button" disabled={groupSaving}>
-              ยกเลิก
-            </Button>
-            <Button onClick={saveGroupModal} type="button" disabled={groupSaving}>
-              {groupModalMode === "create" ? "เพิ่มกลุ่ม" : "บันทึกการแก้ไข"}
-            </Button>
-          </div>
-
-          <div className="mt-2 text-[11px] text-zinc-500">
-            การเก็บค่า: <span className="font-mono">group.group</span> จะเก็บเป็นรายการปาร์ตี้ เช่น{" "}
-            <span className="font-mono">1,3,7</span>
+          <div className="mt-4 flex items-center justify-between gap-2">
+            <div className="text-[11px] text-zinc-400">
+              {groupModalMode === "create"
+                ? "กด Enter หรือปุ่ม \"เพิ่มกลุ่ม\" — ฟอร์มจะ reset ให้ใส่กลุ่มถัดไปได้ทันที"
+                : "กด \"บันทึกการแก้ไข\" เพื่อยืนยันการเปลี่ยนแปลง"}
+            </div>
+            <div className="flex items-center gap-2">
+              {groupModalMode === "edit" && (
+                <button
+                  type="button"
+                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
+                  onClick={resetGroupFormToCreate}
+                  disabled={groupSaving}
+                >
+                  + เพิ่มกลุ่มใหม่
+                </button>
+              )}
+              <Button onClick={saveGroupModal} type="button" disabled={groupSaving}>
+                {groupModalMode === "create" ? "เพิ่มกลุ่ม" : "บันทึกการแก้ไข"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -2550,57 +2610,65 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
           </div>
         </div>
 
-        {/* Party Pane (grouped) */}
+        {/* Party Pane (grouped) — 5-column proportional grid */}
         <div ref={partyScrollRef} className="min-h-0 overflow-y-auto pr-1" style={{ height: paneHeight }}>
-          <div className="space-y-4">
+          {/* Layout: 5-column grid, each group spans its party count */}
+          <div
+            className="grid items-start gap-2"
+            style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
+          >
             {groupedPartySections.map((sec, secIdx) => {
               const partyCount = sec.parties.length;
+              // clamp ที่ 5 — ถ้ากลุ่มมีมากกว่า 5 ตี้ก็ยังแสดงได้ (wrap ภายใน)
+              const spanCols = Math.min(partyCount, 5);
 
-              /**
-               * Party grid
-               * ต้องการให้ “1 แถวมี 4 ปาร์ตี้” (สำหรับ desktop)
-               * - มือถือ/จอเล็ก: 1–2 คอลัมน์เพื่อไม่ให้แคบเกิน
-               * - Desktop: 4 คอลัมน์
-               */
-              const partyGridClass = "grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+              // helper: render party cards
+              const partyCards = sec.parties.map((p) => (
+                <PartyCard
+                  key={p.id}
+                  party={p}
+                  members={members}
+                  classById={classById}
+                  canEdit={canEdit}
+                  selectedIds={selectedIds}
+                  dragItem={dragItem}
+                  dragOverTarget={dragOverTarget}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDragOverSlot={onDragOverSlot}
+                  onDropOnSlot={onDropOnSlot}
+                  onToggleSelect={toggleSelect}
+                  onOpenRemark={openRemarkEditor}
+                  onRemoveFromSlot={removeFromSlot}
+                  groupColor={sec.type === "group" ? (sec.g.color ?? null) : null}
+                  warTime={warTime}
+                  isOnLeave={isOnLeave}
+                  getLeaveReason={(id) => leaveReasonByMemberRef.current.get(id) ?? null}
+                />
+              ));
 
               if (sec.type === "ungrouped") {
                 return (
-                  <div key={`ungrouped-${secIdx}`} className="space-y-2">
-                    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20">
-                      <div className="flex items-center justify-between p-3">
-                        <div className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                  <div
+                    key={`ungrouped-${secIdx}`}
+                    className="flex flex-col gap-1.5"
+                    style={{ gridColumn: `span ${spanCols}` }}
+                  >
+                    {/* ungrouped header */}
+                    <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950/20">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                           ยังไม่จัดกลุ่ม
                         </div>
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">{partyCount} ปาร์ตี้</div>
+                        <div className="text-xs text-zinc-400">{partyCount} ตี้</div>
                       </div>
-                      <div className="h-px w-full bg-zinc-100 dark:bg-zinc-900" />
                     </div>
-
-                    <div className={partyGridClass}>
-                      {sec.parties.map((p) => (
-                        <PartyCard
-                          key={p.id}
-                          party={p}
-                          members={members}
-                          classById={classById}
-                          canEdit={canEdit}
-                          selectedIds={selectedIds}
-                          dragItem={dragItem}
-                          dragOverTarget={dragOverTarget}
-                          onDragStart={onDragStart}
-                          onDragEnd={onDragEnd}
-                          onDragOverSlot={onDragOverSlot}
-                          onDropOnSlot={onDropOnSlot}
-                          onToggleSelect={toggleSelect}
-                          onOpenRemark={openRemarkEditor}
-                          onRemoveFromSlot={removeFromSlot}
-                          groupColor={null}
-                          warTime={warTime}
-                          isOnLeave={isOnLeave}
-                          getLeaveReason={(id) => leaveReasonByMemberRef.current.get(id) ?? null}
-                        />
-                      ))}
+                    {/* party grid — 1 ตี้ต่อ 1 column */}
+                    <div
+                      className="grid gap-2"
+                      style={{ gridTemplateColumns: `repeat(${spanCols}, minmax(0, 1fr))` }}
+                    >
+                      {partyCards}
                     </div>
                   </div>
                 );
@@ -2610,84 +2678,69 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               const gColor = g.color ?? null;
 
               return (
-                <div key={`group-${g.id}`} className="space-y-2">
-                  <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20">
-                    <div className="flex items-center justify-between p-3">
+                <div
+                  key={`group-${g.id}`}
+                  className="flex flex-col gap-1.5"
+                  style={{ gridColumn: `span ${spanCols}` }}
+                >
+                  {/* group header — spans full width of this group */}
+                  <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2">
                       <div className="min-w-0 flex items-center gap-2">
-                        <div
-                          className="h-3 w-3 rounded-full border border-zinc-200 dark:border-zinc-800"
-                          style={{ backgroundColor: gColor ?? "transparent" }}
-                        />
+                        {gColor ? (
+                          <div
+                            className="h-3 w-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: gColor }}
+                          />
+                        ) : null}
                         <div className="min-w-0">
                           <div className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                             {g.name}
                           </div>
-                          <div className="text-xs text-zinc-500 dark:text-zinc-400">ปาร์ตี้: {g.group}</div>
+                          <div className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                            ตี้: {g.group}
+                          </div>
                         </div>
                       </div>
 
                       {canEdit ? (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 shrink-0">
                           <button
                             type="button"
-                            className="rounded-md border border-zinc-200 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                            className="rounded border border-zinc-200 px-1.5 py-0.5 text-[11px] text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                             onClick={() => moveGroup(g.id, -1)}
-                            title="เลื่อนกลุ่มขึ้น"
-                          >
-                            ↑
-                          </button>
+                            title="เลื่อนกลุ่มไปทางซ้าย/ขึ้น"
+                          >↑</button>
                           <button
                             type="button"
-                            className="rounded-md border border-zinc-200 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                            className="rounded border border-zinc-200 px-1.5 py-0.5 text-[11px] text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                             onClick={() => moveGroup(g.id, 1)}
-                            title="เลื่อนกลุ่มลง"
-                          >
-                            ↓
-                          </button>
+                            title="เลื่อนกลุ่มไปทางขวา/ลง"
+                          >↓</button>
                           <button
                             type="button"
-                            className="rounded-md border border-zinc-200 px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                            className="rounded border border-zinc-200 px-1.5 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 dark:border-zinc-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
                             onClick={() => openEditGroupModal(g)}
                             title="แก้ไขกลุ่ม"
-                          >
-                            แก้ไข
-                          </button>
+                          >แก้ไข</button>
                         </div>
                       ) : null}
                     </div>
-
-                    {gColor ? <div className="h-1 w-full" style={{ backgroundColor: gColor, opacity: 0.7 }} /> : null}
+                    {gColor ? (
+                      <div className="h-1 w-full" style={{ backgroundColor: gColor, opacity: 0.8 }} />
+                    ) : null}
                   </div>
 
-                  <div className={partyGridClass}>
-                    {sec.parties.map((p) => (
-                      <PartyCard
-                        key={p.id}
-                        party={p}
-                        members={members}
-                        classById={classById}
-                        canEdit={canEdit}
-                        selectedIds={selectedIds}
-                        dragItem={dragItem}
-                        dragOverTarget={dragOverTarget}
-                        onDragStart={onDragStart}
-                        onDragEnd={onDragEnd}
-                        onDragOverSlot={onDragOverSlot}
-                        onDropOnSlot={onDropOnSlot}
-                        onToggleSelect={toggleSelect}
-                        onOpenRemark={openRemarkEditor}
-                        onRemoveFromSlot={removeFromSlot}
-                        groupColor={gColor}
-                        warTime={warTime}
-                        isOnLeave={isOnLeave}
-                        getLeaveReason={(id) => leaveReasonByMemberRef.current.get(id) ?? null}
-                      />
-                    ))}
+                  {/* party cards — 1 ตี้ต่อ 1 column ตรงกับ span ของกลุ่ม */}
+                  <div
+                    className="grid gap-2"
+                    style={{ gridTemplateColumns: `repeat(${spanCols}, minmax(0, 1fr))` }}
+                  >
+                    {partyCards}
                   </div>
                 </div>
               );
             })}
-
           </div>
         </div>
       </div>
@@ -2851,16 +2904,18 @@ function PartyCard(props: {
   }
 
   return (
-    <div className="min-w-0 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 flex flex-col h-[440px] overflow-hidden">
+    <div className="min-w-0 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 flex flex-col overflow-hidden">
       {/* group color strip */}
       {groupColor ? <div className="h-1 w-full" style={{ backgroundColor: groupColor, opacity: 0.75 }} /> : null}
 
-      <div className="flex items-center justify-between border-b border-zinc-200 p-3 dark:border-zinc-800">
-        <div className="min-w-0 font-semibold truncate">{p.name}</div>
-        <div className="text-xs text-zinc-500 font-mono">{p.slots.filter((s) => s.memberId).length}/6</div>
+      {/* header */}
+      <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+        <div className="min-w-0 text-sm font-semibold truncate">{p.name}</div>
+        <div className="text-xs text-zinc-500 font-mono shrink-0">{p.slots.filter((s) => s.memberId).length}/6</div>
       </div>
 
-      <div className="flex-1 min-h-0 p-1.5 grid grid-rows-6 gap-1.5">
+      {/* slots — compact single-row layout */}
+      <div className="flex-1 min-h-0 p-1 flex flex-col gap-1">
         {p.slots.map((s, idx) => {
           const mem = s.memberId ? members.find((m) => m.id === s.memberId) : null;
 
@@ -2873,11 +2928,19 @@ function PartyCard(props: {
           const leaveThisTime = mem ? isOnLeave(mem.id, warTime) : false;
           const leaveReason = mem ? getLeaveReason(mem.id) : null;
 
+          // build tooltip: ชื่อ + remark + leave info
+          const remarkParsed = mem ? parseColoredPrefix(mem.remark ?? "") : null;
+          const tooltipParts: string[] = [];
+          if (mem) tooltipParts.push(mem.name);
+          if (remarkParsed?.text) tooltipParts.push(remarkParsed.text);
+          if (leaveThisTime) tooltipParts.push(`🚫 ลาวอ (${warTime})${leaveReason ? ` • ${leaveReason}` : ""}`);
+          const tooltip = tooltipParts.join(" — ");
+
           return (
             <div
               key={idx}
               className={[
-                "h-full rounded-lg border px-3 py-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 select-none",
+                "flex flex-col rounded-lg border px-2 py-1 select-none",
                 isTarget
                   ? "border-red-300 bg-red-50 dark:bg-red-950/20"
                   : isSelected
@@ -2886,62 +2949,71 @@ function PartyCard(props: {
               ].join(" ")}
               onDragOver={(e) => onDragOverSlot(e, p.id, idx)}
               onDrop={(e) => onDropOnSlot(e, p.id, idx)}
-              title={leaveThisTime ? (leaveReason ? `ลาวอ (${warTime}) • ${leaveReason}` : `ลาวอ (${warTime})`) : undefined}
+              title={tooltip || undefined}
             >
               {mem ? (
                 <>
-                  <div
-                    className="min-w-0 flex-1"
-                    draggable={canEdit && !leaveThisTime}
-                    onDragStart={(e) =>
-                      onDragStart(e, {
-                        type: "SLOT",
-                        partyId: p.id,
-                        index: idx,
-                        memberId: mem.id,
-                      })
-                    }
-                    onDragEnd={onDragEnd}
-                    onClick={() => onToggleSelect(mem.id, leaveThisTime)}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
+                  {/* แถวบน: ชื่อ + ปุ่ม */}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {/* drag + select area */}
+                    <div
+                      className="min-w-0 flex-1 flex items-center gap-1.5 cursor-pointer"
+                      draggable={canEdit && !leaveThisTime}
+                      onDragStart={(e) =>
+                        onDragStart(e, {
+                          type: "SLOT",
+                          partyId: p.id,
+                          index: idx,
+                          memberId: mem.id,
+                        })
+                      }
+                      onDragEnd={onDragEnd}
+                      onClick={() => onToggleSelect(mem.id, leaveThisTime)}
+                    >
                       <PartyCountBadge count={countMemberParties(mem)} />
-                      <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={16} />
-                      <div className="min-w-0 flex items-center gap-2 text-sm font-semibold">
+                      <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={14} />
+                      <div className="min-w-0 flex items-center gap-1 text-xs font-semibold flex-1">
                         <NameText m={mem} />
                         {leaveThisTime ? (
-                          <span className="shrink-0 rounded-md bg-red-600/15 px-2 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-400">
-                            ลาวอ
+                          <span className="shrink-0 rounded bg-red-600/15 px-1 text-[9px] font-bold text-red-600 dark:text-red-400">
+                            ลา
                           </span>
                         ) : null}
                       </div>
                     </div>
 
-                    <div className="mt-1">
-                      <RemarkText remark={mem.remark ?? null} />
-                    </div>
+                    {/* action buttons */}
+                    {canEdit ? (
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                          title="แก้ไข remark / สี"
+                          onClick={(e) => { e.stopPropagation(); onOpenRemark(mem.id); }}
+                        >แก้</button>
+                        <button
+                          type="button"
+                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:border-zinc-700 dark:text-zinc-500 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                          title="เอาออกจากตี้"
+                          onClick={(e) => { e.stopPropagation(); onRemoveFromSlot(p.id, idx); }}
+                        >ออก</button>
+                      </div>
+                    ) : null}
                   </div>
 
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <IconButton
-                      label="แก้ไข"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenRemark(mem.id);
-                      }}
-                    />
-                    <IconButton
-                      label="เอาออก"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveFromSlot(p.id, idx);
-                      }}
-                    />
-                  </div>
+                  {/* แถวล่าง: remark — แสดงเฉพาะเมื่อมีข้อมูล */}
+                  {remarkParsed?.text ? (
+                    <div
+                      className="mt-0.5 truncate text-[10px] leading-tight text-zinc-400 dark:text-zinc-500"
+                      style={remarkParsed.color ? { color: remarkParsed.color } : undefined}
+                    >
+                      {remarkParsed.text}
+                    </div>
+                  ) : null}
                 </>
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[11px] text-zinc-300 font-semibold tracking-widest">
-                  ว่าง
+                <div className="flex items-center justify-center py-0.5 text-[10px] text-zinc-300 font-semibold tracking-widest">
+                  —
                 </div>
               )}
             </div>
