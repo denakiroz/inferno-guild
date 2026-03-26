@@ -6,13 +6,15 @@ import Members from "./Members";
 import { supabase } from "@/lib/supabase";
 import type { DbLeave, DbMember } from "@/type/db";
 
-type ViewTab = "members" | "club";
+type ViewTab = "members" | "club" | "club2";
 
 type Props = {
   members: DbMember[];
   leaves: DbLeave[];
   clubMembers: DbMember[];
   clubLeaves: DbLeave[];
+  club2Members: DbMember[];
+  club2Leaves: DbLeave[];
 };
 
 export default function AdminMembersClient(initial: Props) {
@@ -28,9 +30,19 @@ export default function AdminMembersClient(initial: Props) {
   const [clubLeaves, setClubLeaves] = useState<DbLeave[]>(initial.clubLeaves ?? []);
   const [isLoadingClub, setIsLoadingClub] = useState(false);
 
+  // Club 2 tab state
+  const [club2Members, setClub2Members] = useState<DbMember[]>(initial.club2Members ?? []);
+  const [club2Leaves, setClub2Leaves] = useState<DbLeave[]>(initial.club2Leaves ?? []);
+  const [isLoadingClub2, setIsLoadingClub2] = useState(false);
+
   const isLoading = useMemo(
-    () => (viewTab === "members" ? isLoadingMembers : isLoadingClub),
-    [viewTab, isLoadingMembers, isLoadingClub]
+    () =>
+      viewTab === "members"
+        ? isLoadingMembers
+        : viewTab === "club"
+        ? isLoadingClub
+        : isLoadingClub2,
+    [viewTab, isLoadingMembers, isLoadingClub, isLoadingClub2]
   );
 
   const onReloadMembers = useCallback(async () => {
@@ -65,6 +77,22 @@ export default function AdminMembersClient(initial: Props) {
     }
   }, []);
 
+  const onReloadClub2 = useCallback(async () => {
+    setIsLoadingClub2(true);
+    try {
+      const res = await fetch("/api/admin/club-members-2", { cache: "no-store" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? "Failed to reload club 2 members");
+
+      setClub2Members((json.members ?? []) as DbMember[]);
+      setClub2Leaves((json.leaves ?? []) as DbLeave[]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingClub2(false);
+    }
+  }, []);
+
   // ✅ Realtime: member/leave เปลี่ยน → reload เฉพาะแท็บที่กำลังดู (ลดภาระ)
   useEffect(() => {
     const ch = supabase
@@ -72,17 +100,19 @@ export default function AdminMembersClient(initial: Props) {
       .on("postgres_changes", { event: "*", schema: "public", table: "member" }, () => {
         if (viewTab === "members") void onReloadMembers();
         if (viewTab === "club") void onReloadClub();
+        if (viewTab === "club2") void onReloadClub2();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "leave" }, () => {
         if (viewTab === "members") void onReloadMembers();
         if (viewTab === "club") void onReloadClub();
+        if (viewTab === "club2") void onReloadClub2();
       })
       .subscribe();
 
     return () => {
       void supabase.removeChannel(ch);
     };
-  }, [viewTab, onReloadMembers, onReloadClub]);
+  }, [viewTab, onReloadMembers, onReloadClub, onReloadClub2]);
 
   const TabBtn = ({ value, label }: { value: ViewTab; label: string }) => {
     const active = viewTab === value;
@@ -108,6 +138,7 @@ export default function AdminMembersClient(initial: Props) {
         <div className="flex items-center gap-2 flex-wrap">
           <TabBtn value="members" label="Members" />
           <TabBtn value="club" label="Club" />
+          <TabBtn value="club2" label="Club 2" />
           <div className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
             {isLoading ? "กำลังโหลด..." : null}
           </div>
@@ -124,7 +155,7 @@ export default function AdminMembersClient(initial: Props) {
           canViewAllGuilds={true}
           tabMode="guild"
         />
-      ) : (
+      ) : viewTab === "club" ? (
         <Members
           members={clubMembers}
           leaves={clubLeaves}
@@ -133,6 +164,16 @@ export default function AdminMembersClient(initial: Props) {
           lockedGuild={null}
           canViewAllGuilds={true}
           tabMode="club"
+        />
+      ) : (
+        <Members
+          members={club2Members}
+          leaves={club2Leaves}
+          isLoading={isLoadingClub2}
+          onReload={onReloadClub2}
+          lockedGuild={null}
+          canViewAllGuilds={true}
+          tabMode="club2"
         />
       )}
     </div>

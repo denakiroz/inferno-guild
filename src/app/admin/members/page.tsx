@@ -22,6 +22,7 @@ const SELECT_MEMBER_WITH_CLASS = `
   is_special,
   guild,
   club,
+  club_2,
   discord_user_id,
   status,
   update_date,
@@ -86,12 +87,33 @@ export default async function AdminMembersPage() {
 
   const safeClubLeaves = clubLeaveErr ? [] : (clubLeaves ?? []);
 
+  // ====== Club 2 members (member.club_2 = true) ======
+  const { data: club2Members, error: club2Err } = await supabaseAdmin
+    .from("member")
+    .select(SELECT_MEMBER_WITH_CLASS)
+    .eq("club_2", true)
+    .order("power", { ascending: false })
+    .order("id", { ascending: true });
+
+  const safeClub2Members = club2Err ? [] : (club2Members ?? []);
+  const club2Ids = safeClub2Members.map((m: any) => m.id).filter(Boolean);
+
+  const { data: club2Leaves, error: club2LeaveErr } = await supabaseAdmin
+    .from("leave")
+    .select(SELECT_LEAVE)
+    .in("member_id", club2Ids.length ? club2Ids : [0])
+    .order("date_time", { ascending: false });
+
+  const safeClub2Leaves = club2LeaveErr ? [] : (club2Leaves ?? []);
+
   return (
     <AdminMembersClient
       members={(members ?? []) as any}
       leaves={safeLeaves as any}
       clubMembers={safeClubMembers as any}
       clubLeaves={safeClubLeaves as any}
+      club2Members={safeClub2Members as any}
+      club2Leaves={safeClub2Leaves as any}
     />
   );
 }

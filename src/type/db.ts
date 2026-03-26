@@ -23,6 +23,8 @@ export type DbMember = {
   discord_user_id: string | null;
   status: MemberStatus | null;
   update_date:string;
+  club?: boolean | null;
+  club_2?: boolean | null;
 
   class?: DbClass | null;
 };

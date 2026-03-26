@@ -102,6 +102,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           { href: "/admin/members", label: "Members", icon: Users },
           { href: "/admin/war-builder", label: "War Builder", icon: Swords },
           { href: "/admin/club-war-builder", label: "Club Builder", icon: Swords },
+          { href: "/admin/club-war-builder-2", label: "Club Builder 2", icon: Swords },
           { href: "/admin/leaves", label: "Leaves", icon: Calendar },
         ],
       },
@@ -112,6 +113,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           { href: "/admin/master/classes", label: "Classes", icon: Database },
           { href: "/admin/master/ultimate-skills", label: "Ultimate Skills", icon: Database },
           { href: "/admin/master/skill-stones", label: "Skill Stones", icon: Database },
+          { href: "/admin/master/special-skill", label: "ศิษย์พี่", icon: Database },
         ],
       },
     ],
@@ -128,7 +130,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   function isActive(href: string) {
     if (pathname === href) return true;
     // highlight nested routes
-    if (href !== "/admin" && pathname?.startsWith(href)) return true;
+    if (href !== "/admin" && pathname?.startsWith(href + "/")) return true;
     return false;
   }
 
@@ -276,6 +278,5 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       >
         <main className="p-4 md:p-6">{children}</main>
       </div>
-    </div>
-  );
+    </div>  );
 }

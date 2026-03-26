@@ -6,11 +6,11 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
-type EquipmentType = 1 | 2 | 3 | 4;
+type EquipmentType = 1 | 2 | 3;
 
 function toEquipmentType(v: any): EquipmentType | null {
   const n = Number(v);
-  if (n === 1 || n === 2 || n === 3 || n === 4) return n;
+  if (n === 1 || n === 2 || n === 3) return n;
   return null;
 }
 
@@ -35,7 +35,7 @@ export async function GET() {
     const { data, error } = await supabaseAdmin
       .from("equipment_create")
       .select("id, name, image_url, type")
-      .in("type", [1, 2, 3, 4])
+      .in("type", [1, 2, 3])
       .order("type", { ascending: true })
       .order("id", { ascending: true });
 
@@ -64,6 +64,30 @@ export async function POST(req: Request) {
     const { error } = await supabaseAdmin.from("equipment_create").insert([{ name, image_url, type }]);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message ?? "unknown_error" }, { status: 500 });
+  }
+}
+
+// DELETE /api/admin/skill-stones?id=<id>
+export async function DELETE(req: Request) {
+  try {
+    const session = await requireAdmin();
+    if (!session) return NextResponse.json({ ok: false }, { status: 403 });
+
+    const { searchParams } = new URL(req.url);
+    const id = Number(searchParams.get("id"));
+
+    if (!Number.isFinite(id) || id <= 0)
+      return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
+
+    const { error } = await supabaseAdmin
+      .from("equipment_create")
+      .delete()
+      .eq("id", id);
+
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown_error" }, { status: 500 });

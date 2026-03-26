@@ -41,8 +41,8 @@ type Props = {
   /** admin เท่านั้น */
   canViewAllGuilds?: boolean;
 
-  /** guild = แยกกิลด์ / club = ซ่อนแท็บกิลด์ (ใช้ในหน้า Club) */
-  tabMode?: "guild" | "club";
+  /** guild = แยกกิลด์ / club = Club (club=true) / club2 = Club 2 (club_2=true) */
+  tabMode?: "guild" | "club" | "club2";
 };
 
 const BKK_TZ = "Asia/Bangkok";
@@ -144,7 +144,6 @@ function equipTypeLabel(t: number) {
   if (t === 1) return "อาวุธ";
   if (t === 2) return "เสื้อ";
   if (t === 3) return "รองเท้า";
-  if (t === 4) return "สร้อย";
   return `Type ${t}`;
 }
 
@@ -341,7 +340,7 @@ export default function Members({
     return members
       .filter((m) => (m.status ?? "active") === "active")
       .filter((m) => {
-        if (tabMode === "club") return true;
+        if (tabMode === "club" || tabMode === "club2") return true;
         if (tab === "all") return canViewAllGuilds;
         return m.guild === tab;
       })
@@ -374,6 +373,7 @@ export default function Members({
   }, [
     members,
     tab,
+    tabMode,
     canViewAllGuilds,
     query,
     classId,
@@ -416,6 +416,7 @@ export default function Members({
     };
 
     await memberService.update(editing.id, payload);
+
     setIsEditOpen(false);
     setEditing(null);
     await onReload();
@@ -514,9 +515,9 @@ export default function Members({
         <div className="p-4 bg-white/70 dark:bg-zinc-950/50 backdrop-blur rounded-2xl border border-zinc-200 dark:border-zinc-800">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex gap-2 flex-wrap">
-              {tabMode === "club" ? (
+              {tabMode === "club" || tabMode === "club2" ? (
                 <div className="px-4 py-2 rounded-xl text-sm font-semibold border bg-white/60 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-800">
-                  Club
+                  {tabMode === "club2" ? "Club 2" : "Club"}
                 </div>
               ) : lockedGuild ? (
                 <TabButton

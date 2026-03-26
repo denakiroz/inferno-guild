@@ -37,6 +37,12 @@ function hasClubRole(roles: string[]): boolean {
   return roles.includes(clubRole);
 }
 
+function hasClub2Role(roles: string[]): boolean {
+  const club2Role = process.env.DISCORD_CLUB_2_ROLE_ID;
+  if (!club2Role) return false; // ✅ default false
+  return roles.includes(club2Role);
+}
+
 async function discordFetch(path: string) {
   const token = mustEnv("DISCORD_BOT_TOKEN");
   const res = await fetch(`${DISCORD_API}${path}`, {
@@ -104,10 +110,11 @@ export async function syncDiscordMembers(opts?: {
         discord_user_id,
         name: String(displayName),
         guild: resolvedGuild,
-        club: hasClubRole(roles), // ✅ role -> member.club
+        club: hasClubRole(roles),   // ✅ role -> member.club
+        club_2: hasClub2Role(roles), // ✅ role -> member.club_2
       };
     })
-    .filter(Boolean) as Array<{ discord_user_id: string; name: string; guild: GuildNo; club: boolean }>;
+    .filter(Boolean) as Array<{ discord_user_id: string; name: string; guild: GuildNo; club: boolean; club_2: boolean }>;
 
   const eligibleIds = eligible.map((x) => x.discord_user_id);
   const eligibleIdSet = new Set(eligibleIds);
@@ -142,6 +149,9 @@ export async function syncDiscordMembers(opts?: {
 
       // ✅ club: default false, true only if has DISCORD_CLUB_ROLE_ID
       club: !!x.club,
+
+      // ✅ club_2: default false, true only if has DISCORD_CLUB_2_ROLE_ID
+      club_2: !!x.club_2,
 
       class_id,
       power,
@@ -183,6 +193,7 @@ export async function syncDiscordMembers(opts?: {
       inactivated: toInactivate.length,
       default_class_id: 0,
       club_role_env: "DISCORD_CLUB_ROLE_ID",
+      club_2_role_env: "DISCORD_CLUB_2_ROLE_ID",
     },
   };
 }

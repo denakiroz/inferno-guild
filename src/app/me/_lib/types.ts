@@ -49,6 +49,17 @@ export type MyUltimateRes =
   | { ok: true; ultimate_skill_ids: number[] }
   | { ok: false; error?: string };
 
+// --- ศิษย์พี่s (special_skill -> member_special_skill)
+export type SpecialSkillRow = {
+  id: number;
+  name: string;
+  special_skill_url?: string | null;
+};
+
+export type MySpecialSkillsRes =
+  | { ok: true; skills: SpecialSkillRow[]; selected_ids: number[] }
+  | { ok: false; error?: string };
+
 // --- Skill stones (equipment_create -> member_equipment_create)
 export type EquipmentCreateType = 1 | 2 | 3 | 4;
 
@@ -66,3 +77,5 @@ export type MySkillStonesRes =
       selected_by_type: Record<EquipmentCreateType, number | null>;
     }
   | { ok: false; error?: string };
+ string };
+

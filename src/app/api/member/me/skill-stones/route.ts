@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
-type EquipmentType = 1 | 2 | 3 | 4;
+type EquipmentType = 1 | 2 | 3;
 type StoneColor = "red" | "purple" | "gold";
 
 type MemberIdRow = { id: number };
@@ -34,7 +34,7 @@ type SelectedStone = {
 
 type SelectedByType = Record<EquipmentType, SelectedStone[]>;
 
-const EMPTY_SELECTED: SelectedByType = { 1: [], 2: [], 3: [], 4: [] };
+const EMPTY_SELECTED: SelectedByType = { 1: [], 2: [], 3: [] };
 
 async function requireSession() {
   const cookieStore = await cookies();
@@ -65,7 +65,7 @@ async function getMyMemberId(discordUserId: string, guild: number): Promise<numb
 
 function toEquipmentType(v: any): EquipmentType | null {
   const n = Number(v);
-  if (n === 1 || n === 2 || n === 3 || n === 4) return n;
+  if (n === 1 || n === 2 || n === 3) return n;
   return null;
 }
 
@@ -119,7 +119,6 @@ function normalizeSelectedByType(input: unknown): SelectedByType {
     1: normalizeSelectedList(obj[1]),
     2: normalizeSelectedList(obj[2]),
     3: normalizeSelectedList(obj[3]),
-    4: normalizeSelectedList(obj[4]),
   };
 }
 
@@ -133,7 +132,7 @@ export async function GET() {
     const { data: equipmentData, error: eqErr } = await supabaseAdmin
       .from("equipment_create")
       .select("id, name, image_url, type")
-      .in("type", [1, 2, 3, 4])
+      .in("type", [1, 2, 3])
       .order("type", { ascending: true })
       .order("id", { ascending: true });
 
@@ -151,7 +150,7 @@ export async function GET() {
 
     const rows = (Array.isArray(linkData) ? linkData : []) as unknown as MemberEquipRow[];
 
-    const selected: SelectedByType = { 1: [], 2: [], 3: [], 4: [] };
+    const selected: SelectedByType = { 1: [], 2: [], 3: [] };
 
     for (const r of rows) {
       const eqId = Number(r.equipment_create_id);
@@ -192,7 +191,7 @@ export async function PUT(req: Request) {
     // Validate ids exist + type match
     const allDesiredIds = Array.from(
       new Set(
-        [...desired[1], ...desired[2], ...desired[3], ...desired[4]].map((x) => x.equipment_create_id)
+        [...desired[1], ...desired[2], ...desired[3]].map((x) => x.equipment_create_id)
       )
     );
 
@@ -210,7 +209,7 @@ export async function PUT(req: Request) {
         if (t) typeById.set(Number((r as any).id), t);
       }
 
-      for (const t of [1, 2, 3, 4] as EquipmentType[]) {
+      for (const t of [1, 2, 3] as EquipmentType[]) {
         for (const item of desired[t]) {
           const realType = typeById.get(item.equipment_create_id);
           if (!realType) return NextResponse.json({ ok: false, error: "equipment_not_found" }, { status: 400 });
@@ -235,7 +234,6 @@ export async function PUT(req: Request) {
       1: new Map(),
       2: new Map(),
       3: new Map(),
-      4: new Map(),
     };
     const dupRowIdsToDelete: number[] = [];
 
@@ -262,14 +260,13 @@ export async function PUT(req: Request) {
       1: new Map(desired[1].map((x) => [x.equipment_create_id, x.color])),
       2: new Map(desired[2].map((x) => [x.equipment_create_id, x.color])),
       3: new Map(desired[3].map((x) => [x.equipment_create_id, x.color])),
-      4: new Map(desired[4].map((x) => [x.equipment_create_id, x.color])),
     };
 
     const rowIdsToDelete: number[] = [...dupRowIdsToDelete];
     const updates: Array<{ id: number; color: StoneColor }> = [];
     const inserts: Array<{ member_id: number; equipment_create_id: number; color: StoneColor }> = [];
 
-    for (const t of [1, 2, 3, 4] as EquipmentType[]) {
+    for (const t of [1, 2, 3] as EquipmentType[]) {
       const exist = existingMap[t];
       const want = desiredMap[t];
 

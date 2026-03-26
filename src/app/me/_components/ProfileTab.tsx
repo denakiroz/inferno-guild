@@ -2,8 +2,9 @@
 
 import React from "react";
 import { Button, Card, Input, Select } from "@/app/components/UI";
-import type { ClassRow, MemberRow, UltimateSkillRow } from "../_lib/types";
+import type { ClassRow, MemberRow, SpecialSkillRow, UltimateSkillRow } from "../_lib/types";
 import { UltimateMultiSelect } from "./UltimateMultiSelect";
+import { SpecialSkillMultiSelect } from "./SpecialSkillMultiSelect";
 
 export function ProfileTab(props: {
   member: MemberRow | null;
@@ -19,6 +20,10 @@ export function ProfileTab(props: {
   ultimateSkills: UltimateSkillRow[];
   selectedUltimateIds: number[];
   setSelectedUltimateIds: React.Dispatch<React.SetStateAction<number[]>>;
+
+  specialSkills: SpecialSkillRow[];
+  selectedSpecialIds: number[];
+  setSelectedSpecialIds: React.Dispatch<React.SetStateAction<number[]>>;
 }) {
   const {
     member,
@@ -32,6 +37,9 @@ export function ProfileTab(props: {
     ultimateSkills,
     selectedUltimateIds,
     setSelectedUltimateIds,
+    specialSkills,
+    selectedSpecialIds,
+    setSelectedSpecialIds,
   } = props;
 
   return (
@@ -61,6 +69,13 @@ export function ProfileTab(props: {
         skills={ultimateSkills}
         selectedIds={selectedUltimateIds}
         onChange={(next) => setSelectedUltimateIds(next)}
+        disabled={saving}
+      />
+
+      <SpecialSkillMultiSelect
+        skills={specialSkills}
+        selectedIds={selectedSpecialIds}
+        onChange={(next) => setSelectedSpecialIds(next)}
         disabled={saving}
       />
 

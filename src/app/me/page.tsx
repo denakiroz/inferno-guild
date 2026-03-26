@@ -18,6 +18,8 @@ import type {
   UltimateSkillRow,
   UltimateSkillListRes,
   MyUltimateRes,
+  SpecialSkillRow,
+  MySpecialSkillsRes,
 } from "./_lib/types";
 
 import { bkkDateOf, bkkNowHHMM, bkkDateTimeParts, canCancelLeave } from "./_lib/bkkDate";
@@ -50,6 +52,10 @@ export default function MePage() {
   // ✅ ultimate
   const [ultimateSkills, setUltimateSkills] = useState<UltimateSkillRow[]>([]);
   const [selectedUltimateIds, setSelectedUltimateIds] = useState<number[]>([]);
+
+  // ✅ ศิษย์พี่s
+  const [specialSkills, setSpecialSkills] = useState<SpecialSkillRow[]>([]);
+  const [selectedSpecialIds, setSelectedSpecialIds] = useState<number[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
@@ -130,6 +136,24 @@ export default function MePage() {
     if (!j.ok) throw new Error(j.error ?? "save_my_ultimate_failed");
   }
 
+  async function loadMySpecialSkills() {
+    const r = await fetch("/api/member/me/special-skills", { cache: "no-store" });
+    const j = (await r.json()) as MySpecialSkillsRes;
+    if (!j.ok) throw new Error((j as any).error ?? "load_special_skills_failed");
+    setSpecialSkills(Array.isArray(j.skills) ? j.skills : []);
+    setSelectedSpecialIds(Array.isArray(j.selected_ids) ? j.selected_ids : []);
+  }
+
+  async function saveMySpecialSkills(ids: number[]) {
+    const res = await fetch("/api/member/me/special-skills", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ special_skill_ids: ids }),
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error ?? "save_special_skills_failed");
+  }
+
   function getAuthDisplayName(): string {
     return String(me?.user?.displayName ?? "").trim();
   }
@@ -152,6 +176,7 @@ export default function MePage() {
         reloadLeaves(),
         loadUltimateMaster(),
         loadMyUltimate(),
+        loadMySpecialSkills(),
       ]);
     })().catch(() => setErr("โหลดข้อมูลไม่สำเร็จ"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,6 +240,7 @@ export default function MePage() {
 
       // ✅ save ultimate after member save success
       await saveMyUltimate(selectedUltimateIds);
+      await saveMySpecialSkills(selectedSpecialIds);
     } catch (e: any) {
       setErr(String(e.message ?? e));
     } finally {
@@ -448,6 +474,9 @@ export default function MePage() {
             ultimateSkills={ultimateSkills}
             selectedUltimateIds={selectedUltimateIds}
             setSelectedUltimateIds={setSelectedUltimateIds}
+            specialSkills={specialSkills}
+            selectedSpecialIds={selectedSpecialIds}
+            setSelectedSpecialIds={setSelectedSpecialIds}
           />
         ) : tab === "internalPower" ? (
           <InternalPowerTab />

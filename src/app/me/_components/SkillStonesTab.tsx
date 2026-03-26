@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Gem, X } from "lucide-react";
 import { Button, Card } from "@/app/components/UI";
 
-type EquipmentType = 1 | 2 | 3 | 4;
+type EquipmentType = 1 | 2 | 3;
 
 type StoneColor = "red" | "purple" | "gold";
 
@@ -38,8 +38,6 @@ function typeLabel(t: EquipmentType) {
       return "เสื้อ";
     case 3:
       return "รองเท้า";
-    case 4:
-      return "สร้อย";
     default:
       return "-";
   }
@@ -64,7 +62,7 @@ const COLOR_OPTIONS: Array<{ value: StoneColor; label: string }> = [
   { value: "gold", label: "ทอง" },
 ];
 
-const EMPTY_SELECTED: SelectedByType = { 1: [], 2: [], 3: [], 4: [] };
+const EMPTY_SELECTED: SelectedByType = { 1: [], 2: [], 3: [] };
 
 function normalizeSelected(input: unknown): SelectedStone[] {
   const raw = Array.isArray(input) ? input : [];
@@ -118,7 +116,6 @@ export function SkillStonesTab() {
         1: normalizeSelected(sbt[1]),
         2: normalizeSelected(sbt[2]),
         3: normalizeSelected(sbt[3]),
-        4: normalizeSelected(sbt[4]),
       });
     } catch (e: any) {
       setErr(e?.message || "Unknown error");
@@ -135,7 +132,6 @@ export function SkillStonesTab() {
         1: normalizeSelected(selectedByType[1]),
         2: normalizeSelected(selectedByType[2]),
         3: normalizeSelected(selectedByType[3]),
-        4: normalizeSelected(selectedByType[4]),
       };
 
       const res = await fetch("/api/member/me/skill-stones", {
@@ -217,7 +213,7 @@ export function SkillStonesTab() {
         <div className="mt-4 text-sm text-zinc-500">กำลังโหลด...</div>
       ) : (
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-          {([1, 2, 3, 4] as EquipmentType[]).map((t) => {
+          {([1, 2, 3] as EquipmentType[]).map((t) => {
             const selected = selectedByType[t] || [];
 
             return (
