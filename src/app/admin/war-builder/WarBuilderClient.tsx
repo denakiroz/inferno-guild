@@ -1244,7 +1244,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
       image_url: s.image_url ?? null,
       type: s.type ?? null,
       count: skillStoneCounts.get(Number(s.id)) ?? 0,
-    })).filter((x) => x.id !== 0);
+    })).filter((x) => x.id !== 0 && x.type === 1); // เฉพาะ type 1 (อาวุธ)
     return base.sort((a, b) => a.id - b.id);
   }, [skillStones, skillStoneCounts]);
 
