@@ -2409,6 +2409,10 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                         onClick={() => toggleUltimateFilter(u.id)}
                         title={u.name}
                       >
+                        {u.ultimate_skill_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={u.ultimate_skill_url} alt="" className="h-4 w-4 rounded object-cover" />
+                        ) : null}
                         <span className="max-w-[160px] truncate">{u.name}</span>
                         <span className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums">
                           {u.count}
