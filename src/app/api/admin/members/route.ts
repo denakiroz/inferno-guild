@@ -142,6 +142,40 @@ export async function GET(req: Request) {
     members = (members ?? []).map((m: any) => ({ ...m, special_skill_ids: [] }));
   }
 
+  // ✅ Attach equipment_create_ids per member (source of truth: member_equipment_create)
+  try {
+    const memberIds = (members ?? [])
+      .map((m: any) => Number(m?.id))
+      .filter((x: number) => Number.isFinite(x) && x > 0);
+
+    if (memberIds.length > 0) {
+      const { data: ecRows } = await supabaseAdmin
+        .from("member_equipment_create")
+        .select("member_id, equipment_create_id")
+        .in("member_id", memberIds);
+
+      const ecMap = new Map<number, number[]>();
+      for (const r of (Array.isArray(ecRows) ? ecRows : []) as any[]) {
+        const mid = Number(r?.member_id);
+        const eid = Number(r?.equipment_create_id);
+        if (!Number.isFinite(mid) || mid <= 0) continue;
+        if (!Number.isFinite(eid) || eid <= 0) continue;
+        const arr = ecMap.get(mid);
+        if (arr) arr.push(eid);
+        else ecMap.set(mid, [eid]);
+      }
+
+      members = (members ?? []).map((m: any) => {
+        const ids = ecMap.get(Number(m?.id)) ?? [];
+        return { ...m, equipment_create_ids: Array.from(new Set(ids)).sort((a, b) => a - b) };
+      });
+    } else {
+      members = (members ?? []).map((m: any) => ({ ...m, equipment_create_ids: [] }));
+    }
+  } catch {
+    members = (members ?? []).map((m: any) => ({ ...m, equipment_create_ids: [] }));
+  }
+
   const { data: leaves, error: leaveErr } = await supabaseAdmin
     .from("leave")
     // ✅ ดึง status + update_date มาด้วย (สำคัญ)

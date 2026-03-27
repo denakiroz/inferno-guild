@@ -25,6 +25,7 @@ type MemberRow = {
    */
   ultimate_skill_ids?: number[] | null;
   special_skill_ids?: number[] | null;
+  equipment_create_ids?: number[] | null;
 
   party: number | null;
   party_2: number | null;
@@ -62,6 +63,14 @@ type DbSpecialSkill = {
   id: number;
   name: string;
   special_skill_url: string | null;
+};
+
+// table: equipment_create (id, name, image_url, type)
+type DbSkillStone = {
+  id: number;
+  name: string;
+  image_url: string | null;
+  type: number | null;
 };
 
 // table: group (id, name, group, color, order_by, guild)
@@ -397,6 +406,10 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
   const [specialSkills, setSpecialSkills] = useState<DbSpecialSkill[]>([]);
   const [specialSkillFilter, setSpecialSkillFilter] = useState<Set<number>>(new Set());
 
+  // skill stone filter (multi-select) — empty = all
+  const [skillStones, setSkillStones] = useState<DbSkillStone[]>([]);
+  const [skillStoneFilter, setSkillStoneFilter] = useState<Set<number>>(new Set());
+
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<DragTarget>(null);
 
@@ -574,6 +587,10 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
   // ---------- Quick War mode ----------
   const [isQuickWarMode, setIsQuickWarMode] = useState(false);
   const [quickWarPickOpen, setQuickWarPickOpen] = useState(false);
+  const [quickWarDate, setQuickWarDate] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
   const [leaveByTime, setLeaveByTime] = useState<Record<WarTime, Set<number>>>({
     "20:00": new Set<number>(),
     "20:30": new Set<number>(),
@@ -662,13 +679,15 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
     setLeaveByTime({ "20:00": s2000, "20:30": s2030 });
   }
 
-  async function loadLeavesForToday(memList: MemberRow[]) {
+  async function loadLeavesForToday(memList: MemberRow[], dateISO?: string) {
     if (!guild) return;
 
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const todayISO = toLocalISODate(today);
-    setLeaveDateISO(todayISO);
+    const defaultISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const targetISO = dateISO ?? defaultISO;
+    const [y, mo, d] = targetISO.split("-").map(Number);
+    const today = new Date(y, mo - 1, d, 0, 0, 0, 0);
+    setLeaveDateISO(targetISO);
 
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
@@ -720,8 +739,8 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
     setOpenColorPalette(false);
     setDragItem(null);
     setDragOverTarget(null);
-    // โหลด leave วันนี้แทน saturday
-    void loadLeavesForToday(members);
+    // โหลด leave วันที่เลือก
+    void loadLeavesForToday(members, quickWarDate);
     setIsQuickWarMode(true);
     setQuickWarPickOpen(false);
   }
@@ -901,6 +920,25 @@ useEffect(() => {
     }
   }
 
+  async function loadSkillStones() {
+    try {
+      const r = await fetch("/api/admin/skill-stones", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = (await r.json()) as any;
+      const list = Array.isArray(j?.skill_stones) ? j.skill_stones : [];
+      setSkillStones(
+        list.map((x: any) => ({
+          id: Number(x.id),
+          name: String(x.name ?? ""),
+          image_url: x.image_url ?? null,
+          type: x.type ?? null,
+        })),
+      );
+    } catch {
+      // ignore
+    }
+  }
+
   async function loadGroups() {
     if (!guild) return;
 
@@ -978,6 +1016,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
       await loadUltimateSkills();
       await loadSpecialSkills();
+      await loadSkillStones();
 
       await loadGroups();
 
@@ -1180,6 +1219,34 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     return base.sort((a, b) => a.id - b.id);
   }, [specialSkills, specialSkillCounts]);
 
+  const skillStoneCounts = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const mem of activeInGuild) {
+      const ids = (mem as any)?.equipment_create_ids;
+      if (!Array.isArray(ids)) continue;
+      const uniq = new Set<number>();
+      for (const raw of ids) {
+        const id = Number(raw);
+        if (!Number.isFinite(id) || id <= 0) continue;
+        uniq.add(id);
+      }
+      for (const id of uniq.values()) {
+        m.set(id, (m.get(id) ?? 0) + 1);
+      }
+    }
+    return m;
+  }, [activeInGuild]);
+
+  const skillStoneOptions = useMemo(() => {
+    const base = (skillStones ?? []).map((s) => ({
+      id: Number(s.id),
+      name: s.name ?? `Stone ${s.id}`,
+      image_url: s.image_url ?? null,
+      type: s.type ?? null,
+      count: skillStoneCounts.get(Number(s.id)) ?? 0,
+    })).filter((x) => x.id !== 0);
+    return base.sort((a, b) => a.id - b.id);
+  }, [skillStones, skillStoneCounts]);
 
   const roster = useMemo(() => {
   let base = [...activeInGuild].sort((a, b) => (b.power ?? 0) - (a.power ?? 0));
@@ -1227,8 +1294,21 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     });
   }
 
+  // skill stone filter (match ANY selected skill stone)
+  if (skillStoneFilter.size > 0) {
+    base = base.filter((m) => {
+      const ids = (m as any)?.equipment_create_ids;
+      if (!Array.isArray(ids) || ids.length === 0) return false;
+      for (const raw of ids) {
+        const id = Number(raw);
+        if (skillStoneFilter.has(id)) return true;
+      }
+      return false;
+    });
+  }
+
   return base;
-}, [activeInGuild, classFilter, partyFilter, assignedIds, ultimateFilter, specialSkillFilter]);
+}, [activeInGuild, classFilter, partyFilter, assignedIds, ultimateFilter, specialSkillFilter, skillStoneFilter]);
 
   // ---------- Grouped party view ----------
   const partiesById = useMemo(() => new Map<number, Party>(parties.map((p) => [p.id, p])), [parties]);
@@ -1437,6 +1517,20 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
   function clearSpecialSkillFilter() {
     setSpecialSkillFilter(new Set());
+  }
+
+  // ---------- Skill stone filter ----------
+  function toggleSkillStoneFilter(id: number) {
+    setSkillStoneFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSkillStoneFilter() {
+    setSkillStoneFilter(new Set());
   }
 
   // ---------- Remark modal ----------
@@ -1833,6 +1927,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
   const ultimateFilterCount = ultimateFilter.size;
   const specialSkillFilterCount = specialSkillFilter.size;
+  const skillStoneFilterCount = skillStoneFilter.size;
 
   const copyLabel = useMemo(() => {
     const from = warTime === "20:00" ? "20.30" : "20.00";
@@ -1852,7 +1947,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             <div className="flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-0.5 text-xs font-semibold text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
               <span>⚡ จัดวอด่วน</span>
               <span className="text-orange-400">•</span>
-              <span>ลาวันนี้: {leaveDateISO}</span>
+              <span>ลาวันที่: {leaveDateISO}</span>
             </div>
           ) : (
             leaveDateISO ? <div className="text-xs text-zinc-400">เสาร์นี้: {leaveDateISO}</div> : null
@@ -2149,57 +2244,115 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             </div>
           </div>
 
-          {/* F2: ศิษย์พี่ */}
-          <div className="p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs text-zinc-500">
-                Filter ศิษย์พี่:{" "}
-                <span className="font-semibold text-zinc-700 dark:text-zinc-200">
-                  {specialSkillFilterCount === 0 ? "ทั้งหมด" : `${specialSkillFilterCount} อย่าง`}
-                </span>
+          {/* F2: ศิษย์พี่ + หินสกิล (50-50) */}
+          <div className="grid grid-cols-2 divide-x divide-zinc-200 dark:divide-zinc-800">
+            {/* F2-left: ศิษย์พี่ */}
+            <div className="p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-zinc-500">
+                  Filter ศิษย์พี่:{" "}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-200">
+                    {specialSkillFilterCount === 0 ? "ทั้งหมด" : `${specialSkillFilterCount} อย่าง`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                  onClick={clearSpecialSkillFilter}
+                  disabled={specialSkillFilterCount === 0}
+                >
+                  ล้าง
+                </button>
               </div>
-              <button
-                type="button"
-                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
-                onClick={clearSpecialSkillFilter}
-                disabled={specialSkillFilterCount === 0}
-              >
-                ล้าง
-              </button>
+
+              <div className="mt-2 max-h-[180px] overflow-y-auto pr-1">
+                <div className="flex flex-wrap gap-2">
+                  {specialSkillOptions.length === 0 ? (
+                    <div className="text-xs text-zinc-400">ยังไม่มีข้อมูลศิษย์พี่</div>
+                  ) : (
+                    specialSkillOptions.map((s) => {
+                      const active = specialSkillFilter.has(s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className={[
+                            "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                            active
+                              ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                              : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+                          ].join(" ")}
+                          onClick={() => toggleSpecialSkillFilter(s.id)}
+                          title={s.name}
+                        >
+                          {s.special_skill_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={s.special_skill_url} alt="" className="h-4 w-4 rounded object-cover" />
+                          ) : null}
+                          <span className="max-w-[120px] truncate">{s.name}</span>
+                          <span className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums">
+                            {s.count}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="mt-2 max-h-[180px] overflow-y-auto pr-1">
-              <div className="flex flex-wrap gap-2">
-                {specialSkillOptions.length === 0 ? (
-                  <div className="text-xs text-zinc-400">ยังไม่มีข้อมูลศิษย์พี่</div>
-                ) : (
-                  specialSkillOptions.map((s) => {
-                    const active = specialSkillFilter.has(s.id);
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        className={[
-                          "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
-                          active
-                            ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
-                            : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
-                        ].join(" ")}
-                        onClick={() => toggleSpecialSkillFilter(s.id)}
-                        title={s.name}
-                      >
-                        {s.special_skill_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={s.special_skill_url} alt="" className="h-4 w-4 rounded object-cover" />
-                        ) : null}
-                        <span className="max-w-[120px] truncate">{s.name}</span>
-                        <span className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums">
-                          {s.count}
-                        </span>
-                      </button>
-                    );
-                  })
-                )}
+            {/* F2-right: หินสกิล */}
+            <div className="p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-zinc-500">
+                  Filter หินสกิล:{" "}
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-200">
+                    {skillStoneFilterCount === 0 ? "ทั้งหมด" : `${skillStoneFilterCount} อย่าง`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                  onClick={clearSkillStoneFilter}
+                  disabled={skillStoneFilterCount === 0}
+                >
+                  ล้าง
+                </button>
+              </div>
+
+              <div className="mt-2 max-h-[180px] overflow-y-auto pr-1">
+                <div className="flex flex-wrap gap-2">
+                  {skillStoneOptions.length === 0 ? (
+                    <div className="text-xs text-zinc-400">ยังไม่มีข้อมูลหินสกิล</div>
+                  ) : (
+                    skillStoneOptions.map((s) => {
+                      const active = skillStoneFilter.has(s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className={[
+                            "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                            active
+                              ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                              : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+                          ].join(" ")}
+                          onClick={() => toggleSkillStoneFilter(s.id)}
+                          title={s.name}
+                        >
+                          {s.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={s.image_url} alt="" className="h-4 w-4 rounded object-cover" />
+                          ) : null}
+                          <span className="max-w-[120px] truncate">{s.name}</span>
+                          <span className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums">
+                            {s.count}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -2983,8 +3136,17 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
             <div className="mb-1 text-base font-bold">⚡ จัดวอด่วน</div>
-            <div className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
-              เลือกเวลาที่จะคัดลอกทีมมาใช้ — ระบบจะโหลดคนลาวันนี้แทนเสาร์ และปิดการบันทึก
+            <div className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+              เลือกวันและรอบเวลาที่จะคัดลอกทีมมาใช้ — ระบบจะโหลดคนลาของวันที่เลือก และปิดการบันทึก
+            </div>
+            <div className="mb-4">
+              <label className="mb-1.5 block text-xs font-semibold text-zinc-600 dark:text-zinc-400">วันที่</label>
+              <input
+                type="date"
+                value={quickWarDate}
+                onChange={(e) => setQuickWarDate(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
             </div>
             <div className="flex flex-col gap-3">
               <button
