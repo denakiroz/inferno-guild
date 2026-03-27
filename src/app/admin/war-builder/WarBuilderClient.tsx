@@ -1976,6 +1976,26 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             </button>
           </div>
 
+          {isQuickWarMode ? (
+            <button
+              type="button"
+              className="rounded-lg border border-orange-400 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
+              onClick={exitQuickWarMode}
+            >
+              ออกจากโหมดวอด่วน
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40 dark:border-orange-700 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
+              onClick={() => setQuickWarPickOpen(true)}
+              disabled={!canEdit || !guild || loading}
+              title="จัดทีมวอนอกรอบ/วันธรรมดา — โหลดคนลาวันนี้ ไม่บันทึก DB"
+            >
+              ⚡ จัดวอด่วน
+            </button>
+          )}
+
           <button
             type="button"
             className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
@@ -2026,26 +2046,6 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
           >
             แสดงผังทัพวอ
           </button>
-
-          {isQuickWarMode ? (
-            <button
-              type="button"
-              className="rounded-lg border border-orange-400 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
-              onClick={exitQuickWarMode}
-            >
-              ออกจากโหมดวอด่วน
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40 dark:border-orange-700 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
-              onClick={() => setQuickWarPickOpen(true)}
-              disabled={!canEdit || !guild || loading}
-              title="จัดทีมวอนอกรอบ/วันธรรมดา — โหลดคนลาวันนี้ ไม่บันทึก DB"
-            >
-              ⚡ จัดวอด่วน
-            </button>
-          )}
 
           <Button onClick={save} disabled={!canEdit || !guild || isQuickWarMode}>
             บันทึก
