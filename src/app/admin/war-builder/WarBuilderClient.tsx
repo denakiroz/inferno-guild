@@ -570,6 +570,10 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
 
   // ---------- leave helpers ----------
   const [leaveDateISO, setLeaveDateISO] = useState<string>(""); // yyyy-mm-dd local
+
+  // ---------- Quick War mode ----------
+  const [isQuickWarMode, setIsQuickWarMode] = useState(false);
+  const [quickWarPickOpen, setQuickWarPickOpen] = useState(false);
   const [leaveByTime, setLeaveByTime] = useState<Record<WarTime, Set<number>>>({
     "20:00": new Set<number>(),
     "20:30": new Set<number>(),
@@ -656,6 +660,76 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
 
     leaveReasonByMemberRef.current = reasonMap;
     setLeaveByTime({ "20:00": s2000, "20:30": s2030 });
+  }
+
+  async function loadLeavesForToday(memList: MemberRow[]) {
+    if (!guild) return;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayISO = toLocalISODate(today);
+    setLeaveDateISO(todayISO);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const guildMemberIds = (memList ?? [])
+      .filter((m) => Number(m.guild) === Number(guild))
+      .map((m) => m.id);
+
+    if (guildMemberIds.length === 0) {
+      setLeaveByTime({ "20:00": new Set(), "20:30": new Set() });
+      leaveReasonByMemberRef.current = new Map();
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("leave")
+      .select("member_id,date_time,reason,status")
+      .in("member_id", guildMemberIds)
+      .eq("status", "Active")
+      .gte("date_time", today.toISOString())
+      .lt("date_time", tomorrow.toISOString());
+
+    if (error) {
+      setLeaveByTime({ "20:00": new Set(), "20:30": new Set() });
+      leaveReasonByMemberRef.current = new Map();
+      return;
+    }
+
+    // ใน Quick War mode รวมทุก leave วันนี้เป็น "ลา" ทั้ง 2 รอบ
+    const allLeaving = new Set<number>();
+    const reasonMap = new Map<number, string | null>();
+    for (const r of (data ?? []) as LeaveRow[]) {
+      const mid = Number(r.member_id);
+      if (!Number.isFinite(mid) || !mid) continue;
+      allLeaving.add(mid);
+      reasonMap.set(mid, r.reason ?? null);
+    }
+
+    leaveReasonByMemberRef.current = reasonMap;
+    setLeaveByTime({ "20:00": allLeaving, "20:30": allLeaving });
+  }
+
+  function enterQuickWarMode(sourceTime: WarTime) {
+    if (!canEdit || !guild) return;
+    // คัดลอก layout จาก sourceTime
+    const srcDraft = getDraft(sourceTime) ?? buildPartiesFromMembers(members, sourceTime);
+    commitLayout(cloneParties(srcDraft), true);
+    setSelectedIds(new Set());
+    setOpenColorPalette(false);
+    setDragItem(null);
+    setDragOverTarget(null);
+    // โหลด leave วันนี้แทน saturday
+    void loadLeavesForToday(members);
+    setIsQuickWarMode(true);
+    setQuickWarPickOpen(false);
+  }
+
+  function exitQuickWarMode() {
+    setIsQuickWarMode(false);
+    // โหลด leave เสาร์กลับ
+    void loadLeavesForUpcomingSaturday(members);
   }
 
   // ---------- Pane height (Roster + Party only) ----------
@@ -1771,10 +1845,18 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
       className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
     >
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="text-sm font-semibold">จัดทัพวอ</div>
           <div className="text-xs text-zinc-500">Guild: {guild ?? "-"}</div>
-          {leaveDateISO ? <div className="text-xs text-zinc-400">เสาร์นี้: {leaveDateISO}</div> : null}
+          {isQuickWarMode ? (
+            <div className="flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-0.5 text-xs font-semibold text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+              <span>⚡ จัดวอด่วน</span>
+              <span className="text-orange-400">•</span>
+              <span>ลาวันนี้: {leaveDateISO}</span>
+            </div>
+          ) : (
+            leaveDateISO ? <div className="text-xs text-zinc-400">เสาร์นี้: {leaveDateISO}</div> : null
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -1850,7 +1932,27 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             แสดงผังทัพวอ
           </button>
 
-          <Button onClick={save} disabled={!canEdit || !guild}>
+          {isQuickWarMode ? (
+            <button
+              type="button"
+              className="rounded-lg border border-orange-400 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
+              onClick={exitQuickWarMode}
+            >
+              ออกจากโหมดวอด่วน
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40 dark:border-orange-700 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
+              onClick={() => setQuickWarPickOpen(true)}
+              disabled={!canEdit || !guild || loading}
+              title="จัดทีมวอนอกรอบ/วันธรรมดา — โหลดคนลาวันนี้ ไม่บันทึก DB"
+            >
+              ⚡ จัดวอด่วน
+            </button>
+          )}
+
+          <Button onClick={save} disabled={!canEdit || !guild || isQuickWarMode}>
             บันทึก
           </Button>
         </div>
@@ -2875,6 +2977,41 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
       {remarkModal}
       {groupModal}
       {warMapModal}
+
+      {/* Quick War Pick Dialog */}
+      {quickWarPickOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mb-1 text-base font-bold">⚡ จัดวอด่วน</div>
+            <div className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
+              เลือกเวลาที่จะคัดลอกทีมมาใช้ — ระบบจะโหลดคนลาวันนี้แทนเสาร์ และปิดการบันทึก
+            </div>
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                className="w-full rounded-xl border-2 border-orange-300 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800 hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-900/20 dark:text-orange-200 dark:hover:bg-orange-900/40"
+                onClick={() => enterQuickWarMode("20:00")}
+              >
+                คัดลอกจากรอบ 20.00
+              </button>
+              <button
+                type="button"
+                className="w-full rounded-xl border-2 border-orange-300 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800 hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-900/20 dark:text-orange-200 dark:hover:bg-orange-900/40"
+                onClick={() => enterQuickWarMode("20:30")}
+              >
+                คัดลอกจากรอบ 20.30
+              </button>
+              <button
+                type="button"
+                className="mt-1 w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                onClick={() => setQuickWarPickOpen(false)}
+              >
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,9 +10,10 @@ import { leaveService } from "@/services/leaveService";
 import { Badge, Button, Card, Input, Modal, Select } from "@/app/components/UI";
 import LeaveRequestButton, { type LeaveCreateRow } from "@/app/components/LeaveRequestButton";
 
-type GuildTab = "all" | GuildNo;
+type GuildTab = "all" | GuildNo | "other";
 type SpecialFilter = "all" | "special" | "normal";
 type LeaveTypeFilter = "all" | "ready" | "errand" | "war";
+type GuildMemberFilter = "all" | "inguild" | "noguild";
 
 // ✅ สีแถบด้านบนตามอาชีพ (ตามที่ระบุ)
 // id1 สีเหลือง, id2 สีม่วง, id3 สีแดง, id4 สีน้ำเงิน, id5 สีชมพู, id6 สีฟ้าอมเขียว
@@ -213,6 +214,7 @@ export default function Members({
   const [classId, setClassId] = useState<string>("All");
   const [specialFilter, setSpecialFilter] = useState<SpecialFilter>("all");
   const [leaveTypeFilter, setLeaveTypeFilter] = useState<LeaveTypeFilter>("all");
+  const [guildMemberFilter, setGuildMemberFilter] = useState<GuildMemberFilter>("all");
 
   const [classList, setClassList] = useState<DbClass[]>([]);
 
@@ -342,7 +344,15 @@ export default function Members({
       .filter((m) => {
         if (tabMode === "club" || tabMode === "club2") return true;
         if (tab === "all") return canViewAllGuilds;
+        if (tab === "other") return !!(m.club || m.club_2) && !m.guild;
         return m.guild === tab;
+      })
+      .filter((m) => {
+        // filter อยู่ในกิล/ไม่อยู่ — ใช้เฉพาะ tab club / club2
+        if (tabMode !== "club" && tabMode !== "club2") return true;
+        if (guildMemberFilter === "inguild") return !!m.guild;
+        if (guildMemberFilter === "noguild") return !m.guild;
+        return true;
       })
       .filter((m) => {
         if (!q) return true;
@@ -380,6 +390,7 @@ export default function Members({
     classById,
     specialFilter,
     leaveTypeFilter,
+    guildMemberFilter,
     todayMetaByMemberId,
   ]);
 
@@ -530,6 +541,7 @@ export default function Members({
                   <TabButton value={1} label="Inferno-1" />
                   <TabButton value={2} label="Inferno-2" />
                   <TabButton value={3} label="Inferno-3" />
+                  {canViewAllGuilds ? <TabButton value="other" label="Other" /> : null}
                 </>
               )}</div>
 
@@ -557,13 +569,15 @@ export default function Members({
               </Select>
             </div>
 
-            <div className="lg:col-span-2">
-              <Select value={specialFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSpecialFilter(e.target.value as SpecialFilter)}>
-                <option value="all">ศิษย์เอก: ทั้งหมด</option>
-                <option value="special">เฉพาะศิษย์เอก</option>
-                <option value="normal">ไม่ใช่ศิษย์เอก</option>
-              </Select>
-            </div>
+            {tabMode === "guild" && (
+              <div className="lg:col-span-2">
+                <Select value={specialFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSpecialFilter(e.target.value as SpecialFilter)}>
+                  <option value="all">ศิษย์เอก: ทั้งหมด</option>
+                  <option value="special">เฉพาะศิษย์เอก</option>
+                  <option value="normal">ไม่ใช่ศิษย์เอก</option>
+                </Select>
+              </div>
+            )}
 
             <div className="lg:col-span-2">
               <Select value={leaveTypeFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLeaveTypeFilter(e.target.value as LeaveTypeFilter)}>
@@ -573,6 +587,16 @@ export default function Members({
                 <option value="war">ลาวอ (เสาร์ที่จะถึง)</option>
               </Select>
             </div>
+
+            {(tabMode === "club" || tabMode === "club2") && (
+              <div className="lg:col-span-2">
+                <Select value={guildMemberFilter} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setGuildMemberFilter(e.target.value as GuildMemberFilter)}>
+                  <option value="all">กิลด์: ทั้งหมด</option>
+                  <option value="inguild">อยู่ในกิลด์</option>
+                  <option value="noguild">ไม่อยู่ในกิลด์</option>
+                </Select>
+              </div>
+            )}
           </div>
 
           <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">

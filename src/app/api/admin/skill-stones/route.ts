@@ -82,6 +82,14 @@ export async function DELETE(req: Request) {
     if (!Number.isFinite(id) || id <= 0)
       return NextResponse.json({ ok: false, error: "invalid_id" }, { status: 400 });
 
+    // ลบ FK references ใน member_equipment_create ก่อน
+    const { error: fkErr } = await supabaseAdmin
+      .from("member_equipment_create")
+      .delete()
+      .eq("equipment_create_id", id);
+
+    if (fkErr) return NextResponse.json({ ok: false, error: fkErr.message }, { status: 500 });
+
     const { error } = await supabaseAdmin
       .from("equipment_create")
       .delete()

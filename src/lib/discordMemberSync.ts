@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 type GuildNo = 1 | 2 | 3;
+type GuildOrNull = GuildNo | null;
 type MemberStatus = "active" | "inactive";
 
 const DISCORD_API = "https://discord.com/api/v10";
@@ -33,13 +34,13 @@ function resolveGuildFromRoles(roles: string[]): GuildNo | null {
 
 function hasClubRole(roles: string[]): boolean {
   const clubRole = process.env.DISCORD_CLUB_ROLE_ID;
-  if (!clubRole) return false; // ✅ default false
+  if (!clubRole) return false;
   return roles.includes(clubRole);
 }
 
 function hasClub2Role(roles: string[]): boolean {
   const club2Role = process.env.DISCORD_CLUB_2_ROLE_ID;
-  if (!club2Role) return false; // ✅ default false
+  if (!club2Role) return false;
   return roles.includes(club2Role);
 }
 
@@ -78,7 +79,7 @@ export async function syncDiscordMembers(opts?: {
   adminSecretHeaderValue?: string | null;
   requiredSecret?: string;
 }): Promise<{ status: number; body: any }> {
-  // 0) Optional secret validation (route ตรวจแล้ว แต่กันหลุด)
+  // 0) Optional secret validation
   if (opts?.requiredSecret) {
     if (!opts.adminSecretHeaderValue || opts.adminSecretHeaderValue !== opts.requiredSecret) {
       return { status: 401, body: { error: "Unauthorized" } };
@@ -94,13 +95,17 @@ export async function syncDiscordMembers(opts?: {
   // 1) Pull members from Discord
   const guildMembers = await listGuildMembersAll(guildId);
 
-  // 2) Build eligible list
+  // 2) Build eligible list — รวมทั้งคนที่มี guild role และคนที่มีแค่ club/club_2 role
   const eligible = guildMembers
     .map((m) => {
       const roles: string[] = Array.isArray(m.roles) ? m.roles : [];
 
+      const club = hasClubRole(roles);
+      const club_2 = hasClub2Role(roles);
       const resolvedGuild = resolveGuildFromRoles(roles);
-      if (!resolvedGuild) return null;
+
+      // ✅ eligible ถ้ามี guild role หรือมี club/club_2 role
+      if (!resolvedGuild && !club && !club_2) return null;
 
       const u = m.user || {};
       const discord_user_id = String(u.id);
@@ -109,17 +114,23 @@ export async function syncDiscordMembers(opts?: {
       return {
         discord_user_id,
         name: String(displayName),
-        guild: resolvedGuild,
-        club: hasClubRole(roles),   // ✅ role -> member.club
-        club_2: hasClub2Role(roles), // ✅ role -> member.club_2
+        guild: resolvedGuild as GuildOrNull,  // null = ไม่อยู่ใน guild (Other)
+        club,
+        club_2,
       };
     })
-    .filter(Boolean) as Array<{ discord_user_id: string; name: string; guild: GuildNo; club: boolean; club_2: boolean }>;
+    .filter(Boolean) as Array<{
+      discord_user_id: string;
+      name: string;
+      guild: GuildOrNull;
+      club: boolean;
+      club_2: boolean;
+    }>;
 
   const eligibleIds = eligible.map((x) => x.discord_user_id);
   const eligibleIdSet = new Set(eligibleIds);
 
-  // 3) Load existing rows for eligible (เพื่อ “ไม่ทับ” class_id/power/is_special/color ของเดิม)
+  // 3) Load existing rows (เพื่อ "ไม่ทับ" class_id/power/is_special/color ของเดิม)
   const { data: existingRows, error: existErr } = await supabase
     .from("member")
     .select("discord_user_id,class_id,power,is_special,color")
@@ -133,7 +144,6 @@ export async function syncDiscordMembers(opts?: {
   });
 
   // 4) Upsert payload
-  // - default class_id = 0 (เฉพาะคนใหม่ หรือคนเดิมที่ยังไม่มีค่า)
   const upsertPayload = eligible.map((x) => {
     const ex = existingMap.get(x.discord_user_id);
 
@@ -145,12 +155,10 @@ export async function syncDiscordMembers(opts?: {
     return {
       discord_user_id: x.discord_user_id,
       name: x.name,
-      guild: x.guild,
+      guild: x.guild,   // null สำหรับคนที่ไม่อยู่ใน guild (Other)
 
-      // ✅ club: default false, true only if has DISCORD_CLUB_ROLE_ID
+      // ✅ club/club_2 sync จาก Discord role
       club: !!x.club,
-
-      // ✅ club_2: default false, true only if has DISCORD_CLUB_2_ROLE_ID
       club_2: !!x.club_2,
 
       class_id,
@@ -185,11 +193,17 @@ export async function syncDiscordMembers(opts?: {
     if (inactErr) throw new Error(`Supabase inactive update error: ${inactErr.message}`);
   }
 
+  // แยกนับ: กิลด์ vs club-only (Other)
+  const guildEligible = eligible.filter((x) => x.guild !== null).length;
+  const otherEligible = eligible.filter((x) => x.guild === null).length;
+
   return {
     status: 200,
     body: {
       ok: true,
       eligible: eligible.length,
+      guild_eligible: guildEligible,
+      other_eligible: otherEligible,
       inactivated: toInactivate.length,
       default_class_id: 0,
       club_role_env: "DISCORD_CLUB_ROLE_ID",

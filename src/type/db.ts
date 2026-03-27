@@ -19,7 +19,7 @@ export type DbMember = {
   pos_party_2: number | null;
   color: string | null;
   is_special: boolean;
-  guild: GuildNo;
+  guild: GuildNo | null;
   discord_user_id: string | null;
   status: MemberStatus | null;
   update_date:string;
