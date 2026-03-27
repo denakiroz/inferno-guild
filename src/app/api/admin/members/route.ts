@@ -108,6 +108,40 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: String(e?.message ?? e) }, { status: 500 });
   }
 
+  // ✅ Attach special_skill_ids per member (source of truth: member_special_skill)
+  try {
+    const memberIds = (members ?? [])
+      .map((m: any) => Number(m?.id))
+      .filter((x: number) => Number.isFinite(x) && x > 0);
+
+    if (memberIds.length > 0) {
+      const { data: ssRows } = await supabaseAdmin
+        .from("member_special_skill")
+        .select("member_id, special_skill_id")
+        .in("member_id", memberIds);
+
+      const ssMap = new Map<number, number[]>();
+      for (const r of (Array.isArray(ssRows) ? ssRows : []) as any[]) {
+        const mid = Number(r?.member_id);
+        const sid = Number(r?.special_skill_id);
+        if (!Number.isFinite(mid) || mid <= 0) continue;
+        if (!Number.isFinite(sid) || sid <= 0) continue;
+        const arr = ssMap.get(mid);
+        if (arr) arr.push(sid);
+        else ssMap.set(mid, [sid]);
+      }
+
+      members = (members ?? []).map((m: any) => {
+        const ids = ssMap.get(Number(m?.id)) ?? [];
+        return { ...m, special_skill_ids: Array.from(new Set(ids)).sort((a, b) => a - b) };
+      });
+    } else {
+      members = (members ?? []).map((m: any) => ({ ...m, special_skill_ids: [] }));
+    }
+  } catch {
+    members = (members ?? []).map((m: any) => ({ ...m, special_skill_ids: [] }));
+  }
+
   const { data: leaves, error: leaveErr } = await supabaseAdmin
     .from("leave")
     // ✅ ดึง status + update_date มาด้วย (สำคัญ)

@@ -24,6 +24,7 @@ type MemberRow = {
    * แนะนำให้ /api/admin/members ส่งมาเป็น array ของ id (จาก table member_ultimate_skill)
    */
   ultimate_skill_ids?: number[] | null;
+  special_skill_ids?: number[] | null;
 
   party: number | null;
   party_2: number | null;
@@ -54,6 +55,13 @@ type DbUltimateSkill = {
   id: number;
   name: string;
   ultimate_skill_url: string | null;
+};
+
+// table: special_skill (id, name, special_skill_url)
+type DbSpecialSkill = {
+  id: number;
+  name: string;
+  special_skill_url: string | null;
 };
 
 // table: group (id, name, group, color, order_by, guild)
@@ -384,6 +392,10 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
   // ultimate filter (multi-select) — empty = all
   const [ultimateSkills, setUltimateSkills] = useState<DbUltimateSkill[]>([]);
   const [ultimateFilter, setUltimateFilter] = useState<Set<number>>(new Set());
+
+  // special skill filter (multi-select) — empty = all
+  const [specialSkills, setSpecialSkills] = useState<DbSpecialSkill[]>([]);
+  const [specialSkillFilter, setSpecialSkillFilter] = useState<Set<number>>(new Set());
 
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<DragTarget>(null);
@@ -797,6 +809,24 @@ useEffect(() => {
     }
   }
 
+  async function loadSpecialSkills() {
+    try {
+      const r = await fetch("/api/admin/special-skills", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = (await r.json()) as any;
+      const list = Array.isArray(j?.skills) ? j.skills : [];
+      setSpecialSkills(
+        list.map((x: any) => ({
+          id: Number(x.id),
+          name: String(x.name ?? ""),
+          special_skill_url: x.special_skill_url ?? null,
+        })),
+      );
+    } catch {
+      // ignore
+    }
+  }
+
   async function loadGroups() {
     if (!guild) return;
 
@@ -873,6 +903,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
       }
 
       await loadUltimateSkills();
+      await loadSpecialSkills();
 
       await loadGroups();
 
@@ -909,6 +940,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     setClassFilter(new Set());
     setPartyFilter("all");
     setUltimateFilter(new Set());
+    setSpecialSkillFilter(new Set());
 
     setRemarkOpen(false);
     setEditingRemarkMemberId(null);
@@ -1046,6 +1078,34 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
   return base.sort((a, b) => a.id - b.id);
 }, [ultimateSkills, ultimateCounts]);
 
+  const specialSkillCounts = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const mem of activeInGuild) {
+      const ids = (mem as any)?.special_skill_ids;
+      if (!Array.isArray(ids)) continue;
+      const uniq = new Set<number>();
+      for (const raw of ids) {
+        const id = Number(raw);
+        if (!Number.isFinite(id) || id <= 0) continue;
+        uniq.add(id);
+      }
+      for (const id of uniq.values()) {
+        m.set(id, (m.get(id) ?? 0) + 1);
+      }
+    }
+    return m;
+  }, [activeInGuild]);
+
+  const specialSkillOptions = useMemo(() => {
+    const base = (specialSkills ?? []).map((s) => ({
+      id: Number(s.id),
+      name: s.name ?? `Special ${s.id}`,
+      special_skill_url: s.special_skill_url ?? null,
+      count: specialSkillCounts.get(Number(s.id)) ?? 0,
+    })).filter((x) => x.id !== 0);
+    return base.sort((a, b) => a.id - b.id);
+  }, [specialSkills, specialSkillCounts]);
+
 
   const roster = useMemo(() => {
   let base = [...activeInGuild].sort((a, b) => (b.power ?? 0) - (a.power ?? 0));
@@ -1080,8 +1140,21 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     });
   }
 
+  // special skill filter (match ANY selected special skill)
+  if (specialSkillFilter.size > 0) {
+    base = base.filter((m) => {
+      const ids = (m as any)?.special_skill_ids;
+      if (!Array.isArray(ids) || ids.length === 0) return false;
+      for (const raw of ids) {
+        const id = Number(raw);
+        if (specialSkillFilter.has(id)) return true;
+      }
+      return false;
+    });
+  }
+
   return base;
-}, [activeInGuild, classFilter, partyFilter, assignedIds, ultimateFilter]);
+}, [activeInGuild, classFilter, partyFilter, assignedIds, ultimateFilter, specialSkillFilter]);
 
   // ---------- Grouped party view ----------
   const partiesById = useMemo(() => new Map<number, Party>(parties.map((p) => [p.id, p])), [parties]);
@@ -1276,6 +1349,20 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
   function clearUltimateFilter() {
     setUltimateFilter(new Set());
+  }
+
+  // ---------- Special skill filter ----------
+  function toggleSpecialSkillFilter(sid: number) {
+    setSpecialSkillFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(sid)) next.delete(sid);
+      else next.add(sid);
+      return next;
+    });
+  }
+
+  function clearSpecialSkillFilter() {
+    setSpecialSkillFilter(new Set());
   }
 
   // ---------- Remark modal ----------
@@ -1671,6 +1758,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
 
   const ultimateFilterCount = ultimateFilter.size;
+  const specialSkillFilterCount = specialSkillFilter.size;
 
   const copyLabel = useMemo(() => {
     const from = warTime === "20:00" ? "20.30" : "20.00";
@@ -1874,16 +1962,15 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             {/* Filter panels (F1 / F2 / F3) */}
       <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20">
         <div className="grid grid-cols-1 divide-y divide-zinc-200 dark:divide-zinc-800 md:grid-cols-3 md:divide-y-0 md:divide-x">
-          {/* F1 */}
+          {/* F1: อาชีพ + ปาร์ตี้ */}
           <div className="p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs text-zinc-500">
-                Filter อาชีพ (Roster):{" "}
+                Filter อาชีพ:{" "}
                 <span className="font-semibold text-zinc-700 dark:text-zinc-200">
                   {classFilterCount === 0 ? "ทั้งหมด" : `${classFilterCount} อาชีพ`}
                 </span>
               </div>
-
               <button
                 type="button"
                 className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
@@ -1926,52 +2013,92 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 )}
               </div>
             </div>
+
+            {/* ปาร์ตี้ (รวมใน F1) */}
+            <div className="mt-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
+              <div className="text-xs text-zinc-500 mb-2">
+                Filter ปาร์ตี้:{" "}
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">{partyFilterLabel}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { key: "all" as const, label: "ทั้งหมด" },
+                  { key: "assigned" as const, label: "มีปาร์ตี้" },
+                  { key: "unassigned" as const, label: "ยังไม่มีปาร์ตี้" },
+                ] as const).map((x) => {
+                  const active = partyFilter === x.key;
+                  return (
+                    <button
+                      key={x.key}
+                      type="button"
+                      className={[
+                        "inline-flex items-center rounded-xl border px-2.5 py-1 text-xs font-semibold",
+                        active
+                          ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                          : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+                      ].join(" ")}
+                      onClick={() => setPartyFilter(x.key)}
+                    >
+                      {x.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
-          {/* F2 */}
+          {/* F2: ศิษย์พี่ */}
           <div className="p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs text-zinc-500">
-                Filter ปาร์ตี้ (Roster):{" "}
-                <span className="font-semibold text-zinc-700 dark:text-zinc-200">{partyFilterLabel}</span>
+                Filter ศิษย์พี่:{" "}
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">
+                  {specialSkillFilterCount === 0 ? "ทั้งหมด" : `${specialSkillFilterCount} อย่าง`}
+                </span>
               </div>
-
               <button
                 type="button"
-                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
-                onClick={() => setPartyFilter("all")}
+                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                onClick={clearSpecialSkillFilter}
+                disabled={specialSkillFilterCount === 0}
               >
                 ล้าง
               </button>
             </div>
 
-            <div className="mt-2 flex flex-wrap gap-2">
-              {([
-                { key: "all" as const, label: "ทั้งหมด" },
-                { key: "assigned" as const, label: "มีปาร์ตี้" },
-                { key: "unassigned" as const, label: "ยังไม่มีปาร์ตี้" },
-              ] as const).map((x) => {
-                const active = partyFilter === x.key;
-                return (
-                  <button
-                    key={x.key}
-                    type="button"
-                    className={[
-                      "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
-                      active
-                        ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
-                        : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
-                    ].join(" ")}
-                    onClick={() => setPartyFilter(x.key)}
-                  >
-                    {x.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-2 text-[11px] text-zinc-500">
-              หมายเหตุ: ใช้อ้างอิงจากการจัดทัพ "ปัจจุบัน" (assigned/unassigned) ไม่ใช่ค่า party ใน DB
+            <div className="mt-2 max-h-[180px] overflow-y-auto pr-1">
+              <div className="flex flex-wrap gap-2">
+                {specialSkillOptions.length === 0 ? (
+                  <div className="text-xs text-zinc-400">ยังไม่มีข้อมูลศิษย์พี่</div>
+                ) : (
+                  specialSkillOptions.map((s) => {
+                    const active = specialSkillFilter.has(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={[
+                          "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                          active
+                            ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                            : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
+                        ].join(" ")}
+                        onClick={() => toggleSpecialSkillFilter(s.id)}
+                        title={s.name}
+                      >
+                        {s.special_skill_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={s.special_skill_url} alt="" className="h-4 w-4 rounded object-cover" />
+                        ) : null}
+                        <span className="max-w-[120px] truncate">{s.name}</span>
+                        <span className="rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums">
+                          {s.count}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
 
@@ -2909,8 +3036,7 @@ function PartyCard(props: {
       {groupColor ? <div className="h-1 w-full" style={{ backgroundColor: groupColor, opacity: 0.75 }} /> : null}
 
       {/* header */}
-      <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-        <div className="min-w-0 text-sm font-semibold truncate">{p.name}</div>
+      <div className="flex items-center justify-end border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
         <div className="text-xs text-zinc-500 font-mono shrink-0">{p.slots.filter((s) => s.memberId).length}/6</div>
       </div>
 
