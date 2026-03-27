@@ -17,18 +17,21 @@ export const runtime = "nodejs";
  */
 
 const ALLOWED_HOSTS = new Set([
-  // SOJ class icon hosting used by this project
-  "img2.pic.in.th",
-  "img5.pic.in.th",
-
-  // Discord (if you ever use it)
+  // Discord
   "cdn.discordapp.com",
   "media.discordapp.net",
+
+  // ImgBB
+  "i.ibb.co",
+  "ibb.co",
 ]);
 
 function isAllowedHost(hostname: string) {
   const h = hostname.toLowerCase();
   if (ALLOWED_HOSTS.has(h)) return true;
+
+  // pic.in.th — all subdomains (img1, img2, img3, img4, img5, ...)
+  if (h === "pic.in.th" || h.endsWith(".pic.in.th")) return true;
 
   // Supabase project domains: <project>.supabase.co
   if (h.endsWith(".supabase.co")) return true;
