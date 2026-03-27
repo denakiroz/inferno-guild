@@ -26,6 +26,7 @@
     "@types/react-dom": "^19",
     "@types/xlsx": "^0.0.35",
     "babel-plugin-react-compiler": "1.0.0",
+    "baseline-browser-mapping": "^2.10.11",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
     "tailwindcss": "^4.1.18",

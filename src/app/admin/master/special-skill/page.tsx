@@ -349,9 +349,3 @@ export default function AdminMasterSpecialSkillPage() {
     </div>
   );
 }
-          </div>
-        </Modal>
-      </div>
-    </div>
-  );
-}

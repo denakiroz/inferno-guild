@@ -77,5 +77,3 @@ export type MySkillStonesRes =
       selected_by_type: Record<EquipmentCreateType, number | null>;
     }
   | { ok: false; error?: string };
- string };
-
