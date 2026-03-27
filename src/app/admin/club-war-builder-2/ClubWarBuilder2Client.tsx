@@ -485,7 +485,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
   const applyPlanToEditor = useCallback((p: PlanRow) => {
     setOurName(p.our_name || "Inferno");
     setOpponentName(p.opponent_name || "");
-    setMatchDateISO(p.match_date || todayISO());
+    // ไม่ดึงวันที่มาจาก plan — ให้ใช้วันที่ที่ set อยู่แล้ว
     const raw = (p.parties ?? createDefaultParties()) as any[];
     const normalized: Party[] = raw.map((x, idx) => {
       const id = Number(x?.id ?? idx + 1);
