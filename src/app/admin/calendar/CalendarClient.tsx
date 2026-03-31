@@ -393,7 +393,7 @@ export default function CalendarClient() {
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-sm p-4" onClick={closeModal}>
           <div
-            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl w-full max-w-md shadow-2xl"
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl w-full max-w-xl shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -491,7 +491,7 @@ export default function CalendarClient() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">รายละเอียด</label>
-                    <textarea value={fDesc} onChange={(e) => setFDesc(e.target.value)} rows={3}
+                    <textarea value={fDesc} onChange={(e) => setFDesc(e.target.value)} rows={6}
                       placeholder="รายละเอียดกิจกรรม..."
                       className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-800 dark:text-zinc-100 placeholder-zinc-300 dark:placeholder-zinc-600 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/80 transition-all resize-none"
                     />
