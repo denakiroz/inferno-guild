@@ -26,6 +26,7 @@ type MemberRow = {
   ultimate_skill_ids?: number[] | null;
   special_skill_ids?: number[] | null;
   equipment_create_ids?: number[] | null;
+  weapon_gold_ids?: number[] | null;      // type=1 (weapon) + color=gold only
 
   party: number | null;
   party_2: number | null;
@@ -1222,7 +1223,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
   const skillStoneCounts = useMemo(() => {
     const m = new Map<number, number>();
     for (const mem of activeInGuild) {
-      const ids = (mem as any)?.equipment_create_ids;
+      // ใช้เฉพาะ weapon_gold_ids (อาวุธสีทอง)
+      const ids = (mem as any)?.weapon_gold_ids ?? (mem as any)?.equipment_create_ids;
       if (!Array.isArray(ids)) continue;
       const uniq = new Set<number>();
       for (const raw of ids) {
@@ -1294,10 +1296,10 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     });
   }
 
-  // skill stone filter (match ANY selected skill stone)
+  // skill stone filter — ใช้เฉพาะ weapon_gold_ids (อาวุธสีทอง)
   if (skillStoneFilter.size > 0) {
     base = base.filter((m) => {
-      const ids = (m as any)?.equipment_create_ids;
+      const ids = (m as any)?.weapon_gold_ids ?? (m as any)?.equipment_create_ids;
       if (!Array.isArray(ids) || ids.length === 0) return false;
       for (const raw of ids) {
         const id = Number(raw);

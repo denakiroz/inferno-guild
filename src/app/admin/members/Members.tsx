@@ -15,6 +15,8 @@ type SpecialFilter = "all" | "special" | "normal";
 type LeaveTypeFilter = "all" | "ready" | "errand" | "war";
 type GuildMemberFilter = "all" | "inguild" | "noguild";
 
+type MasterItem = { id: number; name: string };
+
 // ✅ สีแถบด้านบนตามอาชีพ (ตามที่ระบุ)
 // id1 สีเหลือง, id2 สีม่วง, id3 สีแดง, id4 สีน้ำเงิน, id5 สีชมพู, id6 สีฟ้าอมเขียว
 const TOPBAR_BY_CLASS_ID: Record<number, string> = {
@@ -216,6 +218,16 @@ export default function Members({
   const [leaveTypeFilter, setLeaveTypeFilter] = useState<LeaveTypeFilter>("all");
   const [guildMemberFilter, setGuildMemberFilter] = useState<GuildMemberFilter>("all");
 
+  // ✅ skill filters
+  const [ultimateFilterId,     setUltimateFilterId]     = useState<string>("all");
+  const [specialSkillFilterId, setSpecialSkillFilterId] = useState<string>("all");
+  const [weaponStoneFilterId,  setWeaponStoneFilterId]  = useState<string>("all");
+  const [weaponColorFilter,    setWeaponColorFilter]    = useState<string>("all");
+
+  const [ultimateMaster,     setUltimateMaster]     = useState<MasterItem[]>([]);
+  const [specialSkillMaster, setSpecialSkillMaster] = useState<MasterItem[]>([]);
+  const [weaponStoneMaster,  setWeaponStoneMaster]  = useState<MasterItem[]>([]);
+
   const [classList, setClassList] = useState<DbClass[]>([]);
 
   // Edit modal
@@ -273,11 +285,37 @@ export default function Members({
     if (lockedGuild) setTab(lockedGuild);
   }, [lockedGuild]);
 
+  // ✅ โหลด master data สำหรับ filter
+  useEffect(() => {
+    fetch("/api/admin/ultimate-skills", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setUltimateMaster(Array.isArray(j.skills) ? j.skills.map((s: any) => ({ id: Number(s.id), name: s.name ?? "" })) : []))
+      .catch(() => {});
+
+    fetch("/api/admin/special-skills", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setSpecialSkillMaster(Array.isArray(j.skills) ? j.skills.map((s: any) => ({ id: Number(s.id), name: s.name ?? "" })) : []))
+      .catch(() => {});
+
+    fetch("/api/admin/skill-stones", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const all = Array.isArray(j.skill_stones) ? j.skill_stones : [];
+        setWeaponStoneMaster(all.filter((s: any) => s.type === 1).map((s: any) => ({ id: Number(s.id), name: s.name ?? "" })));
+      })
+      .catch(() => {});
+  }, []);
+
   const classById = useMemo(() => {
     const m = new Map<number, DbClass>();
     classList.forEach((c) => m.set(c.id, c));
     return m;
   }, [classList]);
+
+  // ✅ options from master data (all items)
+  const ultimateOptions     = useMemo(() => [...ultimateMaster].sort((a, b) => a.name.localeCompare(b.name, "th")), [ultimateMaster]);
+  const specialSkillOptions = useMemo(() => [...specialSkillMaster].sort((a, b) => a.name.localeCompare(b.name, "th")), [specialSkillMaster]);
+  const weaponStoneOptions  = useMemo(() => [...weaponStoneMaster].sort((a, b) => a.name.localeCompare(b.name, "th")), [weaponStoneMaster]);
 
   const leaveByMemberId = useMemo(() => {
     const map = new Map<number, DbLeave[]>();
@@ -292,7 +330,7 @@ export default function Members({
     return map;
   }, [leaves]);
 
-  // ✅ สถานะการลา “เฉพาะวันนี้” (เวลาไทย)
+  // ✅ สถานะการลา "เฉพาะวันนี้" (เวลาไทย)
   const todayMetaByMemberId = useMemo(() => {
     const map = new Map<number, TodayLeaveMeta>();
 
@@ -323,10 +361,10 @@ export default function Members({
         if (time === "20:00") cur.war20Today = true;
         if (time === "20:30") cur.war2030Today = true;
 
-        // ถ้าเป็นเสาร์ แต่เวลาไม่ใช่ 20:00/20:30 ก็ยังถือว่าเป็น “ลาวอ”
+        // ถ้าเป็นเสาร์ แต่เวลาไม่ใช่ 20:00/20:30 ก็ยังถือว่าเป็น "ลาวอ"
         cur.warLabelToday = computeWarLabel(cur.war20Today, cur.war2030Today);
       } else if (isToday && time === "00:00") {
-        // ลากิจ — จะถูกบันทึกเป็นเวลา 00:00 ของ “วันนี้” (เวลาไทย)
+        // ลากิจ — จะถูกบันทึกเป็นเวลา 00:00 ของ "วันนี้" (เวลาไทย)
         cur.hasErrandToday = true;
       }
 
@@ -379,6 +417,31 @@ export default function Members({
         if (leaveTypeFilter === "war") return hasWarToday;
         if (leaveTypeFilter === "errand") return hasErrandToday;
         return true;
+      })
+      // ✅ Ultimate filter
+      .filter((m) => {
+        if (ultimateFilterId === "all") return true;
+        const ids = (m as any)?.ultimate_skill_ids;
+        if (!Array.isArray(ids) || ids.length === 0) return false;
+        return ids.map(Number).includes(Number(ultimateFilterId));
+      })
+      // ✅ ศิษย์พี่ filter
+      .filter((m) => {
+        if (specialSkillFilterId === "all") return true;
+        const ids = (m as any)?.special_skill_ids;
+        if (!Array.isArray(ids) || ids.length === 0) return false;
+        return ids.map(Number).includes(Number(specialSkillFilterId));
+      })
+      // ✅ หินสกิลอาวุธ + สี filter
+      .filter((m) => {
+        const stones = ((m as any)?.weapon_stones ?? []) as { id: number; color: string }[];
+        if (weaponStoneFilterId === "all" && weaponColorFilter === "all") return true;
+        if (stones.length === 0) return false;
+        return stones.some((s) => {
+          const idMatch    = weaponStoneFilterId === "all" || Number(s.id) === Number(weaponStoneFilterId);
+          const colorMatch = weaponColorFilter   === "all" || s.color === weaponColorFilter;
+          return idMatch && colorMatch;
+        });
       });
   }, [
     members,
@@ -392,6 +455,10 @@ export default function Members({
     leaveTypeFilter,
     guildMemberFilter,
     todayMetaByMemberId,
+    ultimateFilterId,
+    specialSkillFilterId,
+    weaponStoneFilterId,
+    weaponColorFilter,
   ]);
 
   function isCancelLeaveStatus(status?: string | null) {
@@ -477,7 +544,7 @@ export default function Members({
   };
 
   const getTodayBadges = (m: DbMember): { key: string; label: string; variant: "outline" | "warning" | "success" }[] => {
-    // ✅ กติกา: ถ้าเป็น “ศิษย์เอก” ให้ขึ้นแค่ “ศิษย์เอก” อย่างเดียว
+    // ✅ กติกา: ถ้าเป็น "ศิษย์เอก" ให้ขึ้นแค่ "ศิษย์เอก" อย่างเดียว
     if (m.is_special) return [{ key: "special", label: "ศิษย์เอก", variant: "outline" }];
 
     const badges: { key: string; label: string; variant: "outline" | "warning" | "success" }[] = [];
@@ -599,8 +666,51 @@ export default function Members({
             )}
           </div>
 
+          {/* ✅ Skill filters row */}
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Select
+              value={ultimateFilterId}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setUltimateFilterId(e.target.value)}
+            >
+              <option value="all">Ultimate: ทั้งหมด</option>
+              {ultimateOptions.map((u) => (
+                <option key={u.id} value={String(u.id)}>{u.name}</option>
+              ))}
+            </Select>
+
+            <Select
+              value={specialSkillFilterId}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSpecialSkillFilterId(e.target.value)}
+            >
+              <option value="all">ศิษย์พี่: ทั้งหมด</option>
+              {specialSkillOptions.map((s) => (
+                <option key={s.id} value={String(s.id)}>{s.name}</option>
+              ))}
+            </Select>
+
+            <Select
+              value={weaponStoneFilterId}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setWeaponStoneFilterId(e.target.value)}
+            >
+              <option value="all">หินสกิลอาวุธ: ทั้งหมด</option>
+              {weaponStoneOptions.map((w) => (
+                <option key={w.id} value={String(w.id)}>{w.name}</option>
+              ))}
+            </Select>
+
+            <Select
+              value={weaponColorFilter}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setWeaponColorFilter(e.target.value)}
+            >
+              <option value="all">สีหิน: ทั้งหมด</option>
+              <option value="gold">ทอง</option>
+              <option value="red">แดง</option>
+              <option value="purple">ม่วง</option>
+            </Select>
+          </div>
+
           <div className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-            สถานะคำนวณจาก “วันนี้ (ลากิจ 00:00)” และ “เสาร์ที่จะถึง (วอ 20:00/20:30)” (เวลาไทย) • วันนี้: {todayBkk} • เสาร์ที่จะถึง: {nextSaturdayBkk}
+            สถานะคำนวณจาก "วันนี้ (ลากิจ 00:00)" และ "เสาร์ที่จะถึง (วอ 20:00/20:30)" (เวลาไทย) • วันนี้: {todayBkk} • เสาร์ที่จะถึง: {nextSaturdayBkk}
           </div>
         </div>
       </Card>

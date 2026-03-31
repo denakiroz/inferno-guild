@@ -3,8 +3,6 @@
 // src/app/admin/members/MembersClient.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Members from "./Members";
-import { memberService } from "@/services/memberService";
-import { leaveService } from "@/services/leaveService";
 import { supabase } from "@/lib/supabase";
 import type { DbMember, DbLeave, GuildNo } from "@/type/db";
 
@@ -28,8 +26,6 @@ export default function MembersClient() {
   const [leaves, setLeaves] = useState<DbLeave[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // admin เห็นทุกกิลด์, head เห็นกิลด์ตัวเอง
-  // ✅ แปลงเป็น admin ให้รองรับกรณี guild = 0 (admin) จากฝั่ง /api/me
   const effectiveIsAdmin = useMemo(() => {
     if (!me || !me.ok) return false;
     return !!me.user.isAdmin || Number(me.user.guild) === 0;
@@ -57,15 +53,17 @@ export default function MembersClient() {
     })();
   }, []);
 
+  // ✅ ใช้ /api/admin/members เพื่อให้ได้ ultimate_skill_ids, special_skill_ids, weapon_stones
   const load = useCallback(async (guild?: GuildNo) => {
     setIsLoading(true);
     try {
-      const rows = await memberService.list({ guild, orderByPowerDesc: true });
-      setMembers(rows);
+      const url = guild ? `/api/admin/members?guild=${guild}` : "/api/admin/members";
+      const r = await fetch(url, { cache: "no-store" });
+      const j = await r.json();
 
-      const ids = rows.map((m) => m.id);
-      const leaveRows = ids.length ? await leaveService.list({ memberIds: ids }) : [];
-      setLeaves(leaveRows);
+      const rows: DbMember[] = Array.isArray(j.members) ? j.members : [];
+      setMembers(rows);
+      setLeaves(Array.isArray(j.leaves) ? j.leaves : []);
     } finally {
       setIsLoading(false);
     }
@@ -73,9 +71,9 @@ export default function MembersClient() {
 
   const onReload = useCallback(async () => {
     if (!me || !me.ok) return;
-    if (me.user.isAdmin) return load(undefined);
+    if (effectiveIsAdmin) return load(undefined);
     return load(Number(me.user.guild) as GuildNo);
-  }, [load, me]);
+  }, [load, me, effectiveIsAdmin]);
 
   useEffect(() => {
     if (me == null) return;
@@ -89,7 +87,7 @@ export default function MembersClient() {
 
     if (effectiveIsAdmin) load(undefined);
     else load(Number(me.user.guild) as GuildNo);
-  }, [me, load]);
+  }, [me, load, effectiveIsAdmin]);
 
   // ✅ Realtime: member/leave เปลี่ยน → reload
   useEffect(() => {

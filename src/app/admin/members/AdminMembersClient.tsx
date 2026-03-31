@@ -93,6 +93,15 @@ export default function AdminMembersClient(initial: Props) {
     }
   }, []);
 
+  // ✅ On mount: reload from API to get skill mapping fields
+  //    (initial SSR data from page.tsx doesn't include ultimate_skill_ids / special_skill_ids / weapon_stones)
+  useEffect(() => {
+    void onReloadMembers();
+    void onReloadClub();
+    void onReloadClub2();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ✅ Realtime: member/leave เปลี่ยน → reload เฉพาะแท็บที่กำลังดู (ลดภาระ)
   useEffect(() => {
     const ch = supabase

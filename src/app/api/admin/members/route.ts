@@ -142,38 +142,65 @@ export async function GET(req: Request) {
     members = (members ?? []).map((m: any) => ({ ...m, special_skill_ids: [] }));
   }
 
-  // ✅ Attach equipment_create_ids per member (source of truth: member_equipment_create)
+  // ✅ Attach equipment_create_ids + weapon_gold_ids per member
   try {
     const memberIds = (members ?? [])
       .map((m: any) => Number(m?.id))
       .filter((x: number) => Number.isFinite(x) && x > 0);
 
     if (memberIds.length > 0) {
+      // Fetch with color + join type from equipment_create
       const { data: ecRows } = await supabaseAdmin
         .from("member_equipment_create")
-        .select("member_id, equipment_create_id")
+        .select("member_id, equipment_create_id, color, equipment_create(type)")
         .in("member_id", memberIds);
 
-      const ecMap = new Map<number, number[]>();
+      const ecMap     = new Map<number, number[]>();
+      const goldMap   = new Map<number, number[]>();
+      const weaponMap = new Map<number, { id: number; color: string }[]>();
+
       for (const r of (Array.isArray(ecRows) ? ecRows : []) as any[]) {
-        const mid = Number(r?.member_id);
-        const eid = Number(r?.equipment_create_id);
+        const mid   = Number(r?.member_id);
+        const eid   = Number(r?.equipment_create_id);
+        const color = String(r?.color ?? "").toLowerCase();
+        const ec    = r?.equipment_create;
+        const type  = Number(Array.isArray(ec) ? ec[0]?.type : ec?.type);
+
         if (!Number.isFinite(mid) || mid <= 0) continue;
         if (!Number.isFinite(eid) || eid <= 0) continue;
-        const arr = ecMap.get(mid);
-        if (arr) arr.push(eid);
-        else ecMap.set(mid, [eid]);
+
+        const allArr = ecMap.get(mid) ?? [];
+        allArr.push(eid);
+        ecMap.set(mid, allArr);
+
+        if (type === 1) {
+          if (color === "gold") {
+            const goldArr = goldMap.get(mid) ?? [];
+            goldArr.push(eid);
+            goldMap.set(mid, goldArr);
+          }
+          const wArr = weaponMap.get(mid) ?? [];
+          wArr.push({ id: eid, color });
+          weaponMap.set(mid, wArr);
+        }
       }
 
       members = (members ?? []).map((m: any) => {
-        const ids = ecMap.get(Number(m?.id)) ?? [];
-        return { ...m, equipment_create_ids: Array.from(new Set(ids)).sort((a, b) => a - b) };
+        const ids          = ecMap.get(Number(m?.id))     ?? [];
+        const goldIds      = goldMap.get(Number(m?.id))   ?? [];
+        const weaponStones = weaponMap.get(Number(m?.id)) ?? [];
+        return {
+          ...m,
+          equipment_create_ids: Array.from(new Set(ids)).sort((a, b) => a - b),
+          weapon_gold_ids:      Array.from(new Set(goldIds)).sort((a, b) => a - b),
+          weapon_stones:        weaponStones,
+        };
       });
     } else {
-      members = (members ?? []).map((m: any) => ({ ...m, equipment_create_ids: [] }));
+      members = (members ?? []).map((m: any) => ({ ...m, equipment_create_ids: [], weapon_gold_ids: [], weapon_stones: [] }));
     }
   } catch {
-    members = (members ?? []).map((m: any) => ({ ...m, equipment_create_ids: [] }));
+    members = (members ?? []).map((m: any) => ({ ...m, equipment_create_ids: [], weapon_gold_ids: [], weapon_stones: [] }));
   }
 
   const { data: leaves, error: leaveErr } = await supabaseAdmin

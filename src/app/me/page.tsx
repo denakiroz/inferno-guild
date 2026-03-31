@@ -26,10 +26,15 @@ import { bkkDateOf, bkkNowHHMM, bkkDateTimeParts, canCancelLeave } from "./_lib/
 
 import { ProfileTab } from "./_components/ProfileTab";
 import { InternalPowerTab } from "./_components/InternalPowerTab";
-import { SkillStonesTab } from "./_components/SkillStonesTab";
 import { LeavesTab } from "./_components/LeavesTab";
+import {
+  normalizeSelected,
+  type EquipmentCreateRow,
+  type SelectedByType,
+} from "./_components/WeaponStoneSection";
+import { UpcomingEventsWidget } from "./_components/UpcomingEventsWidget";
 
-type TabKey = "profile" | "internalPower" | "skillStones" | "leaves";
+type TabKey = "profile" | "internalPower" | "leaves";
 
 const tabBase = "px-4 py-2 text-sm rounded-lg transition whitespace-nowrap";
 const tabIdle =
@@ -56,6 +61,11 @@ export default function MePage() {
   // ✅ ศิษย์พี่s
   const [specialSkills, setSpecialSkills] = useState<SpecialSkillRow[]>([]);
   const [selectedSpecialIds, setSelectedSpecialIds] = useState<number[]>([]);
+
+  // ✅ weapon stones
+  const [stoneEquipment, setStoneEquipment] = useState<EquipmentCreateRow[]>([]);
+  const [allStonesByType, setAllStonesByType] = useState<SelectedByType>({ 1: [], 2: [], 3: [] });
+  const [stonesLoading, setStonesLoading] = useState(true);
 
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
@@ -144,6 +154,24 @@ export default function MePage() {
     setSelectedSpecialIds(Array.isArray(j.selected_ids) ? j.selected_ids : []);
   }
 
+  async function loadStones() {
+    setStonesLoading(true);
+    try {
+      const res  = await fetch("/api/member/me/skill-stones", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) return;
+      setStoneEquipment(data.equipment || []);
+      const sbt = data.selected_by_type || {};
+      setAllStonesByType({
+        1: normalizeSelected(sbt[1]),
+        2: normalizeSelected(sbt[2]),
+        3: normalizeSelected(sbt[3]),
+      });
+    } finally {
+      setStonesLoading(false);
+    }
+  }
+
   async function saveMySpecialSkills(ids: number[]) {
     const res = await fetch("/api/member/me/special-skills", {
       method: "PUT",
@@ -177,6 +205,7 @@ export default function MePage() {
         loadUltimateMaster(),
         loadMyUltimate(),
         loadMySpecialSkills(),
+        loadStones(),
       ]);
     })().catch(() => setErr("โหลดข้อมูลไม่สำเร็จ"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -238,9 +267,22 @@ export default function MePage() {
 
       setMember(j.member as MemberRow);
 
-      // ✅ save ultimate after member save success
+      // ✅ save ultimate + special + stones together
       await saveMyUltimate(selectedUltimateIds);
       await saveMySpecialSkills(selectedSpecialIds);
+
+      // save weapon stones (send all 3 types to avoid overwriting)
+      await fetch("/api/member/me/skill-stones", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          selected_by_type: {
+            1: normalizeSelected(allStonesByType[1]),
+            2: normalizeSelected(allStonesByType[2]),
+            3: normalizeSelected(allStonesByType[3]),
+          },
+        }),
+      });
     } catch (e: any) {
       setErr(String(e.message ?? e));
     } finally {
@@ -430,14 +472,6 @@ export default function MePage() {
 
                   <button
                     type="button"
-                    onClick={() => setTab("skillStones")}
-                    className={`${tabBase} ${tab === "skillStones" ? tabActive : tabIdle}`}
-                  >
-                    หินสกิล
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => setTab("leaves")}
                     className={`${tabBase} ${tab === "leaves" ? tabActive : tabIdle}`}
                   >
@@ -460,6 +494,9 @@ export default function MePage() {
           </div>
         </div>
 
+        {/* ── Upcoming Events (non-sticky) ── */}
+        <UpcomingEventsWidget />
+
         {/* Content */}
         {tab === "profile" ? (
           <ProfileTab
@@ -477,11 +514,13 @@ export default function MePage() {
             specialSkills={specialSkills}
             selectedSpecialIds={selectedSpecialIds}
             setSelectedSpecialIds={setSelectedSpecialIds}
+            stoneEquipment={stoneEquipment}
+            allStonesByType={allStonesByType}
+            setAllStonesByType={setAllStonesByType}
+            stonesLoading={stonesLoading}
           />
         ) : tab === "internalPower" ? (
           <InternalPowerTab />
-        ) : tab === "skillStones" ? (
-          <SkillStonesTab />
         ) : (
           <LeavesTab
             leaveErr={leaveErr}

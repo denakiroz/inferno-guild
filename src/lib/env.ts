@@ -25,6 +25,9 @@ const EnvSchema = z.object({
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
 
   DISCORD_BOT_TOKEN: z.string().min(1).optional(),
+
+  // Calendar feature: Discord channel to post event notifications
+  DISCORD_CALENDAR_CHANNEL_ID: z.string().min(1).optional(),
 });
 
 export const env = EnvSchema.parse(process.env);

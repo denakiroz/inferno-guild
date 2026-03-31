@@ -1,10 +1,15 @@
 "use client";
 
 import React from "react";
-import { Button, Card, Input, Select } from "@/app/components/UI";
+import { Button, Card, Select } from "@/app/components/UI";
 import type { ClassRow, MemberRow, SpecialSkillRow, UltimateSkillRow } from "../_lib/types";
 import { UltimateMultiSelect } from "./UltimateMultiSelect";
 import { SpecialSkillMultiSelect } from "./SpecialSkillMultiSelect";
+import {
+  WeaponStoneSection,
+  type EquipmentCreateRow,
+  type SelectedByType,
+} from "./WeaponStoneSection";
 
 export function ProfileTab(props: {
   member: MemberRow | null;
@@ -24,10 +29,14 @@ export function ProfileTab(props: {
   specialSkills: SpecialSkillRow[];
   selectedSpecialIds: number[];
   setSelectedSpecialIds: React.Dispatch<React.SetStateAction<number[]>>;
+
+  // weapon stones
+  stoneEquipment: EquipmentCreateRow[];
+  allStonesByType: SelectedByType;
+  setAllStonesByType: React.Dispatch<React.SetStateAction<SelectedByType>>;
+  stonesLoading: boolean;
 }) {
   const {
-    member,
-    setMember,
     classes,
     classId,
     setClassId,
@@ -40,16 +49,17 @@ export function ProfileTab(props: {
     specialSkills,
     selectedSpecialIds,
     setSelectedSpecialIds,
+    stoneEquipment,
+    allStonesByType,
+    setAllStonesByType,
+    stonesLoading,
   } = props;
 
   return (
     <Card>
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">โปรไฟล์</div>
-      </div>
+      <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">โปรไฟล์</div>
 
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-
         <div>
           <div className="text-xs text-zinc-500 mb-1">อาชีพ</div>
           <Select
@@ -78,6 +88,17 @@ export function ProfileTab(props: {
         onChange={(next) => setSelectedSpecialIds(next)}
         disabled={saving}
       />
+
+      {/* ── หินสกิลอาวุธ ── */}
+      <div className="border-t border-zinc-100 dark:border-zinc-800 mt-5 pt-5">
+        <WeaponStoneSection
+          equipment={stoneEquipment}
+          allStonesByType={allStonesByType}
+          setAllStonesByType={setAllStonesByType}
+          loading={stonesLoading}
+          disabled={saving}
+        />
+      </div>
 
       {err && <div className="mt-3 text-sm text-rose-600">Error: {err}</div>}
 
