@@ -86,8 +86,8 @@ export async function GET(req: Request) {
       const mentions: string[] = ev.mention_roles ? (() => { try { return JSON.parse(ev.mention_roles); } catch { return []; } })() : [];
       const mentionFooter = mentions.length ? `\n${mentions.join(" ")}` : "";
       const msg =
-        `# 🔔 **แจ้งเตือนกิจกรรมวันนี้: ${ev.title}**` +
-        `\n📅 ${fmtDate(ev.event_date)}${timeStr}` +
+        `# 🔔🔔🔔 **แจ้งเตือนกิจกรรมวันนี้: ${ev.title}**` +
+        `\n🗓️ ${fmtDate(ev.event_date)}${timeStr}` +
         desc +
         mentionFooter;
 

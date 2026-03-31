@@ -146,25 +146,33 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // ── Immediate Discord notification ──
-  const mentionFooter = mentionArr.length ? `\n${mentionArr.join(" ")}` : "";
-  const timeStr = event_time ? ` เวลา ${event_time.slice(0, 5)} น.` : "";
-  const desc = description?.trim() ? `\n\n${description.trim()}` : "";
-  const msg =
-    `# 📣 **ประกาศด่วน : ${title.trim()}**` +
-    `\n📅 วันที่ ${fmtDate(event_date)}${timeStr}` +
-    desc +
-    mentionFooter;
+  // ── Immediate Discord notification (เฉพาะวันนี้เท่านั้น) ──
+  // ถ้าเป็นวันในอนาคต ปล่อยให้ cron จัดการในวันที่กิจกรรม
+  const nowBkk = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const todayStr = nowBkk.toISOString().slice(0, 10); // YYYY-MM-DD
 
-  await sendDiscordCalendarMessage(msg);
+  if (event_date === todayStr) {
+    const mentionFooter = mentionArr.length ? `\n${mentionArr.join(" ")}` : "";
+    const timeStr = event_time ? ` เวลา ${event_time.slice(0, 5)} น.` : "";
+    const desc = description?.trim() ? `\n\n${description.trim()}` : "";
+    const msg =
+      `# <a:1149446764869464165:1246856686980042762><a:1149446764869464165:1246856686980042762><a:1149446764869464165:1246856686980042762> **ประกาศด่วน : ${title.trim()}**` +
+      `\n🗓️ วันที่ ${fmtDate(event_date)}${timeStr}` +
+      desc +
+      mentionFooter;
 
-  // mark as notified
-  await supabaseAdmin
-    .from("calendar_event")
-    .update({ discord_notified: true })
-    .eq("id", data.id);
+    await sendDiscordCalendarMessage(msg);
 
-  return NextResponse.json({ ...data, discord_notified: true }, { status: 201 });
+    await supabaseAdmin
+      .from("calendar_event")
+      .update({ discord_notified: true })
+      .eq("id", data.id);
+
+    return NextResponse.json({ ...data, discord_notified: true }, { status: 201 });
+  }
+
+  // กิจกรรมวันอื่น → cron จะแจ้งเตือนในวันนั้น
+  return NextResponse.json(data, { status: 201 });
 }
 
 // ─────────────────────────────────────────────

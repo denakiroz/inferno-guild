@@ -539,7 +539,7 @@ export default function CalendarClient() {
                     <div className="text-xs text-rose-500 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl px-3 py-2">{formError}</div>
                   )}
                   {modal.mode === "create" && (
-                    <div className="text-xs text-zinc-400 dark:text-zinc-600">📢 Discord จะแจ้งเตือนทันทีและแจ้งเตือนอีกครั้งในวันที่กิจกรรม</div>
+                    <div className="text-xs text-zinc-400 dark:text-zinc-600">📢 กิจกรรมวันนี้จะแจ้งเตือน Discord ทันที — กิจกรรมวันอื่นจะแจ้งเตือนในวันที่กิจกรรม</div>
                   )}
                 </div>
               )}
