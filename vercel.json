@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/sync-discord-members",
-      "schedule": "0 17 * * *"
+      "schedule": "0 1 * * *"
     },
     {
       "path": "/api/cron/calendar-reminder",
-      "schedule": "0 17 * * *"
+      "schedule": "0 1 * * *"
     }
   ]
 }
