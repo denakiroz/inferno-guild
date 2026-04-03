@@ -481,9 +481,9 @@ export default function MePage() {
 
                 {/* ✅ Actions right */}
                 <div className="flex items-center justify-end">
-                  {!member?.is_special ? (
+                  {member !== null && !member.is_special ? (
                     <LeaveRequestButton
-                      memberName={member?.name ?? "ฉัน"}
+                      memberName={member.name ?? "ฉัน"}
                       existingLeaves={activeLeaves}
                       onCreate={createMyLeave}
                     />
