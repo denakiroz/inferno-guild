@@ -65,16 +65,25 @@ export async function GET(req: NextRequest) {
     req.headers.get("user-agent") ??
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari";
 
-  const upstream = await fetch(target.toString(), {
-    redirect: "follow",
-    headers: {
-      "User-Agent": ua,
-      Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-      "Accept-Language": req.headers.get("accept-language") ?? "th-TH,th;q=0.9,en;q=0.8",
-      // Some hosts require a referer on hotlinked images
-      Referer: `https://${target.hostname}/`,
-    },
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target.toString(), {
+      redirect: "follow",
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        "User-Agent": ua,
+        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Accept-Language": req.headers.get("accept-language") ?? "th-TH,th;q=0.9,en;q=0.8",
+        Referer: `https://${target.hostname}/`,
+      },
+    });
+  } catch (err: unknown) {
+    const isTimeout = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+    return NextResponse.json(
+      { ok: false, error: isTimeout ? "upstream timeout" : "fetch failed" },
+      { status: 504 }
+    );
+  }
 
   if (!upstream.ok) {
     return NextResponse.json(
@@ -85,20 +94,18 @@ export async function GET(req: NextRequest) {
 
   const ct = upstream.headers.get("content-type") ?? "";
   if (!ct.toLowerCase().startsWith("image/")) {
-    // 200 but not an image => likely hotlink protection returning HTML
-    let sample = "";
-    try {
-      sample = (await upstream.text()).slice(0, 200);
-    } catch {
-      // ignore
-    }
     return NextResponse.json(
-      { ok: false, error: "upstream is not image", contentType: ct, sample },
+      { ok: false, error: "upstream is not image", contentType: ct },
       { status: 502 }
     );
   }
 
-  const buf = await upstream.arrayBuffer();
+  let buf: ArrayBuffer;
+  try {
+    buf = await upstream.arrayBuffer();
+  } catch {
+    return NextResponse.json({ ok: false, error: "failed to read body" }, { status: 502 });
+  }
 
   const res = new NextResponse(buf, { status: 200 });
   res.headers.set("Content-Type", ct);

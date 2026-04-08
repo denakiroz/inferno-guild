@@ -14,12 +14,13 @@ type MemberRow = {
   status?: string | null;
   color?: string | null;
 
-  // added for ultimate filter
   ultimate_skill_ids?: number[] | null;
+  special_skill_ids?: number[] | null;
 };
 
 type DbClass = { id: number; name: string; icon_url: string | null };
 type DbUltimateSkill = { id: number; name: string; ultimate_skill_url: string | null };
+type DbSpecialSkill = { id: number; name: string; special_skill_url: string | null };
 
 type LeaveRow = {
   date_time: string; // timestamptz
@@ -43,6 +44,7 @@ type PlanRow = {
   our_name: string;
   opponent_name: string;
   match_date: string; // YYYY-MM-DD
+  match_time?: string | null; // HH:MM
   parties: Party[];
   note?: string | null;
 };
@@ -113,6 +115,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
 
   // Flow: select date -> opponent -> arrange party
   const [matchDateISO, setMatchDateISO] = useState<string>(todayISO());
+  const [matchTime, setMatchTime] = useState<string>("");
   const [ourName, setOurName] = useState("Inferno");
   const [opponentName, setOpponentName] = useState("");
 
@@ -123,8 +126,9 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
     [classes]
   );
 
-  // ultimate list for filter
+  // ultimate + special skill list for filter
   const [ultimateSkills, setUltimateSkills] = useState<DbUltimateSkill[]>([]);
+  const [specialSkills, setSpecialSkills] = useState<DbSpecialSkill[]>([]);
 
   // leave set for selected date (badge only — NOT excluded)
   const [leaveSet, setLeaveSet] = useState<Set<number>>(new Set());
@@ -143,7 +147,9 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanRow | null>(null);
 
-
+  // Delete confirm + toast
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteToast, setDeleteToast] = useState(false);
 
   // War map (capture) modal
   const [warMapOpen, setWarMapOpen] = useState(false);
@@ -160,11 +166,13 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
   const [showRight, setShowRight] = useState(true);
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("unassigned");
 
-  // Filters: class + ultimate (multi-select)
+  // Filters: class + ultimate + special skill (multi-select)
   const [classFilter, setClassFilter] = useState<Set<number>>(new Set());
   const [ultimateFilter, setUltimateFilter] = useState<Set<number>>(new Set());
+  const [specialSkillFilter, setSpecialSkillFilter] = useState<Set<number>>(new Set());
   const [openClassFilter, setOpenClassFilter] = useState(false);
   const [openUltimateFilter, setOpenUltimateFilter] = useState(false);
+  const [openSpecialSkillFilter, setOpenSpecialSkillFilter] = useState(false);
 
   const assignedIds = useMemo(() => {
     const s = new Set<number>();
@@ -203,10 +211,20 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
       });
     }
 
+    // special skill filter (intersection)
+    if (specialSkillFilter.size > 0) {
+      list = list.filter((m) => {
+        const ids = m.special_skill_ids ?? [];
+        if (!Array.isArray(ids) || ids.length === 0) return false;
+        for (const id of ids) if (specialSkillFilter.has(Number(id))) return true;
+        return false;
+      });
+    }
+
     if (needle) list = list.filter((m) => String(m.name ?? "").toLowerCase().includes(needle));
 
     return list.sort((a, b) => Number(b.power ?? 0) - Number(a.power ?? 0));
-  }, [baseRoster, assignedIds, q, rosterFilter, classFilter, ultimateFilter]);
+  }, [baseRoster, assignedIds, q, rosterFilter, classFilter, ultimateFilter, specialSkillFilter]);
 
   const leaveCount = useMemo(() => leaveSet.size, [leaveSet.size]);
 
@@ -229,12 +247,30 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
       const r = await fetch("/api/admin/ultimate-skills", { cache: "no-store" });
       if (!r.ok) return;
       const json = await r.json().catch(() => ({}));
-      const list = Array.isArray(json.data) ? json.data : Array.isArray(json.items) ? json.items : Array.isArray(json.ultimate_skills) ? json.ultimate_skills : [];
+      const list = Array.isArray(json.skills) ? json.skills : [];
       setUltimateSkills(
         (list as any[]).map((x) => ({
           id: Number(x.id),
           name: String(x.name ?? ""),
-          ultimate_skill_url: x.ultimate_skill_url ?? x.url ?? null,
+          ultimate_skill_url: x.ultimate_skill_url ?? null,
+        }))
+      );
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const loadSpecialSkills = useCallback(async () => {
+    try {
+      const r = await fetch("/api/admin/special-skills", { cache: "no-store" });
+      if (!r.ok) return;
+      const json = await r.json().catch(() => ({}));
+      const list = Array.isArray(json.skills) ? json.skills : [];
+      setSpecialSkills(
+        (list as any[]).map((x) => ({
+          id: Number(x.id),
+          name: String(x.name ?? ""),
+          special_skill_url: x.special_skill_url ?? null,
         }))
       );
     } catch {
@@ -303,13 +339,13 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
   const initialLoad = useCallback(async (isoDate: string) => {
     setLoading(true);
     try {
-      await Promise.all([loadClasses(), loadUltimateSkills()]);
+      await Promise.all([loadClasses(), loadUltimateSkills(), loadSpecialSkills()]);
       const memList = await loadClubRoster();
       await loadLeavesForDate(memList, isoDate);
     } finally {
       setLoading(false);
     }
-  }, [loadClasses, loadUltimateSkills, loadClubRoster, loadLeavesForDate]);
+  }, [loadClasses, loadUltimateSkills, loadSpecialSkills, loadClubRoster, loadLeavesForDate]);
 
   useEffect(() => {
     initialLoad(matchDateISO);
@@ -454,6 +490,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
         our_name: ourName.trim() || "Inferno",
         opponent_name: opp,
         match_date: dt,
+        match_time: matchTime.trim() || null,
         parties,
       };
 
@@ -500,12 +537,14 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
       return { id, name, color, slots };
     });
     setParties(normalized);
+    // ไม่ดึงวันที่/เวลามาจาก plan — ให้ใช้ค่าที่ set อยู่แล้ว
     setPlanModalOpen(false);
+    setShowRight(false);
   }, []);
 
   const deletePlan = useCallback(async (id: string) => {
     if (!canEdit) return;
-    if (!confirm("ลบประวัติการ์ดนี้?")) return;
+    setDeleteConfirmId(null);
 
     const res = await fetch(`/api/admin/club-party-plans-2/${id}`, { method: "DELETE" });
     const json = await res.json().catch(() => ({}));
@@ -515,6 +554,8 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
       return;
     }
     await loadPlans(plansPage);
+    setDeleteToast(true);
+    setTimeout(() => setDeleteToast(false), 2500);
   }, [canEdit, loadPlans, plansPage]);
 
   // ---------- Render helpers ----------
@@ -543,14 +584,14 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
           <img
             src={cls.icon_url}
             alt={cls.name}
-            className="h-6 w-6 rounded-md object-cover border border-zinc-200 dark:border-zinc-800"
+            className="h-7 w-7 rounded-md object-cover border border-zinc-200 dark:border-zinc-800 shrink-0"
           />
         ) : (
-          <div className="h-6 w-6 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-7 w-7 rounded-md bg-zinc-200 dark:bg-zinc-800 shrink-0" />
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2 min-w-0">
+          <div className="flex items-start gap-1 min-w-0">
             <div className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-5 text-zinc-900 dark:text-zinc-100">
               {m.name}
             </div>
@@ -737,6 +778,16 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
     ctx.font = "400 12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
     ctx.fillText("Generated from Club War Builder", PAD, PAD + 72);
 
+    // large match time (top-right)
+    const timeStr = matchTime?.trim() || "";
+    if (timeStr) {
+      ctx.fillStyle = "#ef4444";
+      ctx.font = "800 56px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      ctx.textAlign = "right";
+      ctx.fillText(timeStr, totalW - PAD, PAD + 60);
+      ctx.textAlign = "left";
+    }
+
     // pre-load used class icons (best-effort)
     if (withIcons) {
       const iconUrls = new Set<string>();
@@ -866,7 +917,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
         ctx.fillText(truncateText(ctx, text, nameMax), textX, yy);
       }
     }
-  }, [classById, leaveSet, loadIcon, matchDateISO, memberById, opponentName, ourName, parties, toImgProxyUrl]);
+  }, [classById, leaveSet, loadIcon, matchDateISO, matchTime, memberById, opponentName, ourName, parties, toImgProxyUrl]);
 
   useEffect(() => {
     if (!warMapOpen) return;
@@ -1000,12 +1051,22 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
     <div className="space-y-3">
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3">
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-2">
-          <div className="xl:col-span-3 flex items-center gap-2">
+          <div className="xl:col-span-2 flex items-center gap-2">
             <div className="text-xs text-zinc-500 w-14">วันที่</div>
             <input
               type="date"
               value={matchDateISO}
               onChange={(e) => setMatchDateISO(e.target.value)}
+              className="h-9 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
+            />
+          </div>
+
+          <div className="xl:col-span-2 flex items-center gap-2">
+            <div className="text-xs text-zinc-500 w-14">เวลา</div>
+            <input
+              type="time"
+              value={matchTime}
+              onChange={(e) => setMatchTime(e.target.value)}
               className="h-9 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
             />
           </div>
@@ -1089,9 +1150,9 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:items-stretch">
         {showLeft ? (
-          <div className="lg:col-span-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3">
+          <div className="lg:col-span-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3 flex flex-col lg:sticky lg:top-2 lg:h-[calc(100vh-80px)]">
             <div className="flex items-center gap-2">
               <div className="font-semibold">Roster (Club)</div>
               <div className="ml-auto text-xs text-zinc-500">{roster.length}</div>
@@ -1139,6 +1200,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                   onClick={() => {
                     setOpenClassFilter((v) => !v);
                     setOpenUltimateFilter(false);
+                    setOpenSpecialSkillFilter(false);
                   }}
                 >
                   อาชีพ{classFilter.size > 0 ? ` (${classFilter.size})` : ""}
@@ -1152,9 +1214,24 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                   onClick={() => {
                     setOpenUltimateFilter((v) => !v);
                     setOpenClassFilter(false);
+                    setOpenSpecialSkillFilter(false);
                   }}
                 >
                   Ultimate{ultimateFilter.size > 0 ? ` (${ultimateFilter.size})` : ""}
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "h-8 px-3 rounded-xl border text-xs",
+                    specialSkillFilter.size > 0 ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
+                  )}
+                  onClick={() => {
+                    setOpenSpecialSkillFilter((v) => !v);
+                    setOpenClassFilter(false);
+                    setOpenUltimateFilter(false);
+                  }}
+                >
+                  ศิษย์พี่{specialSkillFilter.size > 0 ? ` (${specialSkillFilter.size})` : ""}
                 </button>
               </div>
             </div>
@@ -1235,7 +1312,49 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                     );
                   })}
                   {ultimateSkills.length === 0 ? (
-                    <div className="text-xs text-zinc-500">ไม่พบ ultimate (ตรวจสอบ /api/admin/ultimate-skills)</div>
+                    <div className="text-xs text-zinc-500">ไม่พบ ultimate</div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {openSpecialSkillFilter ? (
+              <div className="mt-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-2">
+                <div className="flex items-center gap-2">
+                  <div className="text-xs font-semibold">กรองศิษย์พี่</div>
+                  <button
+                    type="button"
+                    className="ml-auto text-xs underline text-zinc-500"
+                    onClick={() => setSpecialSkillFilter(new Set())}
+                  >
+                    ล้าง
+                  </button>
+                </div>
+                <div className="mt-2 space-y-1 max-h-52 overflow-auto pr-1">
+                  {specialSkills.map((s) => {
+                    const checked = specialSkillFilter.has(Number(s.id));
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={cn(
+                          "w-full flex items-center gap-2 rounded-xl border px-2 py-1 text-xs text-left",
+                          checked ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
+                        )}
+                        onClick={() => setSpecialSkillFilter((prev) => toggleSet(prev, Number(s.id)))}
+                      >
+                        {s.special_skill_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={s.special_skill_url} alt={s.name} className="h-5 w-5 rounded-md object-cover" />
+                        ) : (
+                          <div className="h-5 w-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+                        )}
+                        <span className="truncate">{s.name}</span>
+                      </button>
+                    );
+                  })}
+                  {specialSkills.length === 0 ? (
+                    <div className="text-xs text-zinc-500">ไม่พบศิษย์พี่</div>
                   ) : null}
                 </div>
               </div>
@@ -1251,7 +1370,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
             </div>
 
             <div
-              className="mt-2 space-y-2 max-h-[70vh] overflow-auto pr-1"
+              className="mt-2 flex-1 min-h-0 space-y-2 overflow-auto pr-1"
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleDrop({ type: "ROSTER_BIN" })}
             >
@@ -1276,11 +1395,6 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                       title={onLeave ? `ลา: ${leaveReasonByMemberRef.current.get(m.id) ?? ""}` : undefined}
                     >
                       {renderMember(m)}
-                      {onLeave ? (
-                        <div className="mt-1 text-[10px] text-zinc-500">
-                          * คนลาวันนี้: ลากลงตี้ไม่ได้ (แสดงไว้เพื่อเช็ค)
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })
@@ -1296,12 +1410,12 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
           )}
         >
           <div className="flex items-center gap-2">
-            <div className="font-semibold">จัดปาร์ตี้ (10 x 6 = 60)</div>
+            <div className="font-semibold">จัดปาร์ตี้</div>
             <div className="ml-auto text-xs text-zinc-500">Drag & Drop • ลากลงช่องว่างเพื่อเอาออก</div>
           </div>
 
           {/* Wider cards for readability: reduce columns on large screens */}
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
             {parties.map((p) => (
               <div key={p.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 overflow-hidden">
                 <div className="h-2 w-full" style={{ backgroundColor: p.color ?? "transparent" }} />
@@ -1373,67 +1487,56 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                       <div
                         key={idx}
                         className={cn(
-                  "group flex items-start gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 py-2 min-h-[56px]",
+                  "group flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 py-1.5 min-h-[44px]",
                           canEdit ? "" : "opacity-90"
                         )}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => handleDrop({ type: "SLOT", partyId: p.id, index: idx })}
                       >
-                        <div className="w-6 shrink-0 pt-1 text-[11px] text-zinc-500 tabular-nums">{idx + 1}</div>
+                        <div className="w-5 shrink-0 text-[11px] text-zinc-400 tabular-nums">{idx + 1}</div>
 
                         <div className="min-w-0 flex-1">
                           {mem ? (
                             <div className="min-w-0 w-full">
-                              {/* drag handle (icon + name) */}
+                              {/* drag handle (icon + name) — always visible */}
                               <div
                                 draggable={draggable}
                                 onDragStart={() => draggable && onDragStartSlot(p.id, idx, mem.id)}
                                 onDragEnd={clearDrag}
                                 className={cn(
-                                  "flex items-center gap-2 min-w-0",
+                                  "flex items-center gap-1.5 min-w-0 w-full",
                                   draggable ? "cursor-grab active:cursor-grabbing" : "opacity-80 cursor-not-allowed"
                                 )}
                                 title={mem.name}
                               >
-                                <div className="flex items-start gap-2 min-w-0 w-full">
-                                  {cls?.icon_url ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={cls.icon_url}
-                                      alt={cls.name}
-                                      className="h-5 w-5 rounded-md object-cover border border-zinc-200 dark:border-zinc-800"
-                                    />
-                                  ) : (
-                                    <div className="h-5 w-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+                                {cls?.icon_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={cls.icon_url}
+                                    alt={cls.name}
+                                    className="h-5 w-5 shrink-0 rounded-md object-cover border border-zinc-200 dark:border-zinc-800"
+                                  />
+                                ) : (
+                                  <div className="h-5 w-5 shrink-0 rounded-md bg-zinc-200 dark:bg-zinc-800" />
+                                )}
+                                <div
+                                  className={cn(
+                                    "min-w-0 flex-1 truncate text-[13px] font-semibold leading-5",
+                                    onLeave ? "text-red-700 dark:text-red-300" : "text-zinc-900 dark:text-zinc-100"
                                   )}
-
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <div
-                                        className={cn(
-                                          "min-w-0 flex-1 truncate text-[14px] font-semibold leading-5",
-                                          onLeave ? "text-red-700 dark:text-red-300" : "text-zinc-900 dark:text-zinc-100"
-                                        )}
-                                        style={!onLeave && nameColor ? { color: nameColor } : undefined}
-                                        title={mem.name}
-                                      >
-                                        {mem.name}
-                                      </div>
-                                      {onLeave ? (
-                                        <span
-                                          className="shrink-0 rounded-full border border-red-600/50 bg-red-600/10 px-2 py-0.5 text-[10px] text-red-700 dark:text-red-300"
-                                          title="ลา"
-                                        >
-                                          ลา
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                  </div>
+                                  style={!onLeave && nameColor ? { color: nameColor } : undefined}
+                                >
+                                  {mem.name}
                                 </div>
+                                {onLeave ? (
+                                  <span className="shrink-0 rounded-full border border-red-600/50 bg-red-600/10 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-300">
+                                    ลา
+                                  </span>
+                                ) : null}
                               </div>
 
-                              {/* per-person color + note */}
-                              <div className="mt-1 flex items-center gap-2">
+                              {/* per-person color + note — hidden until hover */}
+                              <div className="mt-1 hidden group-hover:flex items-center gap-1.5">
                                 <select
                                   value={nameColor ?? ""}
                                   onChange={(e) => {
@@ -1449,7 +1552,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                                     );
                                   }}
                                   disabled={!canEdit}
-                                  className="h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 text-xs"
+                                  className="h-7 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-1.5 text-[11px]"
                                   title="สีชื่อ (รายคน)"
                                 >
                                   {NAME_COLOR_PRESETS.map((c) => (
@@ -1458,7 +1561,6 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                                     </option>
                                   ))}
                                 </select>
-
                                 <input
                                   value={note}
                                   onChange={(e) => {
@@ -1475,7 +1577,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                                   }}
                                   disabled={!canEdit}
                                   placeholder="Note"
-                                  className="h-8 flex-1 min-w-0 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 text-xs"
+                                  className="h-7 flex-1 min-w-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-1.5 text-[11px]"
                                   title="โน้ต (แสดงในผังทัพวอ)"
                                 />
                               </div>
@@ -1510,13 +1612,11 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                 </div>
 
                 <div
-                  className="mt-3 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/30 p-3 text-center text-xs text-zinc-500"
+                  className="mt-1 h-2 rounded border border-dashed border-zinc-200 dark:border-zinc-800"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => handleDrop({ type: "ROSTER_BIN" })}
-                  title="ลากสมาชิกจากช่องมาวางที่นี่เพื่อเอาออกจากตี้"
-                >
-                  ลากสมาชิกจากช่องมาวางที่นี่เพื่อเอาออกจากตี้
-                </div>
+                  title="ลากมาวางที่นี่เพื่อเอาออกจากตี้"
+                />
 
                 </div>
               </div>
@@ -1525,13 +1625,13 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
         </div>
 
         {showRight ? (
-        <div className="lg:col-span-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3">
+        <div className="lg:col-span-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3 flex flex-col lg:sticky lg:top-2 lg:h-[calc(100vh-80px)]">
           <div className="flex items-center gap-2">
             <div className="font-semibold">ประวัติการ์ด</div>
             <div className="ml-auto text-xs text-zinc-500">{plansLoading ? "กำลังโหลด..." : `${plansTotal}`}</div>
           </div>
 
-          <div className="mt-2 space-y-2 max-h-[70vh] overflow-auto pr-1">
+          <div className="mt-2 flex-1 min-h-0 space-y-2 overflow-auto pr-1">
             {plans.map((p) => (
               <div key={p.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 p-3">
                 <div className="flex items-start gap-2">
@@ -1546,7 +1646,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                       ดู
                     </button>
                     {canEdit ? (
-                      <button type="button" className="text-xs underline text-red-600" onClick={() => deletePlan(p.id)}>
+                      <button type="button" className="text-xs underline text-red-600" onClick={() => setDeleteConfirmId(p.id)}>
                         ลบ
                       </button>
                     ) : null}
@@ -1677,7 +1777,33 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
           </div>
         </div>
       ) : null}
-{planModalOpen && selectedPlan ? (
+{/* Delete confirm modal */}
+      {deleteConfirmId ? (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteConfirmId(null)} />
+          <div className="relative w-full max-w-xs rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 text-center shadow-xl">
+            <p className="text-sm font-semibold mb-1">ลบประวัติการ์ดนี้?</p>
+            <p className="text-xs text-zinc-500 mb-5">ไม่สามารถกู้คืนได้</p>
+            <div className="flex gap-2 justify-center">
+              <button onClick={() => setDeleteConfirmId(null)} className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm">
+                ยกเลิก
+              </button>
+              <button onClick={() => deletePlan(deleteConfirmId)} className="h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm">
+                ลบ
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Delete success toast */}
+      {deleteToast ? (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1100] bg-green-500 text-white px-6 py-3 rounded-xl text-sm shadow-lg pointer-events-none">
+          ลบสำเร็จ ✓
+        </div>
+      ) : null}
+
+      {planModalOpen && selectedPlan ? (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setPlanModalOpen(false)} />
           <div className="relative w-full max-w-4xl rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">

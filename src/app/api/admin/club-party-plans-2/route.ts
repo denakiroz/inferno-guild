@@ -58,12 +58,18 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const our_name = String(body?.our_name ?? "Inferno").trim() || "Inferno";
     const opponent_name = String(body?.opponent_name ?? "").trim();
-    const match_date = String(body?.match_date ?? "").trim();
+    const match_date_raw = String(body?.match_date ?? "").trim();
+    const match_time_raw = String(body?.match_time ?? "").trim();
     const parties = body?.parties;
 
     if (!opponent_name) return NextResponse.json({ ok: false, error: "opponent_name required" }, { status: 400 });
-    if (!match_date) return NextResponse.json({ ok: false, error: "match_date required" }, { status: 400 });
+    if (!match_date_raw) return NextResponse.json({ ok: false, error: "match_date required" }, { status: 400 });
     if (!Array.isArray(parties)) return NextResponse.json({ ok: false, error: "parties must be array" }, { status: 400 });
+
+    // combine date + time → ISO timestamp (e.g. "2026-04-09T21:30:00")
+    const match_date = match_time_raw
+      ? `${match_date_raw}T${match_time_raw}:00`
+      : `${match_date_raw}T00:00:00`;
 
     const created_by = (session as any)?.userId ?? (session as any)?.user?.id ?? null;
 

@@ -57,9 +57,28 @@ export async function GET() {
       }
     }
 
+    // fetch special skill mapping
+    let specialByMember = new Map<number, number[]>();
+    if (ids.length > 0) {
+      const { data: ms } = await supabaseAdmin
+        .from("member_special_skill")
+        .select("member_id, special_skill_id")
+        .in("member_id", ids);
+
+      for (const r of (ms ?? []) as any[]) {
+        const mid = Number(r.member_id);
+        const sid = Number(r.special_skill_id);
+        if (!Number.isFinite(mid) || !Number.isFinite(sid)) continue;
+        const arr = specialByMember.get(mid) ?? [];
+        arr.push(sid);
+        specialByMember.set(mid, arr);
+      }
+    }
+
     const enriched = members.map((m) => ({
       ...m,
       ultimate_skill_ids: ultimateByMember.get(Number(m.id)) ?? [],
+      special_skill_ids:  specialByMember.get(Number(m.id))  ?? [],
     }));
 
     return NextResponse.json({ ok: true, members: enriched });
