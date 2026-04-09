@@ -37,7 +37,7 @@ export async function buildLeaderboard(): Promise<BuildResult> {
   // 1. Records — include batch_id for per-batch averaging
   const { data: records, error: recErr } = await supabaseAdmin
     .from("member_potential_records")
-    .select("batch_id,userdiscordid,kill,assist,supply,damage_player,damage_fort,heal,damage_taken,death,revive");
+    .select("batch_id,userdiscordid,class_id,kill,assist,supply,damage_player,damage_fort,heal,damage_taken,death,revive");
   if (recErr) return { ok: false, error: recErr.message };
 
   // 2. Active members
@@ -64,7 +64,29 @@ export async function buildLeaderboard(): Promise<BuildResult> {
     });
   }
 
-  // 3. Weights
+  // 3. Per-record class_id snapshot — ใช้ class ณ เวลา import ไม่ใช่ class ปัจจุบัน
+  //    key = userdiscordid → class_id ที่พบบ่อยที่สุด (mode) จากทุก record
+  const uidClassVotes = new Map<string, Map<number | null, number>>();
+  for (const r of records ?? []) {
+    const uid = String(r.userdiscordid ?? "").trim();
+    if (!uid) continue;
+    const cid: number | null = (r as any).class_id != null ? Number((r as any).class_id) : null;
+    if (!uidClassVotes.has(uid)) uidClassVotes.set(uid, new Map());
+    const votes = uidClassVotes.get(uid)!;
+    votes.set(cid, (votes.get(cid) ?? 0) + 1);
+  }
+  // เลือก class_id ที่ vote เยอะสุด (batch ล่าสุดน่าจะถูก — แต่ใช้ mode ก็ fair พอ)
+  const recordClassMap = new Map<string, number | null>();
+  for (const [uid, votes] of uidClassVotes.entries()) {
+    let bestCid: number | null = null;
+    let bestCount = -1;
+    for (const [cid, count] of votes.entries()) {
+      if (count > bestCount) { bestCount = count; bestCid = cid; }
+    }
+    recordClassMap.set(uid, bestCid);
+  }
+
+  // 4. Weights
   const { data: weights } = await supabaseAdmin
     .from("member_potential_weights")
     .select("class_id,category,weight,enabled");
@@ -141,7 +163,8 @@ export async function buildLeaderboard(): Promise<BuildResult> {
 
   const leaderboard: LeaderboardItem[] = Array.from(memberMap.entries()).map(([uid, mem]) => {
     const ua = userAggMap.get(uid);
-    const classId = mem.class_id;
+    // ใช้ class_id จาก record snapshot ถ้ามี ไม่งั้น fallback เป็น member ปัจจุบัน
+    const classId = recordClassMap.has(uid) ? recordClassMap.get(uid)! : mem.class_id;
     const role = classToRole(classId);
 
     const avgs: Record<Category, number> = ua

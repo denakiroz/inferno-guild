@@ -40,6 +40,7 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const label = String(body?.label ?? "").trim() || new Date().toLocaleDateString("th-TH");
+    const opponent_guild = body?.opponent_guild ? String(body.opponent_guild).trim() || null : null;
     const rows: any[] = Array.isArray(body?.rows) ? body.rows : [];
 
     if (rows.length === 0)
@@ -50,28 +51,48 @@ export async function POST(req: Request) {
     // Create batch
     const { data: batch, error: bErr } = await supabaseAdmin
       .from("member_potential_batches")
-      .insert({ label, imported_by })
+      .insert({ label, imported_by, opponent_guild })
       .select("id")
       .single();
     if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 });
 
+    // Snapshot class_id ณ เวลา import — กัน class เปลี่ยนทีหลัง
+    const discordIds = rows
+      .map((r) => String(r.userdiscordid ?? "").trim())
+      .filter(Boolean);
+
+    const { data: memberRows } = await supabaseAdmin
+      .from("member")
+      .select("discord_user_id, class_id")
+      .in("discord_user_id", discordIds);
+
+    const classMap = new Map<string, number | null>();
+    for (const m of memberRows ?? []) {
+      if (m.discord_user_id)
+        classMap.set(String(m.discord_user_id), m.class_id ? Number(m.class_id) : null);
+    }
+
     // Insert records
     const records = rows
       .filter((r) => String(r.userdiscordid ?? "").trim())
-      .map((r) => ({
-        batch_id: batch.id,
-        userdiscordid: String(r.userdiscordid ?? "").trim(),
-        discordname: String(r.discordname ?? "").trim(),
-        kill: Number(r.kill) || 0,
-        assist: Number(r.assist) || 0,
-        supply: Number(r.supply) || 0,
-        damage_player: Number(r.damage_player) || 0,
-        damage_fort: Number(r.damage_fort) || 0,
-        heal: Number(r.heal) || 0,
-        damage_taken: Number(r.damage_taken) || 0,
-        death: Number(r.death) || 0,
-        revive: Number(r.revive) || 0,
-      }));
+      .map((r) => {
+        const uid = String(r.userdiscordid ?? "").trim();
+        return {
+          batch_id: batch.id,
+          userdiscordid: uid,
+          discordname: String(r.discordname ?? "").trim(),
+          class_id: classMap.get(uid) ?? null,   // snapshot อาชีพ ณ เวลานี้
+          kill: Number(r.kill) || 0,
+          assist: Number(r.assist) || 0,
+          supply: Number(r.supply) || 0,
+          damage_player: Number(r.damage_player) || 0,
+          damage_fort: Number(r.damage_fort) || 0,
+          heal: Number(r.heal) || 0,
+          damage_taken: Number(r.damage_taken) || 0,
+          death: Number(r.death) || 0,
+          revive: Number(r.revive) || 0,
+        };
+      });
 
     const { error: rErr } = await supabaseAdmin
       .from("member_potential_records")

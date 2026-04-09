@@ -3,6 +3,238 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
+// ── Player History Modal ───────────────────────────────────────────
+type BatchStat = {
+  batch_id: string;
+  label: string;
+  imported_at: string;
+  opponent_guild?: string | null;
+  class_id: number | null;
+  avgs: Record<string, number>;
+  score: number;
+};
+
+function fmtDate(iso: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear().toString().slice(2)}`;
+}
+
+function PlayerModal({
+  row,
+  onClose,
+}: {
+  row: LeaderboardRow;
+  onClose: () => void;
+}) {
+  const [allBatches, setAllBatches] = useState<BatchStat[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [fromDate, setFromDate]     = useState("");
+  const [toDate, setToDate]         = useState("");
+
+  useEffect(() => {
+    fetch(`/api/admin/member-potential/player?uid=${encodeURIComponent(row.userdiscordid)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.ok && Array.isArray(j.batches) && j.batches.length > 0) {
+          setAllBatches(j.batches);
+          // default range: batch เก่าสุด → ใหม่สุด (sorted desc แล้ว)
+          const dates = j.batches.map((b: BatchStat) => b.imported_at.slice(0, 10)).sort();
+          setFromDate(dates[0]);
+          setToDate(dates[dates.length - 1]);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [row.userdiscordid]);
+
+  // filter by range แล้วเรียง newest → oldest
+  const batches = allBatches
+    .filter((b) => {
+      const d = b.imported_at.slice(0, 10);
+      return (!fromDate || d >= fromDate) && (!toDate || d <= toDate);
+    })
+    .sort((a, b) => b.imported_at.localeCompare(a.imported_at));
+
+  const cats: (keyof typeof CAT_LABELS)[] = [
+    "kill", "assist", "supply", "damage_player", "damage_fort",
+    "heal", "damage_taken", "death", "revive",
+  ];
+
+  const maxPerCat = Object.fromEntries(
+    cats.map((c) => [c, Math.max(...batches.map((b) => b.avgs[c] ?? 0), 1)])
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-5 py-4 flex items-center gap-3">
+          {row.class_icon && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={row.class_icon} alt="" className="w-8 h-8 rounded-lg ring-1 ring-zinc-200 dark:ring-zinc-700" />
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{row.discordname}</div>
+            <div className="text-xs text-zinc-400">{row.class_name} · {ROLE_LABEL[row.role]} · คะแนน {fmtScore(row.score)}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+          >✕</button>
+        </div>
+
+        {/* Date range picker */}
+        <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-5 py-3 flex flex-wrap items-center gap-3">
+          <span className="text-xs font-medium text-zinc-500">ช่วงวันที่:</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-8 px-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-red-400"
+            />
+            <span className="text-xs text-zinc-400">ถึง</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-8 px-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-red-400"
+            />
+          </div>
+
+          {/* Batch quick-select pills */}
+          {allBatches.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 ml-2">
+              {/* Quick: 3 batch / 6 batch / ทั้งหมด — dedup based on actual count */}
+              {((): { n: number; label: string }[] => {
+                const opts: { n: number; label: string }[] = [];
+                if (allBatches.length > 3) opts.push({ n: 3, label: "3 batch" });
+                if (allBatches.length > 6) opts.push({ n: 6, label: "6 batch" });
+                opts.push({ n: allBatches.length, label: "ทั้งหมด" });
+                return opts;
+              })().map(({ n, label: pillLabel }) => {
+                const sorted = [...allBatches].sort((a, b) => b.imported_at.localeCompare(a.imported_at));
+                const targetFrom = sorted[Math.min(n, sorted.length) - 1]?.imported_at.slice(0, 10) ?? "";
+                const targetTo   = sorted[0]?.imported_at.slice(0, 10) ?? "";
+                const active = fromDate === targetFrom && toDate === targetTo;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => { setFromDate(targetFrom); setToDate(targetTo); }}
+                    className={`h-7 px-2.5 rounded-lg text-xs border transition ${
+                      active
+                        ? "bg-red-600 text-white border-red-600"
+                        : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:border-red-300 hover:text-red-500"
+                    }`}
+                  >
+                    {pillLabel}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <span className="ml-auto text-xs text-zinc-400">
+            {batches.length} batch
+          </span>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-auto p-5">
+          {loading ? (
+            <div className="py-12 text-center text-sm text-zinc-400">กำลังโหลด...</div>
+          ) : batches.length === 0 ? (
+            <div className="py-12 text-center text-sm text-zinc-400">ไม่มีข้อมูลในช่วงวันที่เลือก</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                  <th className="py-2 pr-4 text-left font-semibold text-zinc-500 w-28">หมวด</th>
+                  {batches.map((b, i) => (
+                    <th key={b.batch_id} className="py-2 px-2 text-center font-semibold whitespace-nowrap min-w-[90px]">
+                      <div className={i === 0 ? "text-red-600 dark:text-red-400" : "text-zinc-500"}>
+                        {b.label || fmtDate(b.imported_at)}
+                      </div>
+                      <div className="text-[10px] font-normal text-zinc-400">{fmtDate(b.imported_at)}</div>
+                      {b.opponent_guild && (
+                        <div className="text-[10px] font-normal text-amber-500 truncate max-w-[90px]" title={b.opponent_guild}>
+                          vs {b.opponent_guild}
+                        </div>
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {/* Score row */}
+                <tr className="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/40">
+                  <td className="py-2 pr-4 font-bold text-red-600 dark:text-red-400 whitespace-nowrap text-xs">⭐ คะแนน</td>
+                  {batches.map((b, i) => (
+                    <td key={b.batch_id} className="py-2 px-2 text-center">
+                      <span className={`tabular-nums font-bold text-sm ${
+                        i === 0 ? "text-red-600 dark:text-red-400" : "text-zinc-500 dark:text-zinc-400"
+                      }`}>
+                        {fmtScore(b.score)}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+                {cats.map((cat) => {
+                  const max = maxPerCat[cat];
+                  return (
+                    <tr key={cat} className="border-b border-zinc-50 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition">
+                      <td className={`py-2 pr-4 font-medium whitespace-nowrap ${cat === "death" ? "text-red-500" : "text-zinc-600 dark:text-zinc-400"}`}>
+                        {CAT_LABELS[cat as Category]}
+                      </td>
+                      {batches.map((b, i) => {
+                        const val    = b.avgs[cat] ?? 0;
+                        const pct    = max > 0 ? (val / max) * 100 : 0;
+                        const isLatest = i === 0;
+                        return (
+                          <td key={b.batch_id} className="py-2 px-2">
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="w-full h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                                <div
+                                  className={`h-1.5 rounded-full ${
+                                    cat === "death" ? "bg-red-400"
+                                    : isLatest ? "bg-gradient-to-r from-orange-400 to-red-500"
+                                    : "bg-zinc-300 dark:bg-zinc-600"
+                                  }`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className={`tabular-nums font-semibold ${
+                                isLatest
+                                  ? cat === "death" ? "text-red-500" : "text-zinc-900 dark:text-zinc-100"
+                                  : "text-zinc-400"
+                              }`}>
+                                {fmtAvg(val)}
+                              </span>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Types ----------
 const CATEGORIES = [
   "kill", "assist", "supply", "damage_player",
@@ -45,6 +277,7 @@ type BatchRow = {
   label: string;
   imported_at: string;
   record_count: number;
+  opponent_guild?: string | null;
 };
 
 type WeightRow = {
@@ -87,6 +320,7 @@ export default function MemberPotentialClient() {
   const [loadingLB, setLoadingLB] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortAsc, setSortAsc] = useState(false);
+  const [playerModal, setPlayerModal] = useState<LeaderboardRow | null>(null);
   const [search, setSearch] = useState("");
   const [guildFilter, setGuildFilter] = useState<number | null>(null);
   const [roleFilter, setRoleFilter] = useState<Role | null>(null);
@@ -99,6 +333,11 @@ export default function MemberPotentialClient() {
   const [deletingBatch, setDeletingBatch] = useState<string | null>(null);
   const [deleteToast, setDeleteToast] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Import modal
+  const [pendingImport, setPendingImport] = useState<{ records: any[]; defaultLabel: string } | null>(null);
+  const [importLabel, setImportLabel] = useState("");
+  const [importOpponentGuild, setImportOpponentGuild] = useState("");
 
   // Weights
   const [weights, setWeights] = useState<WeightRow[]>([]);
@@ -162,12 +401,11 @@ export default function MemberPotentialClient() {
     if (tab === "weights") loadWeights();
   }, [tab, loadBatches, loadWeights]);
 
-  // ---------- Import ----------
+  // ---------- Import: parse file → open confirm modal ----------
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    setImporting(true);
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
@@ -184,9 +422,8 @@ export default function MemberPotentialClient() {
       const catIndices: Partial<Record<Category, number>> = {};
       for (const [hdr, cat] of Object.entries(EXCEL_COL_MAP)) {
         const idx = headerRow.indexOf(hdr);
-        if (idx >= 0 && cat !== "kill") catIndices[cat] = idx; // handled above
+        if (idx >= 0 && cat !== "kill") catIndices[cat] = idx;
       }
-      // fix kill separately
       const killIdx = headerRow.indexOf("ฆ่า");
       if (killIdx >= 0) catIndices["kill"] = killIdx;
 
@@ -203,7 +440,6 @@ export default function MemberPotentialClient() {
           const idx = catIndices[cat];
           rec[cat] = idx !== undefined ? (Number(r[idx]) || 0) : 0;
         }
-        // ข้ามถ้า stat ทุกตัวเป็น 0 หมด
         const allZero = CATEGORIES.every((cat) => rec[cat] === 0);
         if (allZero) continue;
         records.push(rec);
@@ -211,16 +447,39 @@ export default function MemberPotentialClient() {
 
       if (records.length === 0) { showToast("ไม่พบข้อมูลในไฟล์", false); return; }
 
+      // Open confirm modal instead of immediately POSTing
+      const defaultLabel = new Date().toLocaleDateString("th-TH");
+      setImportLabel(batchLabel || defaultLabel);
+      setImportOpponentGuild("");
+      setPendingImport({ records, defaultLabel });
+    } catch (err: any) {
+      showToast(`เกิดข้อผิดพลาด: ${err?.message ?? "unknown"}`, false);
+    }
+  };
+
+  // ---------- Import: confirm POST ----------
+  const handleConfirmImport = async () => {
+    if (!pendingImport) return;
+    const { records } = pendingImport;   // capture before clearing
+    setImporting(true);
+    setPendingImport(null);
+    try {
       const res = await fetch("/api/admin/member-potential", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ label: batchLabel || undefined, rows: records }),
+        body: JSON.stringify({
+          label: importLabel.trim() || undefined,
+          opponent_guild: importOpponentGuild.trim() || undefined,
+          rows: records,
+        }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) { showToast(`Import ไม่สำเร็จ: ${json.error ?? "unknown"}`, false); return; }
 
       showToast(`Import สำเร็จ ${json.count} คน ✓`);
       setBatchLabel("");
+      setImportLabel("");
+      setImportOpponentGuild("");
       await loadLeaderboard();
       if (tab === "batches") await loadBatches();
     } catch (err: any) {
@@ -461,7 +720,15 @@ export default function MemberPotentialClient() {
                   ) : sorted.map((r, i) => (
                     <tr key={r.userdiscordid} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition">
                       <td className="px-3 py-2 text-xs text-zinc-400">{i + 1}</td>
-                      <td className="px-3 py-2 font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">{r.discordname}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => setPlayerModal(r)}
+                          className="font-medium text-zinc-800 dark:text-zinc-200 hover:text-red-600 dark:hover:text-red-400 hover:underline transition-colors text-left"
+                        >
+                          {r.discordname}
+                        </button>
+                      </td>
                       <td className="px-3 py-2 text-xs text-zinc-500 whitespace-nowrap">
                         {r.class_icon && (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -500,6 +767,7 @@ export default function MemberPotentialClient() {
             <thead>
               <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">ชื่อ Batch</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">กิลที่เจอ</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">วันที่ Import</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500">จำนวนคน</th>
                 <th className="px-4 py-3" />
@@ -513,6 +781,7 @@ export default function MemberPotentialClient() {
               ) : batches.map((b) => (
                 <tr key={b.id} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition">
                   <td className="px-4 py-3 font-medium text-zinc-800 dark:text-zinc-200">{b.label || "-"}</td>
+                  <td className="px-4 py-3 text-xs text-amber-600 dark:text-amber-400">{b.opponent_guild || <span className="text-zinc-400">-</span>}</td>
                   <td className="px-4 py-3 text-xs text-zinc-500">{new Date(b.imported_at).toLocaleString("th-TH")}</td>
                   <td className="px-4 py-3 text-center text-xs text-zinc-600">{b.record_count} คน</td>
                   <td className="px-4 py-3 text-right">
@@ -704,6 +973,73 @@ export default function MemberPotentialClient() {
           {toast.msg}
         </div>
       ) : null}
+
+      {/* Player history modal */}
+      {playerModal && (
+        <PlayerModal row={playerModal} onClose={() => setPlayerModal(null)} />
+      )}
+
+      {/* Import confirm modal */}
+      {pendingImport && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setPendingImport(null)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">📥 ยืนยัน Import</div>
+            <p className="text-xs text-zinc-500">พบข้อมูล {pendingImport.records.length} คน</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+                  ชื่อ Batch <span className="text-zinc-400">(ใส่หรือปล่อยว่าง)</span>
+                </label>
+                <input
+                  type="text"
+                  value={importLabel}
+                  onChange={(e) => setImportLabel(e.target.value)}
+                  placeholder={pendingImport.defaultLabel}
+                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+                  ชื่อกิลที่เจอ <span className="text-zinc-400">(ใส่หรือปล่อยว่าง)</span>
+                </label>
+                <input
+                  type="text"
+                  value={importOpponentGuild}
+                  onChange={(e) => setImportOpponentGuild(e.target.value)}
+                  placeholder="เช่น Guild XYZ"
+                  autoFocus
+                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={importing}
+                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50 transition"
+              >
+                {importing ? "กำลัง Import..." : "✓ Import"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingImport(null)}
+                className="h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+              >
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
