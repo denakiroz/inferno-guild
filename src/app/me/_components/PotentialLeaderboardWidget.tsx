@@ -30,6 +30,8 @@ type Props = {
   myGuild?: number | null;
 };
 
+type Role = "dps" | "tank" | "healer";
+
 type RankedRow = {
   rank: number;
   userdiscordid: string;
@@ -38,6 +40,7 @@ type RankedRow = {
   class_icon: string;
   guild: number | null;
   score: number;
+  role: Role;
 };
 
 const MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
@@ -420,13 +423,11 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
           setRoleTab(cid === 1 ? "tank" : cid === 5 ? "healer" : "dps");
         }
         if (lb.ok && Array.isArray(lb.items)) {
-          // กรองเฉพาะ guild เดียวกัน แล้ว re-rank
-          const filtered: RankedRow[] = myGuild
-            ? lb.items
-                .filter((r: RankedRow) => r.guild === myGuild)
-                .map((r: RankedRow, i: number) => ({ ...r, rank: i + 1 }))
-            : lb.items.map((r: RankedRow, i: number) => ({ ...r, rank: i + 1 }));
-          setLbItems(filtered);
+          // เก็บทั้งหมดไว้ก่อน (filter role ตอน render เพราะต้องรู้ roleTab)
+          const guildFiltered: RankedRow[] = myGuild
+            ? lb.items.filter((r: RankedRow) => r.guild === myGuild)
+            : lb.items;
+          setLbItems(guildFiltered);
         }
       })
       .catch(() => {})
@@ -552,19 +553,24 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
         ))}
       </div>
 
-      {/* ── Top 3 Leaderboard ── */}
-      {lbItems.length > 0 && (
+      {/* ── Top 3 Leaderboard (filtered by role + re-ranked) ── */}
+      {(() => {
+        const roleItems = lbItems
+          .filter((r) => r.role === roleTab)
+          .map((r, i) => ({ ...r, rank: i + 1 }));
+        if (roleItems.length === 0) return null;
+        return (
         <div className="px-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-1.5 mb-2">
             <Trophy className="h-3.5 w-3.5 text-amber-500" />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Top 3 · {myGuild ? `Inferno-${myGuild}` : "ทั้งหมด"}
+              Top 3 · {roleTab === "dps" ? "DPS" : roleTab === "tank" ? "หมัด" : "พระ"} · {myGuild ? `Inferno-${myGuild}` : "ทั้งหมด"}
             </span>
           </div>
           <div className="space-y-1.5">
-            {lbItems.slice(0, 3).map((row) => {
+            {roleItems.slice(0, 3).map((row) => {
               const isMe = row.userdiscordid === myDiscordId;
-              const maxScore = lbItems[0]?.score ?? 1;
+              const maxScore = roleItems[0]?.score ?? 1;
               const pct = maxScore > 0 ? (row.score / maxScore) * 100 : 0;
               return (
                 <div
@@ -619,10 +625,10 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
 
             {/* My rank if outside top 3 */}
             {(() => {
-              const myIdx = lbItems.findIndex((r) => r.userdiscordid === myDiscordId);
+              const myIdx = roleItems.findIndex((r) => r.userdiscordid === myDiscordId);
               if (myIdx < 3 || myIdx === -1) return null;
-              const myRow = lbItems[myIdx];
-              const maxScore = lbItems[0]?.score ?? 1;
+              const myRow = roleItems[myIdx];
+              const maxScore = roleItems[0]?.score ?? 1;
               const pct = maxScore > 0 ? (myRow.score / maxScore) * 100 : 0;
               return (
                 <>
@@ -657,7 +663,8 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
             })()}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Mock banner */}
       {isMock && (

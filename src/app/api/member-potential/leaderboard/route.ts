@@ -19,16 +19,21 @@ export async function GET() {
     const result = await buildLeaderboard();
     if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
 
-    // Assign rank and expose only public fields (no avgs detail)
-    const ranked = result.items.map((r, i) => ({
-      rank: i + 1,
-      userdiscordid: r.userdiscordid,
-      name: r.discordname,
-      class_name: r.class_name,
-      class_icon: r.class_icon,
-      guild: r.guild,
-      score: r.score,
-    }));
+    // Assign rank per role group, expose public fields
+    const roleRanks: Record<string, number> = {};
+    const ranked = result.items.map((r) => {
+      roleRanks[r.role] = (roleRanks[r.role] ?? 0) + 1;
+      return {
+        rank: roleRanks[r.role],
+        userdiscordid: r.userdiscordid,
+        name: r.discordname,
+        class_name: r.class_name,
+        class_icon: r.class_icon,
+        guild: r.guild,
+        score: r.score,
+        role: r.role,
+      };
+    });
 
     return NextResponse.json({ ok: true, items: ranked });
   } catch (e: any) {

@@ -7,6 +7,14 @@ export const CATEGORIES = [
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
 
+export type Role = "dps" | "tank" | "healer";
+
+export function classToRole(class_id: number | null): Role {
+  if (class_id === 1) return "tank";
+  if (class_id === 5) return "healer";
+  return "dps";
+}
+
 export type LeaderboardItem = {
   userdiscordid: string;
   discordname: string;
@@ -16,7 +24,9 @@ export type LeaderboardItem = {
   guild: number | null;
   batch_count: number;
   avgs: Record<Category, number>;
-  score: number;
+  rawScore: number;   // before normalization
+  score: number;      // normalized 0–100 within role group
+  role: Role;
 };
 
 type BuildResult =
@@ -132,6 +142,7 @@ export async function buildLeaderboard(): Promise<BuildResult> {
   const leaderboard: LeaderboardItem[] = Array.from(memberMap.entries()).map(([uid, mem]) => {
     const ua = userAggMap.get(uid);
     const classId = mem.class_id;
+    const role = classToRole(classId);
 
     const avgs: Record<Category, number> = ua
       ? Object.fromEntries(
@@ -153,23 +164,23 @@ export async function buildLeaderboard(): Promise<BuildResult> {
       guild: mem.guild,
       batch_count: ua?.batchCount ?? 0,
       avgs,
-      score: Math.round(rawScore * 10) / 10,
+      rawScore,
+      score: 0, // filled below
+      role,
     };
   });
 
-  // 6. Min-max normalize to 0–100
-  const rawScores = leaderboard.map((r) => r.score);
-  const minScore = Math.min(...rawScores);
-  const maxScore = Math.max(...rawScores);
-  const range = maxScore - minScore;
-
+  // 6. Raw score — ไม่ normalize, score = rawScore ปัดทศนิยม 1 ตำแหน่ง
   for (const r of leaderboard) {
-    r.score = range > 0
-      ? Math.round(((r.score - minScore) / range) * 1000) / 10
-      : 0;
+    r.score = Math.round(r.rawScore * 10) / 10;
   }
 
-  leaderboard.sort((a, b) => b.score - a.score);
+  // Sort by role group first, then by score desc within group
+  leaderboard.sort((a, b) => {
+    const roleOrder: Record<Role, number> = { dps: 0, tank: 1, healer: 2 };
+    if (a.role !== b.role) return roleOrder[a.role] - roleOrder[b.role];
+    return b.score - a.score;
+  });
 
   return { ok: true, items: leaderboard };
 }

@@ -24,6 +24,9 @@ const EXCEL_COL_MAP: Record<string, Category> = {
   ฮีล: "heal", รับดาเมจ: "damage_taken", ตาย: "death", ชุบ: "revive",
 };
 
+type Role = "dps" | "tank" | "healer";
+const ROLE_LABEL: Record<Role, string> = { dps: "DPS", tank: "หมัด", healer: "พระ" };
+
 type LeaderboardRow = {
   userdiscordid: string;
   discordname: string;
@@ -34,6 +37,7 @@ type LeaderboardRow = {
   batch_count: number;
   avgs: Record<Category, number>;
   score: number;
+  role: Role;
 };
 
 type BatchRow = {
@@ -85,6 +89,7 @@ export default function MemberPotentialClient() {
   const [sortAsc, setSortAsc] = useState(false);
   const [search, setSearch] = useState("");
   const [guildFilter, setGuildFilter] = useState<number | null>(null);
+  const [roleFilter, setRoleFilter] = useState<Role | null>(null);
 
   // Batches
   const [batches, setBatches] = useState<BatchRow[]>([]);
@@ -299,6 +304,7 @@ export default function MemberPotentialClient() {
   // ---------- Sort + filter ----------
   const filtered = rows.filter((r) => {
     if (guildFilter !== null && r.guild !== guildFilter) return false;
+    if (roleFilter !== null && r.role !== roleFilter) return false;
     if (search && !r.discordname.toLowerCase().includes(search.toLowerCase()) && !r.userdiscordid.includes(search)) return false;
     return true;
   });
@@ -376,6 +382,30 @@ export default function MemberPotentialClient() {
             })}
           </div>
 
+          {/* Role tabs */}
+          <div className="flex gap-1.5 flex-wrap items-center">
+            <span className="text-xs text-zinc-400 mr-1">โหมด:</span>
+            {([null, "dps", "tank", "healer"] as (Role | null)[]).map((r) => {
+              const baseRows = guildFilter !== null ? rows.filter((x) => x.guild === guildFilter) : rows;
+              const count = r === null ? baseRows.length : baseRows.filter((x) => x.role === r).length;
+              const active = roleFilter === r;
+              return (
+                <button
+                  key={r ?? "all"}
+                  onClick={() => setRoleFilter(r)}
+                  className={`h-7 px-3 rounded-lg text-xs border transition ${active
+                    ? "bg-zinc-800 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
+                >
+                  {r === null ? "ทุกโหมด" : ROLE_LABEL[r]}
+                  <span className={`ml-1 text-[11px] ${active ? "opacity-70" : "text-zinc-400"}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Import / Template — เฉพาะเมื่อเลือก guild */}
           <div className="flex flex-wrap items-center gap-2">
             {guildFilter === null ? (
@@ -438,6 +468,13 @@ export default function MemberPotentialClient() {
                           <img src={r.class_icon} alt="" className="inline w-4 h-4 rounded mr-1 align-middle" />
                         )}
                         {r.class_name || "-"}
+                        <span className={`ml-1.5 rounded px-1 py-px text-[10px] font-semibold ${
+                          r.role === "healer" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                          : r.role === "tank" ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
+                          : "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400"
+                        }`}>
+                          {ROLE_LABEL[r.role]}
+                        </span>
                       </td>
                       {CATEGORIES.map((c) => (
                         <td key={c} className={`px-3 py-2 text-right tabular-nums text-xs ${c === "death" ? "text-red-500" : "text-zinc-700 dark:text-zinc-300"}`}>
