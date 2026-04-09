@@ -344,6 +344,7 @@ export default function MemberPotentialClient() {
   const [loadingW, setLoadingW] = useState(false);
   const [savingW, setSavingW] = useState(false);
   const [editWeights, setEditWeights] = useState<Record<string, number>>({});
+  const [dirtyWeights, setDirtyWeights] = useState<Set<string>>(new Set());
   const [classes, setClasses] = useState<{ id: number; name: string; icon_url?: string }[]>([]);
 
   // Toast
@@ -390,6 +391,7 @@ export default function MemberPotentialClient() {
           init[`${w.class_id ?? "null"}:${w.category}`] = w.weight;
         }
         setEditWeights(init);
+        setDirtyWeights(new Set());
       }
       if (cJson.ok) setClasses(cJson.classes ?? []);
     } finally { setLoadingW(false); }
@@ -448,10 +450,10 @@ export default function MemberPotentialClient() {
       if (records.length === 0) { showToast("ไม่พบข้อมูลในไฟล์", false); return; }
 
       // Open confirm modal instead of immediately POSTing
-      const defaultLabel = new Date().toLocaleDateString("th-TH");
-      setImportLabel(batchLabel || defaultLabel);
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      setImportLabel(today);
       setImportOpponentGuild("");
-      setPendingImport({ records, defaultLabel });
+      setPendingImport({ records, defaultLabel: today });
     } catch (err: any) {
       showToast(`เกิดข้อผิดพลาด: ${err?.message ?? "unknown"}`, false);
     }
@@ -468,7 +470,10 @@ export default function MemberPotentialClient() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          label: importLabel.trim() || undefined,
+          // format YYYY-MM-DD → d/m/yy (Thai-friendly short date)
+          label: importLabel
+            ? (() => { const [y, m, d] = importLabel.split("-"); return `${+d}/${+m}/${String(+y).slice(2)}`; })()
+            : undefined,
           opponent_guild: importOpponentGuild.trim() || undefined,
           rows: records,
         }),
@@ -500,18 +505,29 @@ export default function MemberPotentialClient() {
   };
 
   // ---------- Save weights ----------
-  const saveWeight = async (w: WeightRow, newVal: number) => {
+  const saveAllWeights = async () => {
+    if (dirtyWeights.size === 0) return;
     setSavingW(true);
     try {
-      const res = await fetch("/api/admin/member-potential/weights", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...w, weight: newVal }),
+      const toSave = weights.filter((w) => {
+        const key = `${w.class_id ?? "null"}:${w.category}`;
+        return dirtyWeights.has(key);
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) { showToast("บันทึกไม่สำเร็จ", false); return; }
-      showToast("บันทึกสำเร็จ ✓");
+      await Promise.all(
+        toSave.map((w) => {
+          const key = `${w.class_id ?? "null"}:${w.category}`;
+          return fetch("/api/admin/member-potential/weights", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...w, weight: editWeights[key] }),
+          });
+        })
+      );
+      setDirtyWeights(new Set());
+      showToast(`บันทึกสำเร็จ ${toSave.length} รายการ ✓`);
       await loadLeaderboard();
+    } catch {
+      showToast("บันทึกไม่สำเร็จ", false);
     } finally { setSavingW(false); }
   };
 
@@ -700,6 +716,9 @@ export default function MemberPotentialClient() {
                       ชื่อ{sortIcon("discordname")}
                     </th>
                     <th className="px-3 py-2.5 text-left text-xs font-semibold text-zinc-500 whitespace-nowrap">อาชีพ</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold text-zinc-400 whitespace-nowrap">
+                      จำนวนวอ
+                    </th>
                     {CATEGORIES.map((c) => (
                       <th key={c} onClick={() => toggleSort(c)}
                         className={`px-3 py-2.5 text-right text-xs font-semibold cursor-pointer whitespace-nowrap hover:text-zinc-800 transition ${c === "death" ? "text-red-400" : "text-zinc-500"}`}>
@@ -714,9 +733,9 @@ export default function MemberPotentialClient() {
                 </thead>
                 <tbody>
                   {loadingLB ? (
-                    <tr><td colSpan={CATEGORIES.length + 5} className="px-3 py-8 text-center text-sm text-zinc-400">กำลังโหลด...</td></tr>
+                    <tr><td colSpan={CATEGORIES.length + 6} className="px-3 py-8 text-center text-sm text-zinc-400">กำลังโหลด...</td></tr>
                   ) : sorted.length === 0 ? (
-                    <tr><td colSpan={CATEGORIES.length + 5} className="px-3 py-8 text-center text-sm text-zinc-400">ยังไม่มีข้อมูล — กด Import Excel เพื่อนำเข้า</td></tr>
+                    <tr><td colSpan={CATEGORIES.length + 6} className="px-3 py-8 text-center text-sm text-zinc-400">ยังไม่มีข้อมูล — กด Import Excel เพื่อนำเข้า</td></tr>
                   ) : sorted.map((r, i) => (
                     <tr key={r.userdiscordid} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition">
                       <td className="px-3 py-2 text-xs text-zinc-400">{i + 1}</td>
@@ -742,6 +761,9 @@ export default function MemberPotentialClient() {
                         }`}>
                           {ROLE_LABEL[r.role]}
                         </span>
+                      </td>
+                      <td className="px-3 py-2 text-center tabular-nums text-xs text-zinc-400">
+                        {r.batch_count}
                       </td>
                       {CATEGORIES.map((c) => (
                         <td key={c} className={`px-3 py-2 text-right tabular-nums text-xs ${c === "death" ? "text-red-500" : "text-zinc-700 dark:text-zinc-300"}`}>
@@ -797,9 +819,9 @@ export default function MemberPotentialClient() {
       {/* ===== WEIGHTS ===== */}
       {tab === "weights" && (
         <div className="space-y-4">
-          {/* Legend */}
+          {/* Legend + Save button */}
           <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-zinc-500">
-            <span>คะแนน = Σ(ค่าเฉลี่ย × weight) → normalize เป็น 0–100</span>
+            <span>คะแนน = Σ(ค่าเฉลี่ย × weight)</span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-3 rounded-sm bg-red-100 dark:bg-red-950 border border-red-300 dark:border-red-800" />
               หมวดที่หักคะแนน
@@ -808,7 +830,18 @@ export default function MemberPotentialClient() {
               <span className="inline-block w-3 h-3 rounded-sm bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800" />
               Override จาก Default
             </span>
-            <span className="ml-auto text-zinc-400 italic">กด Enter หรือคลิกออกเพื่อบันทึก</span>
+            <div className="ml-auto flex items-center gap-2">
+              {dirtyWeights.size > 0 && (
+                <span className="text-amber-500 font-medium">มีการแก้ไข {dirtyWeights.size} รายการ</span>
+              )}
+              <button
+                onClick={saveAllWeights}
+                disabled={savingW || dirtyWeights.size === 0}
+                className="h-8 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                {savingW ? "กำลังบันทึก..." : "💾 บันทึก"}
+              </button>
+            </div>
           </div>
 
           {loadingW ? (
@@ -899,9 +932,15 @@ export default function MemberPotentialClient() {
                                     type="number"
                                     step="0.001"
                                     value={val}
-                                    onChange={(e) => setEditWeights((prev) => ({ ...prev, [wKey]: Number(e.target.value) }))}
-                                    onBlur={() => { if (Number(val) !== w.weight) saveWeight(w, Number(val)); }}
-                                    onKeyDown={(e) => { if (e.key === "Enter") saveWeight(w, Number(val)); }}
+                                    onChange={(e) => {
+                                      const newVal = Number(e.target.value);
+                                      setEditWeights((prev) => ({ ...prev, [wKey]: newVal }));
+                                      setDirtyWeights((prev) => {
+                                        const next = new Set(prev);
+                                        if (newVal !== w.weight) next.add(wKey); else next.delete(wKey);
+                                        return next;
+                                      });
+                                    }}
                                     className={`h-7 w-full rounded-lg border-0 bg-transparent px-1 text-sm text-right tabular-nums font-semibold focus:outline-none focus:ring-1 focus:ring-red-400 ${
                                       isDeath ? "text-red-600 dark:text-red-400" : "text-zinc-800 dark:text-zinc-100"
                                     }`}
@@ -995,13 +1034,12 @@ export default function MemberPotentialClient() {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
-                  ชื่อ Batch <span className="text-zinc-400">(ใส่หรือปล่อยว่าง)</span>
+                  วันที่ Batch
                 </label>
                 <input
-                  type="text"
+                  type="date"
                   value={importLabel}
                   onChange={(e) => setImportLabel(e.target.value)}
-                  placeholder={pendingImport.defaultLabel}
                   className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
                 />
               </div>
