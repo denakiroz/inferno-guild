@@ -519,7 +519,7 @@ export default function MemberPotentialClient() {
           return fetch("/api/admin/member-potential/weights", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ...w, weight: editWeights[key] }),
+            body: JSON.stringify({ ...w, weight: Number(editWeights[key]) }),
           });
         })
       );
@@ -933,11 +933,11 @@ export default function MemberPotentialClient() {
                                     step="0.001"
                                     value={val}
                                     onChange={(e) => {
-                                      const newVal = Number(e.target.value);
+                                      const newVal = e.target.value === "" ? 0 : Number(e.target.value);
                                       setEditWeights((prev) => ({ ...prev, [wKey]: newVal }));
                                       setDirtyWeights((prev) => {
                                         const next = new Set(prev);
-                                        if (newVal !== w.weight) next.add(wKey); else next.delete(wKey);
+                                        if (newVal !== Number(w.weight)) next.add(wKey); else next.delete(wKey);
                                         return next;
                                       });
                                     }}
