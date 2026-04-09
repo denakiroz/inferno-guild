@@ -334,6 +334,13 @@ function ComboChart({
   );
 }
 
+// สีแต่ละ batch (เก่า → ใหม่)
+const BATCH_COLORS = [
+  { bar: "linear-gradient(to top, #fbbf24, #f59e0b)", dot: "#f59e0b" }, // amber
+  { bar: "linear-gradient(to top, #fb923c, #f97316)", dot: "#f97316" }, // orange
+  { bar: "linear-gradient(to top, #f87171, #ef4444)", dot: "#ef4444" }, // red
+];
+
 // ── Stat mini-bar row ──────────────────────────────────────────────
 function StatMiniBar({
   label,
@@ -347,28 +354,26 @@ function StatMiniBar({
   const max = Math.max(...values, 1);
   const hasSelect = selectedIdx !== null;
 
-  // default → เฉลี่ยทั้งหมด / เลือก batch → ค่าของ batch นั้น
   const avgVal     = values.reduce((s, v) => s + v, 0) / (values.length || 1);
   const displayVal = hasSelect ? (values[selectedIdx] ?? 0) : avgVal;
 
   return (
     <div className="flex items-center gap-2">
       <span className="w-14 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{label}</span>
-      <div className="flex-1 flex items-end gap-0.5 h-4">
+      <div className="flex-1 flex items-end gap-1 h-4">
         {values.map((v, i) => {
           const h        = Math.max(2, (v / max) * 16);
-          const isActive = hasSelect ? i === selectedIdx : true; // default ทุกแถบเข้ม
+          const isActive = !hasSelect || i === selectedIdx;
+          const color    = BATCH_COLORS[i] ?? BATCH_COLORS[BATCH_COLORS.length - 1];
           return (
             <div
               key={i}
-              title={fmtNum(v)}
+              title={`${fmtNum(v)}`}
               className="flex-1 rounded-sm"
               style={{
                 height: h,
-                background: isActive
-                  ? "linear-gradient(to top, #f97316, #ef4444)"
-                  : "#e4e4e7",
-                opacity: hasSelect && !isActive ? 0.25 : 1,
+                background: isActive ? color.bar : "#e4e4e7",
+                opacity: hasSelect && !isActive ? 0.2 : 1,
                 transition: "height 0.4s ease, opacity 0.25s",
               }}
             />
@@ -377,8 +382,12 @@ function StatMiniBar({
       </div>
       <span className={[
         "w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums",
-        hasSelect ? "text-red-600 dark:text-red-400" : "text-zinc-700 dark:text-zinc-300",
-      ].join(" ")}>
+        hasSelect
+          ? `text-[${BATCH_COLORS[selectedIdx]?.dot ?? "#ef4444"}]`
+          : "text-zinc-700 dark:text-zinc-300",
+      ].join(" ")}
+        style={{ color: hasSelect ? (BATCH_COLORS[selectedIdx]?.dot ?? "#ef4444") : undefined }}
+      >
         {fmtNum(displayVal)}
       </span>
     </div>
@@ -675,7 +684,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
               ? `สถิติ · ${displayBatches[selectedIdx]?.label || fmtDate(displayBatches[selectedIdx]?.imported_at ?? "")}`
               : `เฉลี่ย ${displayBatches.length} batch`}
           </div>
-          {selectedIdx !== null && (
+          {selectedIdx !== null ? (
             <button
               type="button"
               onClick={() => setSelectedIdx(null)}
@@ -683,6 +692,19 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
             >
               ✕ ล้าง
             </button>
+          ) : (
+            /* Legend */
+            <div className="flex items-center gap-2">
+              {displayBatches.map((b, i) => {
+                const color = BATCH_COLORS[i] ?? BATCH_COLORS[BATCH_COLORS.length - 1];
+                return (
+                  <div key={i} className="flex items-center gap-1">
+                    <div className="h-2 w-2 rounded-full shrink-0" style={{ background: color.dot }} />
+                    <span className="text-[10px] text-zinc-400">{b.label || fmtDate(b.imported_at)}</span>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
