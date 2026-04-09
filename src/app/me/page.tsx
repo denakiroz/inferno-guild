@@ -25,7 +25,6 @@ import type {
 import { bkkDateOf, bkkNowHHMM, bkkDateTimeParts, canCancelLeave } from "./_lib/bkkDate";
 
 import { ProfileTab } from "./_components/ProfileTab";
-import { InternalPowerTab } from "./_components/InternalPowerTab";
 import { LeavesTab } from "./_components/LeavesTab";
 import {
   normalizeSelected,
@@ -33,6 +32,7 @@ import {
   type SelectedByType,
 } from "./_components/WeaponStoneSection";
 import { UpcomingEventsWidget } from "./_components/UpcomingEventsWidget";
+import { PotentialLeaderboardWidget } from "./_components/PotentialLeaderboardWidget";
 
 type TabKey = "profile" | "internalPower" | "leaves";
 
@@ -464,14 +464,6 @@ export default function MePage() {
 
                   <button
                     type="button"
-                    onClick={() => setTab("internalPower")}
-                    className={`${tabBase} ${tab === "internalPower" ? tabActive : tabIdle}`}
-                  >
-                    กำลังภายใน
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => setTab("leaves")}
                     className={`${tabBase} ${tab === "leaves" ? tabActive : tabIdle}`}
                   >
@@ -497,6 +489,9 @@ export default function MePage() {
         {/* ── Upcoming Events (non-sticky) ── */}
         <UpcomingEventsWidget />
 
+        {/* ── Potential Leaderboard ── */}
+        <PotentialLeaderboardWidget myDiscordId={me?.user?.discordUserId} myGuild={member ? Number((member as any).guild) || null : null} />
+
         {/* Content */}
         {tab === "profile" ? (
           <ProfileTab
@@ -519,8 +514,6 @@ export default function MePage() {
             setAllStonesByType={setAllStonesByType}
             stonesLoading={stonesLoading}
           />
-        ) : tab === "internalPower" ? (
-          <InternalPowerTab />
         ) : (
           <LeavesTab
             leaveErr={leaveErr}

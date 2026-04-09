@@ -36,7 +36,7 @@ type MeRes = {
 };
 
 type NavItem = { href: string; label: string; icon: any };
-type NavSection = { title: string; items: NavItem[] };
+type NavSection = { title: string; items: NavItem[]; collapsible?: boolean };
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -47,6 +47,17 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   // ✅ Hamburger sidebar (ซ้าย) — desktop: push content, mobile: overlay
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // ✅ Collapsible sections — default collapsed
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    new Set(["Master Data"])
+  );
+  const toggleSection = (title: string) =>
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      next.has(title) ? next.delete(title) : next.add(title);
+      return next;
+    });
 
   useEffect(() => {
     fetch("/api/me", { cache: "no-store" })
@@ -93,7 +104,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     () => [
       {
         title: "Overview",
-        items: [{ href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard }],
+        items: [
+          { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+          { href: "/admin/master/member-potential", label: "Member Potential", icon: Trophy },
+        ],
       },
       {
         title: "Guild",
@@ -109,8 +123,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       },
       {
         title: "Master Data",
+        collapsible: true,
         items: [
-          // ✅ เปลี่ยน href ให้ตรงกับหน้าจริงของคุณ
           { href: "/admin/master/classes", label: "Classes", icon: Database },
           { href: "/admin/master/ultimate-skills", label: "Ultimate Skills", icon: Database },
           { href: "/admin/master/skill-stones", label: "Skill Stones", icon: Database },
@@ -180,36 +194,57 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Manage guild data</div>
 
             <nav className="mt-4 space-y-4">
-              {sections.map((sec) => (
-                <div key={sec.title}>
-                  <div className="px-2 pb-2 text-[11px] font-semibold tracking-wide text-zinc-500 dark:text-zinc-400 uppercase">
-                    {sec.title}
-                  </div>
-
-                  <div className="space-y-1">
-                    {sec.items.map((it) => {
-                      const active = isActive(it.href);
-                      const Icon = it.icon;
-                      return (
-                        <Link
-                          key={it.href}
-                          href={it.href}
-                          onClick={() => setMenuOpen(false)}
+              {sections.map((sec) => {
+                const isCollapsed = sec.collapsible && collapsedSections.has(sec.title);
+                return (
+                  <div key={sec.title}>
+                    {sec.collapsible ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(sec.title)}
+                        className="w-full flex items-center justify-between px-2 pb-2 text-[11px] font-semibold tracking-wide text-zinc-500 dark:text-zinc-400 uppercase hover:text-zinc-700 dark:hover:text-zinc-200 transition"
+                      >
+                        {sec.title}
+                        <ChevronDown
                           className={[
-                            "flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition",
-                            active
-                              ? "bg-red-600 text-white border-red-600"
-                              : "bg-white/50 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-transparent hover:border-zinc-200 dark:hover:border-zinc-800",
+                            "w-3 h-3 transition-transform duration-200",
+                            isCollapsed ? "" : "rotate-180",
                           ].join(" ")}
-                        >
-                          <Icon className="w-4 h-4" />
-                          {it.label}
-                        </Link>
-                      );
-                    })}
+                        />
+                      </button>
+                    ) : (
+                      <div className="px-2 pb-2 text-[11px] font-semibold tracking-wide text-zinc-500 dark:text-zinc-400 uppercase">
+                        {sec.title}
+                      </div>
+                    )}
+
+                    {!isCollapsed && (
+                      <div className="space-y-1">
+                        {sec.items.map((it) => {
+                          const active = isActive(it.href);
+                          const Icon = it.icon;
+                          return (
+                            <Link
+                              key={it.href}
+                              href={it.href}
+                              onClick={() => setMenuOpen(false)}
+                              className={[
+                                "flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition",
+                                active
+                                  ? "bg-red-600 text-white border-red-600"
+                                  : "bg-white/50 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-transparent hover:border-zinc-200 dark:hover:border-zinc-800",
+                              ].join(" ")}
+                            >
+                              <Icon className="w-4 h-4" />
+                              {it.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </nav>
 
             <div className="mt-6 border-t border-zinc-200 dark:border-zinc-800 pt-4 space-y-2">
