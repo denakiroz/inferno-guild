@@ -251,23 +251,37 @@ export default function MemberPotentialClient() {
     } finally { setSavingW(false); }
   };
 
+  // Strip leading emoji / symbols from Discord display names
+  const stripLeadingIcon = (name: string) =>
+    name.replace(/^[\p{Extended_Pictographic}\p{Symbol}\p{So}\s]+/u, "").trim();
+
   // ---------- Download Template ----------
   const handleDownloadTemplate = async () => {
     if (guildFilter === null) return;
     try {
       const res = await fetch(`/api/admin/members?guild=${guildFilter}`, { cache: "no-store" });
       const json = await res.json();
-      const members: { discord_user_id: string; name: string; status: string; guild: number }[] =
-        Array.isArray(json) ? json : (json?.members ?? []);
+      const members: {
+        discord_user_id: string;
+        name: string;
+        status: string;
+        guild: number;
+        class?: { id: number; name: string; icon_url?: string } | null;
+      }[] = Array.isArray(json) ? json : (json?.members ?? []);
 
-      const active = members.filter(
-        (m) => m.discord_user_id && String(m.status ?? "").toLowerCase() === "active"
-      );
+      const active = members
+        .filter((m) => m.discord_user_id && String(m.status ?? "").toLowerCase() === "active")
+        .sort((a, b) => {
+          const ca = (a.class?.name ?? "").localeCompare(b.class?.name ?? "", "th");
+          if (ca !== 0) return ca;
+          return stripLeadingIcon(a.name ?? "").localeCompare(stripLeadingIcon(b.name ?? ""), "th");
+        });
 
-      const headers = ["userdiscordid", "discordname", ...CATEGORIES.map((c) => CAT_LABELS[c])];
+      const headers = ["userdiscordid", "discordname", "อาชีพ", ...CATEGORIES.map((c) => CAT_LABELS[c])];
       const dataRows = active.map((m) => [
         m.discord_user_id,
-        m.name ?? "",
+        stripLeadingIcon(m.name ?? ""),
+        m.class?.name ?? "",
         ...CATEGORIES.map(() => 0),
       ]);
 
