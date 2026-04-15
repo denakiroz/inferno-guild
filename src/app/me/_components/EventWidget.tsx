@@ -172,8 +172,8 @@ export function EventWidget() {
           <div className="min-w-0">
             <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{event.name}</div>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 เปิดรับสมัคร
               </span>
               <span className="text-xs text-zinc-400">{event.registration_count} คนสมัครแล้ว</span>
@@ -216,9 +216,9 @@ export function EventWidget() {
 
       {/* Registered badge */}
       {registered && (
-        <div className="mt-3 flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-2">
-          <span className="text-orange-600 dark:text-orange-400 text-sm">✓</span>
-          <span className="text-sm font-medium text-orange-700 dark:text-orange-400">คุณสมัครเข้าร่วม Tournament นี้แล้ว</span>
+        <div className="mt-3 flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-3 py-2">
+          <span className="text-green-600 dark:text-green-400 text-sm">✓</span>
+          <span className="text-sm font-medium text-green-700 dark:text-green-400">คุณสมัครเข้าร่วม Tournament นี้แล้ว</span>
         </div>
       )}
 
