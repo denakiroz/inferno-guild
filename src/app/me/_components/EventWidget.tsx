@@ -9,9 +9,9 @@ function PromoBanner() {
       {/* Poster image */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="https://img1.pic.in.th/images/content8c98807f37f36478.png"
+        src="https://img2.pic.in.th/123123123.png"
         alt="Inferno 6-6 Tournament"
-        className="w-full object-contain"
+        className="w-full object-contain max-h-[480px]"
         referrerPolicy="no-referrer"
         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
       />
