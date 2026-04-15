@@ -5,7 +5,7 @@ import React, { useEffect, useState } from "react";
 // ── Promo Banner ──────────────────────────────────────────────────────────────
 function PromoBanner() {
   return (
-    <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+    <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1007", border: "1px solid #3d2a0a" }}>
       {/* Poster image */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -15,60 +15,61 @@ function PromoBanner() {
         referrerPolicy="no-referrer"
         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
       />
-      {/* Info */}
-      <div className="px-5 py-4 space-y-4 bg-gradient-to-b from-[#1a2e1a] to-[#0f1f0f] text-white">
 
-        {/* Tournament title */}
-        <div className="flex items-center gap-2">
+      {/* Info — warm brown/gold palette เข้ากับรูป */}
+      <div className="px-5 py-5 space-y-4 text-white" style={{ background: "linear-gradient(180deg,#2a1a06 0%,#1c1007 100%)" }}>
+
+        {/* Title */}
+        <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: "#4a3010" }}>
           <span className="text-xl">⚔️</span>
-          <span className="font-bold text-lg tracking-wide" style={{ color: "#c8a84b", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
+          <span className="font-bold text-2xl tracking-wide" style={{ color: "#e8c060", textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}>
             Inferno 6-6 Tournament
           </span>
         </div>
 
         {/* Basic info */}
-        <div className="space-y-1.5 text-sm leading-relaxed">
-          <p className="text-zinc-200">
-            <span className="font-semibold text-amber-300">กิจกรรมแข่งขัน 6-6</span>
-            {" "}(ประจำแพท 1.2.1)
+        <div className="space-y-2 text-base leading-relaxed">
+          <p style={{ color: "#d4a855" }}>
+            <span className="font-semibold">กิจกรรมแข่งขัน 6-6</span>
+            <span style={{ color: "#a08040" }}>{" "}(ประจำแพท 1.2.1)</span>
           </p>
-          <p className="text-zinc-300">
+          <p style={{ color: "#c8b890" }}>
             <span className="font-semibold text-white">ระยะเวลาการแข่ง :</span>
             {" "}1 และ 3 May 2026 เวลา 20:00 เป็นต้นไป
           </p>
-          <p className="text-zinc-300">
+          <p style={{ color: "#c8b890" }}>
             <span className="font-semibold text-white">รูปแบบการแข่งขัน :</span>
             {" "}ทางทีมงานสุ่มจัดทีมให้
           </p>
         </div>
 
-        {/* Sponsor banner */}
-        <div className="rounded-xl border border-amber-400/40 bg-amber-950/60 px-4 py-3 space-y-2.5">
-          <p className="text-amber-300 font-bold text-sm text-center">
+        {/* Sponsor block */}
+        <div className="rounded-xl px-4 py-3.5 space-y-2.5" style={{ background: "rgba(0,0,0,0.35)", border: "1px solid #5a3a10" }}>
+          <p className="font-bold text-base text-center" style={{ color: "#f0c040" }}>
             🔥 สมาชิก Inferno ห้ามพลาด! กิจกรรมพิเศษจากสปอนเซอร์ใจดี! 🔥
           </p>
-          <p className="text-zinc-200 text-sm leading-relaxed">
+          <p className="text-base leading-relaxed" style={{ color: "#c8b890" }}>
             <span className="font-bold text-white">Zafezone</span> ใจดีจัดหนัก ขนรางวัลมาแจกพวกเราชาว Inferno รวมมูลค่าหลายพันบาท!
-            {" "}<span className="text-amber-300">เอาเหรียญไปใช้เป็นส่วนลดเติมเกมกันได้แบบฟรีๆ</span>
+            {" "}<span style={{ color: "#e8c060" }}>เอาเหรียญไปใช้เป็นส่วนลดเติมเกมกันได้แบบฟรีๆ</span>
           </p>
 
           {/* Prize */}
-          <div className="bg-black/30 rounded-lg px-3 py-2.5 space-y-1 text-sm">
-            <p className="text-green-400 font-bold">✅ รางวัลจัดเต็ม:</p>
-            <p className="text-zinc-200">🥇 <span className="text-amber-300 font-semibold">อันดับ 1-3</span> — รับสูงสุด <span className="font-bold text-white">50,000 Zafe Coin</span> <span className="text-zinc-400 text-xs">(มูลค่า 500 บาท!)</span></p>
-            <p className="text-zinc-200">🎁 <span className="font-semibold text-white">รางวัลปลอบใจ</span> — แค่เข้าร่วมกิจกรรม กีรับไปเลย <span className="text-amber-300 font-bold">2,000 Coin</span> ทุกคน!</p>
+          <div className="rounded-lg px-3 py-2.5 space-y-1.5 text-base" style={{ background: "rgba(0,0,0,0.4)" }}>
+            <p className="font-bold" style={{ color: "#90d090" }}>✅ รางวัลจัดเต็ม:</p>
+            <p style={{ color: "#c8b890" }}>🥇 <span style={{ color: "#e8c060" }} className="font-semibold">อันดับ 1-3</span> — รับสูงสุด <span className="font-bold text-white">50,000 Zafe Coin</span> <span style={{ color: "#806040" }} className="text-sm">(มูลค่า 500 บาท!)</span></p>
+            <p style={{ color: "#c8b890" }}>🎁 <span className="font-semibold text-white">รางวัลปลอบใจ</span> — แค่เข้าร่วมกิจกรรม กีรับไปเลย <span style={{ color: "#e8c060" }} className="font-bold">2,000 Coin</span> ทุกคน!</p>
           </div>
 
           {/* Steps */}
-          <div className="space-y-1 text-sm">
-            <p className="text-zinc-300 font-semibold">เริ่มง่ายๆ แค่ 3 ขั้นตอน:</p>
-            <p className="text-zinc-300">1. สมัครสมาชิกที่ <a href="https://www.zafezone.co" target="_blank" rel="noopener noreferrer" className="text-amber-300 underline font-semibold hover:text-amber-200">www.zafezone.co</a></p>
-            <p className="text-zinc-300">2. ลงทะเบียนเข้าร่วมกิจกรรมที่หน้า Website Inferno <span className="text-amber-300">(กดปุ่มด้านล่าง!)</span></p>
-            <p className="text-zinc-300">3. เข้าร่วมกิจกรรมและรอรับของรางวัลกันเลย</p>
+          <div className="space-y-1 text-base" style={{ color: "#c8b890" }}>
+            <p className="font-semibold text-white">เริ่มง่ายๆ แค่ 3 ขั้นตอน:</p>
+            <p>1. สมัครสมาชิกที่ <a href="https://www.zafezone.co" target="_blank" rel="noopener noreferrer" style={{ color: "#e8c060" }} className="underline font-semibold hover:opacity-80">www.zafezone.co</a></p>
+            <p>2. ลงทะเบียนเข้าร่วมกิจกรรมที่หน้า Website Inferno <span style={{ color: "#e8c060" }}>(กดปุ่มด้านล่าง!)</span></p>
+            <p>3. เข้าร่วมกิจกรรมและรอรับของรางวัลกันเลย</p>
           </div>
 
-          <p className="text-center text-zinc-400 text-xs pt-1">
-            ขอบคุณ <span className="text-white font-semibold">Zafezone</span> ที่สนับสนุนกิลด์เราครับ 🙏✨
+          <p className="text-center text-sm pt-1" style={{ color: "#806040" }}>
+            ขอบคุณ <span className="font-semibold" style={{ color: "#c8a050" }}>Zafezone</span> ที่สนับสนุนกิลด์เราครับ 🙏✨
           </p>
         </div>
 
@@ -160,8 +161,8 @@ export function EventWidget() {
           <div className="min-w-0">
             <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{event.name}</div>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
                 เปิดรับสมัคร
               </span>
               <span className="text-xs text-zinc-400">{event.registration_count} คนสมัครแล้ว</span>
@@ -184,7 +185,7 @@ export function EventWidget() {
           </button>
         ) : (
           registered ? (
-            <span className="shrink-0 h-9 px-4 rounded-xl text-sm font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex items-center">
+            <span className="shrink-0 h-9 px-4 rounded-xl text-sm font-semibold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 flex items-center">
               ✓ สมัครแล้ว
             </span>
           ) : (
@@ -204,9 +205,9 @@ export function EventWidget() {
 
       {/* Registered badge */}
       {registered && (
-        <div className="mt-3 flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-3 py-2">
-          <span className="text-green-600 dark:text-green-400 text-sm">✓</span>
-          <span className="text-sm font-medium text-green-700 dark:text-green-400">คุณสมัครเข้าร่วม Tournament นี้แล้ว</span>
+        <div className="mt-3 flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-2">
+          <span className="text-orange-600 dark:text-orange-400 text-sm">✓</span>
+          <span className="text-sm font-medium text-orange-700 dark:text-orange-400">คุณสมัครเข้าร่วม Tournament นี้แล้ว</span>
         </div>
       )}
 
