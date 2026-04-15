@@ -62,6 +62,17 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     const { id: eventId } = await params;
 
+    // Block unregister if event is not open
+    const { data: event } = await supabaseAdmin
+      .from("events")
+      .select("status")
+      .eq("id", eventId)
+      .maybeSingle();
+
+    if (!event) return NextResponse.json({ ok: false, error: "event not found" }, { status: 404 });
+    if (event.status !== "open")
+      return NextResponse.json({ ok: false, error: "ปิดรับสมัครแล้ว ไม่สามารถถอนตัวได้" }, { status: 400 });
+
     const { error } = await supabaseAdmin
       .from("event_registrations")
       .delete()

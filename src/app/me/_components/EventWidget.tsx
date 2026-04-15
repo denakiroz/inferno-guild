@@ -170,17 +170,29 @@ export function EventWidget() {
         </div>
 
         {/* Register / Unregister button */}
-        <button
-          onClick={handleRegister}
-          disabled={acting}
-          className={`shrink-0 h-9 px-4 rounded-xl text-sm font-semibold transition disabled:opacity-50 ${
-            registered
-              ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600"
-              : "bg-red-600 hover:bg-red-700 text-white"
-          }`}
-        >
-          {acting ? "..." : registered ? "✓ สมัครแล้ว — ถอนตัว?" : "เข้าร่วม"}
-        </button>
+        {event.status === "open" ? (
+          <button
+            onClick={handleRegister}
+            disabled={acting}
+            className={`shrink-0 h-9 px-4 rounded-xl text-sm font-semibold transition disabled:opacity-50 ${
+              registered
+                ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600"
+                : "bg-red-600 hover:bg-red-700 text-white"
+            }`}
+          >
+            {acting ? "..." : registered ? "✓ สมัครแล้ว — ถอนตัว?" : "เข้าร่วม"}
+          </button>
+        ) : (
+          registered ? (
+            <span className="shrink-0 h-9 px-4 rounded-xl text-sm font-semibold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex items-center">
+              ✓ สมัครแล้ว
+            </span>
+          ) : (
+            <span className="shrink-0 h-9 px-4 rounded-xl text-sm font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center">
+              ปิดรับสมัครแล้ว
+            </span>
+          )
+        )}
       </div>
 
       {/* Description */}
