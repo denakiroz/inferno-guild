@@ -68,6 +68,17 @@ function PromoBanner() {
             <p>3. เข้าร่วมกิจกรรมและรอรับของรางวัลกันเลย</p>
           </div>
 
+          {/* CTA Button */}
+          <a
+            href="https://www.zafezone.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full text-center font-bold text-base py-2.5 rounded-xl transition hover:opacity-90 active:scale-95"
+            style={{ background: "linear-gradient(135deg,#f0a020,#e06010)", color: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.4)" }}
+          >
+            🎮 เติมเกม
+          </a>
+
           <p className="text-center text-sm pt-1" style={{ color: "#806040" }}>
             ขอบคุณ <span className="font-semibold" style={{ color: "#c8a050" }}>Zafezone</span> ที่สนับสนุนกิลด์เราครับ 🙏✨
           </p>
