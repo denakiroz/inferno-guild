@@ -9,7 +9,7 @@ function PromoBanner() {
       {/* Poster image */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="https://img2.pic.in.th/a465b38e-e046-4afb-b3f4-e74b512d7776.png"
+        src="https://img1.pic.in.th/images/content8c98807f37f36478.png"
         alt="Inferno 6-6 Tournament"
         className="w-full object-contain"
         referrerPolicy="no-referrer"
