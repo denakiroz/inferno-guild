@@ -166,8 +166,8 @@ function PlayerModal({
                       </div>
                       <div className="text-[10px] font-normal text-zinc-400">{fmtDate(b.imported_at)}</div>
                       {b.opponent_guild && (
-                        <div className="text-[10px] font-normal text-amber-500 truncate max-w-[90px]" title={b.opponent_guild}>
-                          vs {b.opponent_guild}
+                        <div className="mt-1 inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-full px-2 py-0.5 text-[11px] font-semibold max-w-[110px] truncate" title={b.opponent_guild}>
+                          ⚔️ {b.opponent_guild}
                         </div>
                       )}
                     </th>
@@ -278,6 +278,7 @@ type BatchRow = {
   imported_at: string;
   record_count: number;
   opponent_guild?: string | null;
+  guild?: number | null;
 };
 
 type WeightRow = {
@@ -323,7 +324,7 @@ export default function MemberPotentialClient() {
   const [playerModal, setPlayerModal] = useState<LeaderboardRow | null>(null);
   const [search, setSearch] = useState("");
   const [guildFilter, setGuildFilter] = useState<number | null>(null);
-  const [roleFilter, setRoleFilter] = useState<Role | null>(null);
+  const [roleFilter, setRoleFilter] = useState<string | null>(null);
 
   // Batches
   const [batches, setBatches] = useState<BatchRow[]>([]);
@@ -339,12 +340,21 @@ export default function MemberPotentialClient() {
   const [importLabel, setImportLabel] = useState("");
   const [importOpponentGuild, setImportOpponentGuild] = useState("");
 
+  // Batch edit modal
+  const [editingBatch, setEditingBatch] = useState<BatchRow | null>(null);
+  const [editBatchLabel, setEditBatchLabel] = useState("");
+  const [editBatchOpponent, setEditBatchOpponent] = useState("");
+  const [editBatchGuild, setEditBatchGuild] = useState<number | null>(null);
+  const [savingBatch, setSavingBatch] = useState(false);
+
+  // Batch guild filter
+  const [batchGuildFilter, setBatchGuildFilter] = useState<number | null>(null);
+
   // Weights
   const [weights, setWeights] = useState<WeightRow[]>([]);
   const [loadingW, setLoadingW] = useState(false);
   const [savingW, setSavingW] = useState(false);
   const [editWeights, setEditWeights] = useState<Record<string, number>>({});
-  const [dirtyWeights, setDirtyWeights] = useState<Set<string>>(new Set());
   const [classes, setClasses] = useState<{ id: number; name: string; icon_url?: string }[]>([]);
 
   // Toast
@@ -391,7 +401,6 @@ export default function MemberPotentialClient() {
           init[`${w.class_id ?? "null"}:${w.category}`] = w.weight;
         }
         setEditWeights(init);
-        setDirtyWeights(new Set());
       }
       if (cJson.ok) setClasses(cJson.classes ?? []);
     } finally { setLoadingW(false); }
@@ -475,6 +484,7 @@ export default function MemberPotentialClient() {
             ? (() => { const [y, m, d] = importLabel.split("-"); return `${+d}/${+m}/${String(+y).slice(2)}`; })()
             : undefined,
           opponent_guild: importOpponentGuild.trim() || undefined,
+          guild: guildFilter,
           rows: records,
         }),
       });
@@ -492,6 +502,42 @@ export default function MemberPotentialClient() {
     } finally { setImporting(false); }
   };
 
+  // ---------- Edit batch ----------
+  const openEditBatch = (b: BatchRow) => {
+    // convert label "d/m/yy" back to YYYY-MM-DD for date input if possible
+    const toDateInput = (label: string) => {
+      const m = label.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+      if (!m) return "";
+      const [, d, mo, y] = m;
+      const year = +y < 100 ? 2500 + +y - 543 : +y > 2400 ? +y - 543 : +y;
+      return `${year}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    };
+    setEditingBatch(b);
+    setEditBatchLabel(toDateInput(b.label) || "");
+    setEditBatchOpponent(b.opponent_guild ?? "");
+    setEditBatchGuild(b.guild ?? null);
+  };
+
+  const saveBatchEdit = async () => {
+    if (!editingBatch) return;
+    setSavingBatch(true);
+    try {
+      const label = editBatchLabel
+        ? (() => { const [y, m, d] = editBatchLabel.split("-"); return `${+d}/${+m}/${String(+y).slice(2)}`; })()
+        : editingBatch.label;
+      const res = await fetch(`/api/admin/member-potential/batches/${editingBatch.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label, opponent_guild: editBatchOpponent.trim() || null, guild: editBatchGuild }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) { showToast("บันทึกไม่สำเร็จ", false); return; }
+      showToast("บันทึกสำเร็จ ✓");
+      setEditingBatch(null);
+      await loadBatches();
+    } finally { setSavingBatch(false); }
+  };
+
   // ---------- Delete batch ----------
   const deleteBatch = async (id: string) => {
     setDeletingBatch(null);
@@ -506,25 +552,19 @@ export default function MemberPotentialClient() {
 
   // ---------- Save weights ----------
   const saveAllWeights = async () => {
-    if (dirtyWeights.size === 0) return;
     setSavingW(true);
     try {
-      const toSave = weights.filter((w) => {
-        const key = `${w.class_id ?? "null"}:${w.category}`;
-        return dirtyWeights.has(key);
-      });
       await Promise.all(
-        toSave.map((w) => {
+        weights.map((w) => {
           const key = `${w.class_id ?? "null"}:${w.category}`;
           return fetch("/api/admin/member-potential/weights", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ...w, weight: Number(editWeights[key]) }),
+            body: JSON.stringify({ ...w, weight: Number(editWeights[key] ?? w.weight) }),
           });
         })
       );
-      setDirtyWeights(new Set());
-      showToast(`บันทึกสำเร็จ ${toSave.length} รายการ ✓`);
+      showToast(`บันทึกสำเร็จ ${weights.length} รายการ ✓`);
       await loadLeaderboard();
     } catch {
       showToast("บันทึกไม่สำเร็จ", false);
@@ -579,7 +619,12 @@ export default function MemberPotentialClient() {
   // ---------- Sort + filter ----------
   const filtered = rows.filter((r) => {
     if (guildFilter !== null && r.guild !== guildFilter) return false;
-    if (roleFilter !== null && r.role !== roleFilter) return false;
+    if (roleFilter !== null) {
+      if (roleFilter === "dps" && r.role !== "dps") return false;
+      if (roleFilter === "tank" && r.role !== "tank") return false;
+      if (roleFilter === "healer" && r.role !== "healer") return false;
+      if (roleFilter.startsWith("dps:") && !(r.role === "dps" && r.class_name === roleFilter.slice(4))) return false;
+    }
     if (search && !r.discordname.toLowerCase().includes(search.toLowerCase()) && !r.userdiscordid.includes(search)) return false;
     return true;
   });
@@ -658,28 +703,87 @@ export default function MemberPotentialClient() {
           </div>
 
           {/* Role tabs */}
-          <div className="flex gap-1.5 flex-wrap items-center">
-            <span className="text-xs text-zinc-400 mr-1">โหมด:</span>
-            {([null, "dps", "tank", "healer"] as (Role | null)[]).map((r) => {
-              const baseRows = guildFilter !== null ? rows.filter((x) => x.guild === guildFilter) : rows;
-              const count = r === null ? baseRows.length : baseRows.filter((x) => x.role === r).length;
-              const active = roleFilter === r;
-              return (
-                <button
-                  key={r ?? "all"}
-                  onClick={() => setRoleFilter(r)}
-                  className={`h-7 px-3 rounded-lg text-xs border transition ${active
-                    ? "bg-zinc-800 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
-                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
-                >
-                  {r === null ? "ทุกโหมด" : ROLE_LABEL[r]}
-                  <span className={`ml-1 text-[11px] ${active ? "opacity-70" : "text-zinc-400"}`}>
-                    {count}
-                  </span>
+          {(() => {
+            const baseRows = guildFilter !== null ? rows.filter((x) => x.guild === guildFilter) : rows;
+
+            // derive DPS classes
+            const dpsClassMap = new Map<string, { class_name: string; class_icon: string; count: number }>();
+            for (const r of baseRows) {
+              if (r.role !== "dps") continue;
+              const k = r.class_name;
+              const e = dpsClassMap.get(k);
+              if (e) e.count++; else dpsClassMap.set(k, { class_name: k, class_icon: r.class_icon, count: 1 });
+            }
+            const dpsClasses = Array.from(dpsClassMap.values()).sort((a, b) => b.count - a.count);
+
+            // derive tank/healer class info
+            const tankEntry   = baseRows.find((r) => r.role === "tank");
+            const healerEntry = baseRows.find((r) => r.role === "healer");
+            const tankCls   = tankEntry   ? { class_name: tankEntry.class_name,   class_icon: tankEntry.class_icon   } : { class_name: "ไอรอนแคลด", class_icon: "" };
+            const healerCls = healerEntry ? { class_name: healerEntry.class_name, class_icon: healerEntry.class_icon } : { class_name: "ซิลฟ์",     class_icon: "" };
+
+            const countFor = (f: string | null) => {
+              if (f === null) return baseRows.length;
+              if (f === "dps") return baseRows.filter((x) => x.role === "dps").length;
+              if (f === "tank") return baseRows.filter((x) => x.role === "tank").length;
+              if (f === "healer") return baseRows.filter((x) => x.role === "healer").length;
+              if (f.startsWith("dps:")) return baseRows.filter((x) => x.role === "dps" && x.class_name === f.slice(4)).length;
+              return 0;
+            };
+
+            const btnCls = (key: string | null) => `h-7 rounded-lg text-xs border transition flex items-center gap-1.5 px-2.5 ${
+              roleFilter === key
+                ? "bg-zinc-800 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+                : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            }`;
+            const countSpan = (key: string | null) => (
+              <span className={`text-[11px] ${roleFilter === key ? "opacity-70" : "text-zinc-400"}`}>
+                {countFor(key)}
+              </span>
+            );
+
+            return (
+              <div className="flex gap-1.5 flex-wrap items-center">
+                <span className="text-xs text-zinc-400 mr-1">โหมด:</span>
+
+                {/* ทุกโหมด */}
+                <button onClick={() => setRoleFilter(null)} className={btnCls(null)}>
+                  ทุกโหมด {countSpan(null)}
                 </button>
-              );
-            })}
-          </div>
+
+                {/* DPS รวม */}
+                <button onClick={() => setRoleFilter("dps")} className={btnCls("dps")}>
+                  DPS {countSpan("dps")}
+                </button>
+
+                {/* แต่ละอาชีพ DPS */}
+                {dpsClasses.map(({ class_name, class_icon }) => {
+                  const key = `dps:${class_name}`;
+                  return (
+                    <button key={key} onClick={() => setRoleFilter(key)} className={btnCls(key)}>
+                      {class_icon && <img src={class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />}
+                      {class_name} {countSpan(key)}
+                    </button>
+                  );
+                })}
+
+                {/* divider */}
+                {dpsClasses.length > 0 && <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-700" />}
+
+                {/* ไอรอนแคลด (tank) */}
+                <button onClick={() => setRoleFilter("tank")} className={btnCls("tank")}>
+                  {tankCls.class_icon && <img src={tankCls.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />}
+                  {tankCls.class_name} {countSpan("tank")}
+                </button>
+
+                {/* ซิลฟ์ (healer) */}
+                <button onClick={() => setRoleFilter("healer")} className={btnCls("healer")}>
+                  {healerCls.class_icon && <img src={healerCls.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />}
+                  {healerCls.class_name} {countSpan("healer")}
+                </button>
+              </div>
+            );
+          })()}
 
           {/* Import / Template — เฉพาะเมื่อเลือก guild */}
           <div className="flex flex-wrap items-center gap-2">
@@ -784,35 +888,142 @@ export default function MemberPotentialClient() {
 
       {/* ===== BATCHES ===== */}
       {tab === "batches" && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">ชื่อ Batch</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">กิลที่เจอ</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">วันที่ Import</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500">จำนวนคน</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {loadingBatches ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-400">กำลังโหลด...</td></tr>
-              ) : batches.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-400">ยังไม่มี Batch</td></tr>
-              ) : batches.map((b) => (
-                <tr key={b.id} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition">
-                  <td className="px-4 py-3 font-medium text-zinc-800 dark:text-zinc-200">{b.label || "-"}</td>
-                  <td className="px-4 py-3 text-xs text-amber-600 dark:text-amber-400">{b.opponent_guild || <span className="text-zinc-400">-</span>}</td>
-                  <td className="px-4 py-3 text-xs text-zinc-500">{new Date(b.imported_at).toLocaleString("th-TH")}</td>
-                  <td className="px-4 py-3 text-center text-xs text-zinc-600">{b.record_count} คน</td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => setDeletingBatch(b.id)} className="text-xs text-red-500 hover:underline">ลบ</button>
-                  </td>
+        <div className="space-y-3">
+          {/* Guild filter tabs */}
+          <div className="flex flex-wrap gap-1.5">
+            {([null, 1, 2, 3] as (number | null)[]).map((g) => (
+              <button
+                key={g ?? "all"}
+                onClick={() => setBatchGuildFilter(g)}
+                className={`h-8 px-3 rounded-xl text-xs font-semibold transition border ${
+                  batchGuildFilter === g
+                    ? "bg-red-600 text-white border-red-600 shadow-sm"
+                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-red-400"
+                }`}
+              >
+                {g === null ? "ทั้งหมด" : `Guild ${g}`}
+              </button>
+            ))}
+          </div>
+
+          {/* Table */}
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">ชื่อ Batch</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">กิล</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">กิลที่เจอ</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">วันที่ Import</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500">จำนวนคน</th>
+                  <th className="px-4 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loadingBatches ? (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-zinc-400">กำลังโหลด...</td></tr>
+                ) : batches.filter((b) => batchGuildFilter === null || b.guild === batchGuildFilter).length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-zinc-400">ยังไม่มี Batch</td></tr>
+                ) : batches
+                    .filter((b) => batchGuildFilter === null || b.guild === batchGuildFilter)
+                    .map((b) => (
+                  <tr key={b.id} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition">
+                    <td className="px-4 py-3 font-medium text-zinc-800 dark:text-zinc-200">{b.label || "-"}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">{b.guild ? `Guild ${b.guild}` : <span className="text-zinc-400">-</span>}</td>
+                    <td className="px-4 py-3 text-xs text-amber-600 dark:text-amber-400">{b.opponent_guild || <span className="text-zinc-400">-</span>}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">{new Date(b.imported_at).toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-3 text-center text-xs text-zinc-600">{b.record_count} คน</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditBatch(b)}
+                          className="text-xs text-blue-500 hover:underline"
+                        >✏️ แก้ไข</button>
+                        <button
+                          onClick={() => setDeletingBatch(b.id)}
+                          className="text-xs text-red-500 hover:underline"
+                        >ลบ</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ===== EDIT BATCH MODAL ===== */}
+      {editingBatch && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setEditingBatch(null)}
+        >
+          <div
+            className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-zinc-100 dark:border-zinc-800 px-5 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-zinc-900 dark:text-zinc-100">✏️ แก้ไข Batch</h3>
+              <button
+                onClick={() => setEditingBatch(null)}
+                className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+              >✕</button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              {/* Label (date picker) */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">วันที่ Batch</label>
+                <input
+                  type="date"
+                  value={editBatchLabel}
+                  onChange={(e) => setEditBatchLabel(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </div>
+              {/* Opponent guild */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">ชื่อกิลที่เจอ</label>
+                <input
+                  type="text"
+                  placeholder="ชื่อกิลฝ่ายตรงข้าม..."
+                  value={editBatchOpponent}
+                  onChange={(e) => setEditBatchOpponent(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </div>
+              {/* Guild selector */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">กิลของเรา</label>
+                <div className="flex gap-2">
+                  {([null, 1, 2, 3] as (number | null)[]).map((g) => (
+                    <button
+                      key={g ?? "none"}
+                      onClick={() => setEditBatchGuild(g)}
+                      className={`flex-1 h-9 rounded-xl text-xs font-semibold transition border ${
+                        editBatchGuild === g
+                          ? "bg-red-600 text-white border-red-600"
+                          : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-red-400"
+                      }`}
+                    >
+                      {g === null ? "-" : `Guild ${g}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-zinc-100 dark:border-zinc-800 px-5 py-4 flex justify-end gap-2">
+              <button
+                onClick={() => setEditingBatch(null)}
+                className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+              >ยกเลิก</button>
+              <button
+                onClick={saveBatchEdit}
+                disabled={savingBatch}
+                className="h-9 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+              >{savingBatch ? "กำลังบันทึก..." : "💾 บันทึก"}</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -831,12 +1042,9 @@ export default function MemberPotentialClient() {
               Override จาก Default
             </span>
             <div className="ml-auto flex items-center gap-2">
-              {dirtyWeights.size > 0 && (
-                <span className="text-amber-500 font-medium">มีการแก้ไข {dirtyWeights.size} รายการ</span>
-              )}
               <button
                 onClick={saveAllWeights}
-                disabled={savingW || dirtyWeights.size === 0}
+                disabled={savingW}
                 className="h-8 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 {savingW ? "กำลังบันทึก..." : "💾 บันทึก"}
@@ -935,11 +1143,6 @@ export default function MemberPotentialClient() {
                                     onChange={(e) => {
                                       const newVal = e.target.value === "" ? 0 : Number(e.target.value);
                                       setEditWeights((prev) => ({ ...prev, [wKey]: newVal }));
-                                      setDirtyWeights((prev) => {
-                                        const next = new Set(prev);
-                                        if (newVal !== Number(w.weight)) next.add(wKey); else next.delete(wKey);
-                                        return next;
-                                      });
                                     }}
                                     className={`h-7 w-full rounded-lg border-0 bg-transparent px-1 text-sm text-right tabular-nums font-semibold focus:outline-none focus:ring-1 focus:ring-red-400 ${
                                       isDeath ? "text-red-600 dark:text-red-400" : "text-zinc-800 dark:text-zinc-100"

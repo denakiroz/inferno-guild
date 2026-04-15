@@ -107,6 +107,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         items: [
           { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
           { href: "/admin/master/member-potential", label: "Member Potential", icon: Trophy },
+          { href: "/admin/event", label: "Event", icon: Trophy },
         ],
       },
       {

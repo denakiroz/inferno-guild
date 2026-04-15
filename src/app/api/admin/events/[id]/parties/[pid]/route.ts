@@ -1,3 +1,5 @@
+// PATCH  /api/admin/events/[id]/parties/[pid]  — rename / recolor party
+// DELETE /api/admin/events/[id]/parties/[pid]  — delete party
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
@@ -11,32 +13,26 @@ async function requireEditor() {
   const sid = cookieStore.get(env.AUTH_COOKIE_NAME)?.value;
   if (!sid) return null;
   const session = await getSession(sid);
-  if (!session) return null;
-  if (!(session.isAdmin || session.isHead)) return null;
+  if (!session || !(session.isAdmin || session.isHead)) return null;
   return session;
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; pid: string }> }) {
   try {
     const session = await requireEditor();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
-    const { id } = await params;
+    const { pid } = await params;
     const body = await req.json().catch(() => ({}));
 
     const updates: Record<string, unknown> = {};
-    if ("label" in body)          updates.label          = String(body.label ?? "").trim() || null;
-    if ("opponent_guild" in body) updates.opponent_guild = String(body.opponent_guild ?? "").trim() || null;
-    if ("guild" in body)          updates.guild          = body.guild != null ? Number(body.guild) : null;
+    if ("name"  in body) updates.name  = String(body.name  ?? "").trim() || null;
+    if ("color" in body) updates.color = String(body.color ?? "").trim() || null;
 
     if (Object.keys(updates).length === 0)
       return NextResponse.json({ ok: false, error: "nothing to update" }, { status: 400 });
 
-    const { error } = await supabaseAdmin
-      .from("member_potential_batches")
-      .update(updates)
-      .eq("id", id);
-
+    const { error } = await supabaseAdmin.from("event_parties").update(updates).eq("id", pid);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
@@ -44,17 +40,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string; pid: string }> }) {
   try {
     const session = await requireEditor();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
-    const { id } = await params;
-    const { error } = await supabaseAdmin
-      .from("member_potential_batches")
-      .delete()
-      .eq("id", id);
-
+    const { pid } = await params;
+    const { error } = await supabaseAdmin.from("event_parties").delete().eq("id", pid);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   } catch (e: any) {

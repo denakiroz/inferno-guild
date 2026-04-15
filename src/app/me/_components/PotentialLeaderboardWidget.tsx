@@ -403,7 +403,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
   const [classId, setClassId] = useState<number | null>(null);
   const [lbItems, setLbItems] = useState<RankedRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [roleTab, setRoleTab] = useState<"dps" | "tank" | "healer">("dps");
+  const [roleTab, setRoleTab] = useState<string>("dps");
   const [animated, setAnimated] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -423,16 +423,32 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
           setRoleTab(cid === 1 ? "tank" : cid === 5 ? "healer" : "dps");
         }
         if (lb.ok && Array.isArray(lb.items)) {
-          // เก็บทั้งหมดไว้ก่อน (filter role ตอน render เพราะต้องรู้ roleTab)
+          // filter ตามกิล แล้ว re-rank ภายในกิลนั้น
           const guildFiltered: RankedRow[] = myGuild
             ? lb.items.filter((r: RankedRow) => r.guild === myGuild)
             : lb.items;
-          setLbItems(guildFiltered);
+          // re-assign rank per role within the filtered set (sorted by score desc already)
+          const roleRanks: Record<string, number> = {};
+          const reRanked = guildFiltered.map((r: RankedRow) => {
+            roleRanks[r.role] = (roleRanks[r.role] ?? 0) + 1;
+            return { ...r, rank: roleRanks[r.role] };
+          });
+          setLbItems(reRanked);
+
+          // ตั้ง default tab ให้ตรงกับอาชีพของ user จาก lbItems
+          if (myDiscordId) {
+            const myRow = reRanked.find((r: RankedRow) => r.userdiscordid === myDiscordId);
+            if (myRow) {
+              if (myRow.role === "tank") setRoleTab("tank");
+              else if (myRow.role === "healer") setRoleTab("healer");
+              else setRoleTab(`dps:${myRow.class_name}`);
+            }
+          }
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [myGuild]);
+  }, [myGuild, myDiscordId]);
 
   // Mock data when no real data
   const MOCK: BatchData[] = [
@@ -458,6 +474,44 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
     ...b,
     rawScore: roleTab === "tank" ? b.scoreTank : roleTab === "healer" ? b.scoreHealer : b.scoreDps,
   }));
+
+  // derive unique DPS classes from lbItems (sorted by count desc)
+  const dpsClassMap = new Map<string, { class_name: string; class_icon: string; count: number }>();
+  for (const r of lbItems) {
+    if (r.role !== "dps") continue;
+    const k = r.class_name;
+    const entry = dpsClassMap.get(k);
+    if (entry) entry.count++;
+    else dpsClassMap.set(k, { class_name: k, class_icon: r.class_icon, count: 1 });
+  }
+  const dpsClasses = Array.from(dpsClassMap.values()).sort((a, b) => b.count - a.count);
+
+  // derive tank / healer class info from lbItems
+  const tankEntry   = lbItems.find((r) => r.role === "tank");
+  const healerEntry = lbItems.find((r) => r.role === "healer");
+  const tankClass   = tankEntry   ? { class_name: tankEntry.class_name,   class_icon: tankEntry.class_icon }   : { class_name: "หมัด",  class_icon: "" };
+  const healerClass = healerEntry ? { class_name: healerEntry.class_name, class_icon: healerEntry.class_icon } : { class_name: "พระ",   class_icon: "" };
+
+  // helper: filter lbItems by current tab and re-rank
+  const getTabItems = (tab: string): RankedRow[] => {
+    let filtered: RankedRow[];
+    if (tab === "tank") filtered = lbItems.filter((r) => r.role === "tank");
+    else if (tab === "healer") filtered = lbItems.filter((r) => r.role === "healer");
+    else if (tab === "dps") filtered = lbItems.filter((r) => r.role === "dps");
+    else if (tab.startsWith("dps:")) {
+      const cn = tab.slice(4);
+      filtered = lbItems.filter((r) => r.role === "dps" && r.class_name === cn);
+    } else filtered = [];
+    return filtered.map((r, i) => ({ ...r, rank: i + 1 }));
+  };
+
+  const tabLabel = (tab: string): string => {
+    if (tab === "dps") return "DPS";
+    if (tab === "tank") return tankClass.class_name;
+    if (tab === "healer") return healerClass.class_name;
+    if (tab.startsWith("dps:")) return tab.slice(4);
+    return tab;
+  };
 
   const latest = scoredBatches[scoredBatches.length - 1]!;
   const prev   = scoredBatches[scoredBatches.length - 2];
@@ -531,40 +585,86 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
       </div>
 
       {/* ── Role tab selector ── */}
-      <div className="flex items-center gap-1.5 px-4 pb-3">
+      <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
+        {/* DPS รวม */}
+        <button
+          type="button"
+          onClick={() => setRoleTab("dps")}
+          className={[
+            "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all border",
+            roleTab === "dps"
+              ? "bg-red-600 text-white border-red-600 shadow-sm"
+              : "bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-red-300 hover:text-red-500",
+          ].join(" ")}
+        >
+          DPS
+        </button>
+
+        {/* แยกแต่ละอาชีพ DPS */}
+        {dpsClasses.map(({ class_name, class_icon }) => {
+          const key = `dps:${class_name}`;
+          const active = roleTab === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setRoleTab(key)}
+              className={[
+                "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border flex items-center gap-1.5",
+                active
+                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                  : "bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-red-300 hover:text-red-500",
+              ].join(" ")}
+            >
+              {class_icon && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+              )}
+              {class_name}
+            </button>
+          );
+        })}
+
+        {/* Divider */}
+        {dpsClasses.length > 0 && (
+          <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
+        )}
+
+        {/* ไอรอนแคลด (tank) + ซิลฟ์ (healer) — ใช้ชื่อจริงจาก data */}
         {([
-          { key: "dps",    label: "DPS" },
-          { key: "tank",   label: "หมัด" },
-          { key: "healer", label: "พระ" },
-        ] as const).map(({ key, label }) => (
+          { key: "tank",   info: tankClass },
+          { key: "healer", info: healerClass },
+        ] as const).map(({ key, info }) => (
           <button
             key={key}
             type="button"
             onClick={() => setRoleTab(key)}
             className={[
-              "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all border",
+              "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border flex items-center gap-1.5",
               roleTab === key
                 ? "bg-red-600 text-white border-red-600 shadow-sm"
                 : "bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-red-300 hover:text-red-500",
             ].join(" ")}
           >
-            {label}
+            {info.class_icon && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={info.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+            )}
+            {info.class_name}
           </button>
         ))}
       </div>
 
       {/* ── Top 3 Leaderboard (filtered by role + re-ranked) ── */}
       {(() => {
-        const roleItems = lbItems
-          .filter((r) => r.role === roleTab)
-          .map((r, i) => ({ ...r, rank: i + 1 }));
+        const roleItems = getTabItems(roleTab);
         if (roleItems.length === 0) return null;
         return (
         <div className="px-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-1.5 mb-2">
             <Trophy className="h-3.5 w-3.5 text-amber-500" />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Top 3 · {roleTab === "dps" ? "DPS" : roleTab === "tank" ? "หมัด" : "พระ"} · {myGuild ? `Inferno-${myGuild}` : "ทั้งหมด"}
+              Top 3 · {tabLabel(roleTab)} · {myGuild ? `Inferno-${myGuild}` : "ทั้งหมด"}
             </span>
           </div>
           <div className="space-y-1.5">

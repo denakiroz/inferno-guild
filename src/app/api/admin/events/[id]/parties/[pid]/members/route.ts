@@ -1,3 +1,5 @@
+// POST   /api/admin/events/[id]/parties/[pid]/members  — add member to party
+// DELETE /api/admin/events/[id]/parties/[pid]/members  — remove member (body: {discord_user_id})
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
@@ -11,31 +13,26 @@ async function requireEditor() {
   const sid = cookieStore.get(env.AUTH_COOKIE_NAME)?.value;
   if (!sid) return null;
   const session = await getSession(sid);
-  if (!session) return null;
-  if (!(session.isAdmin || session.isHead)) return null;
+  if (!session || !(session.isAdmin || session.isHead)) return null;
   return session;
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string; pid: string }> }) {
   try {
     const session = await requireEditor();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
-    const { id } = await params;
+    const { pid } = await params;
     const body = await req.json().catch(() => ({}));
+    const discord_user_id = String(body?.discord_user_id ?? "").trim();
+    const member_name     = String(body?.member_name     ?? "").trim() || null;
 
-    const updates: Record<string, unknown> = {};
-    if ("label" in body)          updates.label          = String(body.label ?? "").trim() || null;
-    if ("opponent_guild" in body) updates.opponent_guild = String(body.opponent_guild ?? "").trim() || null;
-    if ("guild" in body)          updates.guild          = body.guild != null ? Number(body.guild) : null;
-
-    if (Object.keys(updates).length === 0)
-      return NextResponse.json({ ok: false, error: "nothing to update" }, { status: 400 });
+    if (!discord_user_id)
+      return NextResponse.json({ ok: false, error: "discord_user_id required" }, { status: 400 });
 
     const { error } = await supabaseAdmin
-      .from("member_potential_batches")
-      .update(updates)
-      .eq("id", id);
+      .from("event_party_members")
+      .upsert({ party_id: pid, discord_user_id, member_name }, { onConflict: "party_id,discord_user_id" });
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
@@ -44,16 +41,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string; pid: string }> }) {
   try {
     const session = await requireEditor();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
-    const { id } = await params;
+    const { pid } = await params;
+    const body = await req.json().catch(() => ({}));
+    const discord_user_id = String(body?.discord_user_id ?? "").trim();
+
+    if (!discord_user_id)
+      return NextResponse.json({ ok: false, error: "discord_user_id required" }, { status: 400 });
+
     const { error } = await supabaseAdmin
-      .from("member_potential_batches")
+      .from("event_party_members")
       .delete()
-      .eq("id", id);
+      .eq("party_id", pid)
+      .eq("discord_user_id", discord_user_id);
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });

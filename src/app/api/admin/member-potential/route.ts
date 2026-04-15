@@ -41,6 +41,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const label = String(body?.label ?? "").trim() || new Date().toLocaleDateString("th-TH");
     const opponent_guild = body?.opponent_guild ? String(body.opponent_guild).trim() || null : null;
+    const guild = body?.guild != null ? Number(body.guild) : null;
     const rows: any[] = Array.isArray(body?.rows) ? body.rows : [];
 
     if (rows.length === 0)
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
     // Create batch
     const { data: batch, error: bErr } = await supabaseAdmin
       .from("member_potential_batches")
-      .insert({ label, imported_by, opponent_guild })
+      .insert({ label, imported_by, opponent_guild, guild })
       .select("id")
       .single();
     if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 });

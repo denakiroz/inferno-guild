@@ -163,8 +163,10 @@ export async function buildLeaderboard(): Promise<BuildResult> {
 
   const leaderboard: LeaderboardItem[] = Array.from(memberMap.entries()).map(([uid, mem]) => {
     const ua = userAggMap.get(uid);
-    // ใช้ class_id จาก record snapshot ถ้ามี ไม่งั้น fallback เป็น member ปัจจุบัน
-    const classId = recordClassMap.has(uid) ? recordClassMap.get(uid)! : mem.class_id;
+    // scoreClassId = snapshot (ใช้ weight ถูกต้องตาม class ตอนเล่นจริง)
+    const scoreClassId = recordClassMap.has(uid) ? recordClassMap.get(uid)! : mem.class_id;
+    // role ใช้ current class_id เสมอ — ถ้าย้ายอาชีพแล้วให้ย้าย group ตาม
+    const classId = mem.class_id ?? scoreClassId;
     const role = classToRole(classId);
 
     const avgs: Record<Category, number> = ua
@@ -174,7 +176,7 @@ export async function buildLeaderboard(): Promise<BuildResult> {
       : { ...zeroAvgs };
 
     const rawScore = CATEGORIES.reduce(
-      (acc, c) => acc + avgs[c] * getWeight(classId, c),
+      (acc, c) => acc + avgs[c] * getWeight(scoreClassId, c),
       0
     );
 

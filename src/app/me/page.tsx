@@ -33,8 +33,9 @@ import {
 } from "./_components/WeaponStoneSection";
 import { UpcomingEventsWidget } from "./_components/UpcomingEventsWidget";
 import { PotentialLeaderboardWidget } from "./_components/PotentialLeaderboardWidget";
+import { EventWidget } from "./_components/EventWidget";
 
-type TabKey = "profile" | "internalPower" | "leaves";
+type TabKey = "overview" | "event" | "profile" | "internalPower" | "leaves";
 
 const tabBase = "px-4 py-2 text-sm rounded-lg transition whitespace-nowrap";
 const tabIdle =
@@ -44,7 +45,7 @@ const tabActive = "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 sh
 export default function MePage() {
   const { theme, toggleTheme } = useTheme();
 
-  const [tab, setTab] = useState<TabKey>("profile");
+  const [tab, setTab] = useState<TabKey>("event");
 
   const [me, setMe] = useState<MeRes | null>(null);
   const [member, setMember] = useState<MemberRow | null>(null);
@@ -456,6 +457,22 @@ export default function MePage() {
                 <div className="inline-flex max-w-full overflow-x-auto rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1">
                   <button
                     type="button"
+                    onClick={() => setTab("event")}
+                    className={`${tabBase} ${tab === "event" ? tabActive : tabIdle}`}
+                  >
+                    🏆 Event
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTab("overview")}
+                    className={`${tabBase} ${tab === "overview" ? tabActive : tabIdle}`}
+                  >
+                    Dashboard
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setTab("profile")}
                     className={`${tabBase} ${tab === "profile" ? tabActive : tabIdle}`}
                   >
@@ -486,14 +503,19 @@ export default function MePage() {
           </div>
         </div>
 
-        {/* ── Upcoming Events (non-sticky) ── */}
-        <UpcomingEventsWidget />
-
-        {/* ── Potential Leaderboard ── */}
-        <PotentialLeaderboardWidget myDiscordId={me?.user?.discordUserId} myGuild={member ? Number((member as any).guild) || null : null} />
-
         {/* Content */}
-        {tab === "profile" ? (
+        {tab === "overview" && (
+          <>
+            <UpcomingEventsWidget />
+            <PotentialLeaderboardWidget myDiscordId={me?.user?.discordUserId} myGuild={member ? Number((member as any).guild) || null : null} />
+          </>
+        )}
+
+        {tab === "event" && (
+          <EventWidget />
+        )}
+
+        {tab === "profile" && (
           <ProfileTab
             member={member}
             setMember={setMember}
@@ -514,7 +536,9 @@ export default function MePage() {
             setAllStonesByType={setAllStonesByType}
             stonesLoading={stonesLoading}
           />
-        ) : (
+        )}
+
+        {tab === "leaves" && (
           <LeavesTab
             leaveErr={leaveErr}
             upcomingGrouped={upcomingGrouped}

@@ -1,3 +1,5 @@
+// PATCH  /api/admin/events/[id]  — update event (name, description, status)
+// DELETE /api/admin/events/[id]  — delete event
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
@@ -11,8 +13,7 @@ async function requireEditor() {
   const sid = cookieStore.get(env.AUTH_COOKIE_NAME)?.value;
   if (!sid) return null;
   const session = await getSession(sid);
-  if (!session) return null;
-  if (!(session.isAdmin || session.isHead)) return null;
+  if (!session || !(session.isAdmin || session.isHead)) return null;
   return session;
 }
 
@@ -25,18 +26,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json().catch(() => ({}));
 
     const updates: Record<string, unknown> = {};
-    if ("label" in body)          updates.label          = String(body.label ?? "").trim() || null;
-    if ("opponent_guild" in body) updates.opponent_guild = String(body.opponent_guild ?? "").trim() || null;
-    if ("guild" in body)          updates.guild          = body.guild != null ? Number(body.guild) : null;
+    if ("name"        in body) updates.name        = String(body.name ?? "").trim() || null;
+    if ("description" in body) updates.description = String(body.description ?? "").trim() || null;
+    if ("status"      in body) updates.status      = String(body.status ?? "").trim();
 
     if (Object.keys(updates).length === 0)
       return NextResponse.json({ ok: false, error: "nothing to update" }, { status: 400 });
 
-    const { error } = await supabaseAdmin
-      .from("member_potential_batches")
-      .update(updates)
-      .eq("id", id);
-
+    const { error } = await supabaseAdmin.from("events").update(updates).eq("id", id);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
@@ -50,11 +47,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
     const { id } = await params;
-    const { error } = await supabaseAdmin
-      .from("member_potential_batches")
-      .delete()
-      .eq("id", id);
-
+    const { error } = await supabaseAdmin.from("events").delete().eq("id", id);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   } catch (e: any) {

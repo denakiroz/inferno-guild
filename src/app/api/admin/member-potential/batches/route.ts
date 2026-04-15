@@ -23,7 +23,7 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("member_potential_batches")
-      .select("id,label,imported_at,imported_by,opponent_guild")
+      .select("id,label,imported_at,imported_by,opponent_guild,guild")
       .order("imported_at", { ascending: false });
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
