@@ -494,6 +494,19 @@ export default function MemberPotentialClient() {
   const [importLabel, setImportLabel] = useState("");
   const [importOpponentGuild, setImportOpponentGuild] = useState("");
   const [importClassFilter, setImportClassFilter] = useState<string | null>(null);
+  // Sort preview table
+  type ImportSortField = "name" | "class" | Category;
+  const [importSortField, setImportSortField] = useState<ImportSortField | null>(null);
+  const [importSortDir, setImportSortDir] = useState<"asc" | "desc">("desc");
+  const toggleImportSort = (field: ImportSortField) => {
+    if (importSortField === field) {
+      setImportSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setImportSortField(field);
+      // numeric cols default desc (เยอะ → น้อย), string cols default asc
+      setImportSortDir(field === "name" || field === "class" ? "asc" : "desc");
+    }
+  };
 
   // Batch edit modal
   const [editingBatch, setEditingBatch] = useState<BatchRow | null>(null);
@@ -1941,11 +1954,28 @@ export default function MemberPotentialClient() {
         const classOptions = Array.from(classCounts.entries())
           .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "th"));
 
-        const filteredRecords = importClassFilter === null
+        const baseFiltered = importClassFilter === null
           ? pendingImport.records
           : pendingImport.records.filter((r) => {
               const k = (r.class_name ?? "").trim() || "-";
               return k === importClassFilter;
+            });
+
+        // Sort ตาม importSortField/importSortDir (null = คงลำดับเดิม)
+        const filteredRecords = importSortField === null
+          ? baseFiltered
+          : [...baseFiltered].sort((a, b) => {
+              const dir = importSortDir === "asc" ? 1 : -1;
+              if (importSortField === "name") {
+                return (a.discordname ?? "").localeCompare(b.discordname ?? "", "th") * dir;
+              }
+              if (importSortField === "class") {
+                return ((a.class_name ?? "").localeCompare(b.class_name ?? "", "th")) * dir;
+              }
+              // numeric categories
+              const av = Number(a[importSortField]) || 0;
+              const bv = Number(b[importSortField]) || 0;
+              return (av - bv) * dir;
             });
 
         const classIconMap = new Map<string, string | undefined>();
@@ -1953,13 +1983,23 @@ export default function MemberPotentialClient() {
           classIconMap.set(c.name, c.icon_url ?? undefined);
         }
 
+        // Helper: icon ↑/↓ ของ header ปัจจุบัน
+        const sortIcon = (field: ImportSortField) => {
+          if (importSortField !== field) return <span className="opacity-20 ml-0.5">↕</span>;
+          return (
+            <span className="text-red-500 ml-0.5">
+              {importSortDir === "asc" ? "↑" : "↓"}
+            </span>
+          );
+        };
+
         return (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
             onClick={() => setPendingImport(null)}
           >
             <div
-              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col"
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-5xl h-[92vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -2062,16 +2102,40 @@ export default function MemberPotentialClient() {
                       <thead>
                         <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800">
                           <th className="px-2 py-2 text-left font-semibold text-zinc-400 w-10">#</th>
-                          <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">ชื่อ</th>
-                          <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">อาชีพ</th>
-                          {CATEGORIES.map((c) => (
-                            <th
-                              key={c}
-                              className={`px-2 py-2 text-right font-semibold whitespace-nowrap ${c === "death" ? "text-red-400" : "text-zinc-500"}`}
-                            >
-                              {CAT_LABELS[c]}
-                            </th>
-                          ))}
+                          <th
+                            onClick={() => toggleImportSort("name")}
+                            className={`px-2 py-2 text-left font-semibold whitespace-nowrap cursor-pointer select-none hover:bg-zinc-100 dark:hover:bg-zinc-800 transition ${
+                              importSortField === "name" ? "text-red-500" : "text-zinc-500"
+                            }`}
+                          >
+                            ชื่อ{sortIcon("name")}
+                          </th>
+                          <th
+                            onClick={() => toggleImportSort("class")}
+                            className={`px-2 py-2 text-left font-semibold whitespace-nowrap cursor-pointer select-none hover:bg-zinc-100 dark:hover:bg-zinc-800 transition ${
+                              importSortField === "class" ? "text-red-500" : "text-zinc-500"
+                            }`}
+                          >
+                            อาชีพ{sortIcon("class")}
+                          </th>
+                          {CATEGORIES.map((c) => {
+                            const isActive = importSortField === c;
+                            return (
+                              <th
+                                key={c}
+                                onClick={() => toggleImportSort(c)}
+                                className={`px-2 py-2 text-right font-semibold whitespace-nowrap cursor-pointer select-none hover:bg-zinc-100 dark:hover:bg-zinc-800 transition ${
+                                  isActive
+                                    ? "text-red-500"
+                                    : c === "death"
+                                    ? "text-red-400"
+                                    : "text-zinc-500"
+                                }`}
+                              >
+                                {CAT_LABELS[c]}{sortIcon(c)}
+                              </th>
+                            );
+                          })}
                         </tr>
                       </thead>
                       <tbody>
