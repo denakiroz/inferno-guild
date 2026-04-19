@@ -91,7 +91,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const { pid } = await params;
     const body = await req.json().catch(() => ({}));
-    const order = Array.isArray(body?.order) ? body.order.map(String) : null;
+    const order: string[] | null = Array.isArray(body?.order)
+      ? (body.order as unknown[]).map((v) => String(v))
+      : null;
 
     if (!order || order.length === 0)
       return NextResponse.json({ ok: false, error: "order required" }, { status: 400 });
