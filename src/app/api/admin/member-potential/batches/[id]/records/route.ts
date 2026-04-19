@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { invalidateMemberPotential } from "@/lib/redisCache";
 
 export const runtime = "nodejs";
 
@@ -52,39 +53,51 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (bErr || !batch)
       return NextResponse.json({ ok: false, error: "batch not found" }, { status: 404 });
 
-    // Run updates sequentially (simple, reliable) — Supabase JS client has no true bulk update by composite key
+    // ⚡ รัน updates แบบ parallel — Supabase JS client ไม่มี bulk update by composite key
+    //    แต่ละ update คนละ row จึงไม่ conflict
+    const jobs = updates
+      .map((u) => {
+        const uid = String(u.userdiscordid ?? "").trim();
+        if (!uid) return null;
+        const patch: Record<string, number> = {};
+        for (const field of STAT_FIELDS) {
+          if (field in u) {
+            const n = Number(u[field]);
+            if (Number.isFinite(n) && n >= 0) patch[field] = Math.floor(n);
+          }
+        }
+        if (Object.keys(patch).length === 0) return null;
+        return { uid, patch };
+      })
+      .filter((x): x is { uid: string; patch: Record<string, number> } => x !== null);
+
+    const results = await Promise.all(
+      jobs.map(({ uid, patch }) =>
+        supabaseAdmin
+          .from("member_potential_records")
+          .update(patch, { count: "exact" })
+          .eq("batch_id", batchId)
+          .eq("userdiscordid", uid)
+          .then((res) => ({ uid, res })),
+      ),
+    );
+
     const errors: Array<{ userdiscordid: string; error: string }> = [];
     let updatedCount = 0;
-
-    for (const u of updates) {
-      const uid = String(u.userdiscordid ?? "").trim();
-      if (!uid) continue;
-
-      const patch: Record<string, number> = {};
-      for (const field of STAT_FIELDS) {
-        if (field in u) {
-          const n = Number(u[field]);
-          if (Number.isFinite(n) && n >= 0) patch[field] = Math.floor(n);
-        }
-      }
-      if (Object.keys(patch).length === 0) continue;
-
-      const { error: uErr, count } = await supabaseAdmin
-        .from("member_potential_records")
-        .update(patch, { count: "exact" })
-        .eq("batch_id", batchId)
-        .eq("userdiscordid", uid);
-
-      if (uErr) {
-        errors.push({ userdiscordid: uid, error: uErr.message });
+    for (const { uid, res } of results) {
+      if (res.error) {
+        errors.push({ userdiscordid: uid, error: res.error.message });
       } else {
-        updatedCount += count ?? 0;
+        updatedCount += res.count ?? 0;
       }
     }
 
     if (errors.length > 0 && updatedCount === 0) {
       return NextResponse.json({ ok: false, error: "all updates failed", details: errors }, { status: 500 });
     }
+
+    // stat เปลี่ยน → leaderboard ต้องคำนวณใหม่
+    await invalidateMemberPotential();
 
     return NextResponse.json({ ok: true, updated: updatedCount, errors });
   } catch (e: any) {

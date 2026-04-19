@@ -45,19 +45,22 @@ export default async function DashboardPage() {
 
   // ✅ admin: SSR เห็นทั้งหมด
   if (session.isAdmin) {
-    const { data: members, error: memErr } = await supabaseAdmin
-      .from("member")
-      .select(SELECT_MEMBER_WITH_CLASS)
-      .order("id", { ascending: true });
+    // ⚡ 2 query อิสระ — ยิงพร้อมกัน
+    const [memRes, leaveRes] = await Promise.all([
+      supabaseAdmin
+        .from("member")
+        .select(SELECT_MEMBER_WITH_CLASS)
+        .order("id", { ascending: true }),
+      supabaseAdmin
+        .from("leave")
+        .select(SELECT_LEAVE)
+        .order("date_time", { ascending: false }),
+    ]);
 
+    const { data: members, error: memErr } = memRes;
     if (memErr) return <div className="p-6 text-sm">Failed to load members: {memErr.message}</div>;
 
-    const { data: leaves, error: leaveErr } = await supabaseAdmin
-      .from("leave")
-      .select(SELECT_LEAVE)
-      .order("date_time", { ascending: false });
-
-    const safeLeaves = leaveErr ? [] : (leaves ?? []);
+    const safeLeaves = leaveRes.error ? [] : (leaveRes.data ?? []);
     return <AdminDashboardClient members={(members ?? []) as any} leaves={safeLeaves as any} />;
   }
 

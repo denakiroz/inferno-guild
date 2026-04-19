@@ -1,30 +1,18 @@
 "use client";
 
 // src/app/admin/members/MembersClient.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Members from "./Members";
 import { supabase } from "@/lib/supabase";
+import { qk } from "@/lib/queryClient";
+import { useMe, useMembers } from "@/hooks/api/members";
 import type { DbMember, DbLeave, GuildNo } from "@/type/db";
 
-type MeResp =
-  | {
-      ok: true;
-      user: {
-        discordUserId: string;
-        displayName: string;
-        avatarUrl: string | null;
-        guild: number;
-        isAdmin: boolean;
-      };
-    }
-  | { ok: false };
-
 export default function MembersClient() {
-  const [me, setMe] = useState<MeResp | null>(null);
-
-  const [members, setMembers] = useState<DbMember[]>([]);
-  const [leaves, setLeaves] = useState<DbLeave[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const qc = useQueryClient();
+  const meQuery = useMe();
+  const me = meQuery.data ?? null;
 
   const effectiveIsAdmin = useMemo(() => {
     if (!me || !me.ok) return false;
@@ -41,76 +29,54 @@ export default function MembersClient() {
     return !!(me && me.ok && effectiveIsAdmin);
   }, [me, effectiveIsAdmin]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch("/api/me", { cache: "no-store" });
-        const j = (await r.json()) as MeResp;
-        setMe(j);
-      } catch {
-        setMe({ ok: false });
-      }
-    })();
-  }, []);
+  // Determine which guild to fetch:
+  // - admin → all (guild = null)
+  // - non-admin → their own guild
+  // - me not loaded yet → don't fetch yet
+  const fetchGuild: number | null = me?.ok
+    ? effectiveIsAdmin
+      ? null
+      : Number(me.user.guild)
+    : null;
 
-  // ✅ ใช้ /api/admin/members เพื่อให้ได้ ultimate_skill_ids, special_skill_ids, weapon_stones
-  const load = useCallback(async (guild?: GuildNo) => {
-    setIsLoading(true);
-    try {
-      const url = guild ? `/api/admin/members?guild=${guild}` : "/api/admin/members";
-      const r = await fetch(url, { cache: "no-store" });
-      const j = await r.json();
+  const membersEnabled = meQuery.isSuccess && me?.ok === true;
 
-      const rows: DbMember[] = Array.isArray(j.members) ? j.members : [];
-      setMembers(rows);
-      setLeaves(Array.isArray(j.leaves) ? j.leaves : []);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const membersQuery = useMembers(fetchGuild, { enabled: membersEnabled });
 
-  const onReload = useCallback(async () => {
-    if (!me || !me.ok) return;
-    if (effectiveIsAdmin) return load(undefined);
-    return load(Number(me.user.guild) as GuildNo);
-  }, [load, me, effectiveIsAdmin]);
+  const members: DbMember[] = (membersQuery.data?.members as DbMember[] | undefined) ?? [];
+  const leaves: DbLeave[] = (membersQuery.data?.leaves as DbLeave[] | undefined) ?? [];
+  const isLoading = meQuery.isLoading || (membersEnabled && membersQuery.isLoading);
 
-  useEffect(() => {
-    if (me == null) return;
-
-    if (!me.ok) {
-      setMembers([]);
-      setLeaves([]);
-      setIsLoading(false);
-      return;
-    }
-
-    if (effectiveIsAdmin) load(undefined);
-    else load(Number(me.user.guild) as GuildNo);
-  }, [me, load, effectiveIsAdmin]);
-
-  // ✅ Realtime: member/leave เปลี่ยน → reload
+  // Realtime: member/leave เปลี่ยน → invalidate cached list
   useEffect(() => {
     if (!me || !me.ok) return;
+
+    const invalidate = () => {
+      qc.invalidateQueries({ queryKey: ["members"] });
+    };
 
     const ch = supabase
       .channel("admin-members-realtime")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "member" },
-        () => void onReload()
+        invalidate
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "leave" },
-        () => void onReload()
+        invalidate
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [me, onReload]);
+  }, [me, qc]);
+
+  const onReload = async () => {
+    await qc.invalidateQueries({ queryKey: qk.members(fetchGuild) });
+  };
 
   return (
     <Members

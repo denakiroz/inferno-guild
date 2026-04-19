@@ -21,26 +21,29 @@ export async function GET(req: Request) {
     const uid = new URL(req.url).searchParams.get("uid");
     if (!uid) return NextResponse.json({ ok: false, error: "uid required" }, { status: 400 });
 
-    // ดึง record ทั้งหมดของคนนี้ พร้อม batch info
-    const { data: records, error } = await supabaseAdmin
-      .from("member_potential_records")
-      .select(`
-        batch_id,
-        class_id,
-        kill, assist, supply,
-        damage_player, damage_fort,
-        heal, damage_taken, death, revive,
-        member_potential_batches!inner(id, label, imported_at, opponent_guild)
-      `)
-      .eq("userdiscordid", uid)
-      .order("member_potential_batches(imported_at)", { ascending: false });
+    // ⚡ records + weights อิสระต่อกัน — ยิงพร้อมกัน
+    const [recordsRes, weightsRes] = await Promise.all([
+      supabaseAdmin
+        .from("member_potential_records")
+        .select(`
+          batch_id,
+          class_id,
+          kill, assist, supply,
+          damage_player, damage_fort,
+          heal, damage_taken, death, revive,
+          member_potential_batches!inner(id, label, imported_at, opponent_guild)
+        `)
+        .eq("userdiscordid", uid)
+        .order("member_potential_batches(imported_at)", { ascending: false }),
+      supabaseAdmin
+        .from("member_potential_weights")
+        .select("class_id,category,weight,enabled"),
+    ]);
 
+    const { data: records, error } = recordsRes;
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-    // Fetch weights for score calculation
-    const { data: weights } = await supabaseAdmin
-      .from("member_potential_weights")
-      .select("class_id,category,weight,enabled");
+    const { data: weights } = weightsRes;
 
     const defaultWeights = new Map<string, number>();
     const classWeightsMap = new Map<number, Map<string, number>>();

@@ -6,6 +6,7 @@ import Dashboard from "./Dashboard";
 import { memberService } from "@/services/memberService";
 import { leaveService } from "@/services/leaveService";
 import { supabase } from "@/lib/supabase";
+import { useMe } from "@/hooks/api/members";
 import type { DbMember, DbLeave, GuildNo } from "@/type/db";
 
 type MeResp =
@@ -22,7 +23,11 @@ type MeResp =
   | { ok: false };
 
 export default function DashboardClient() {
-  const [me, setMe] = useState<MeResp | null>(null);
+  const meQuery = useMe();
+  // null while still loading; (MeResp) once fetched
+  const me: MeResp | null = meQuery.isLoading
+    ? null
+    : ((meQuery.data as MeResp | undefined) ?? { ok: false });
 
   const [members, setMembers] = useState<DbMember[]>([]);
   const [leaves, setLeaves] = useState<DbLeave[]>([]);
@@ -44,18 +49,6 @@ export default function DashboardClient() {
   const canViewAllGuilds = useMemo(() => {
     return !!(me && me.ok && effectiveIsAdmin);
   }, [me, effectiveIsAdmin]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch("/api/me", { cache: "no-store" });
-        const j = (await r.json()) as MeResp;
-        setMe(j);
-      } catch {
-        setMe({ ok: false });
-      }
-    })();
-  }, []);
 
   const load = useCallback(async (guild?: GuildNo) => {
     setIsLoading(true);

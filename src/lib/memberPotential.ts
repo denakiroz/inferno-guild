@@ -34,18 +34,28 @@ type BuildResult =
   | { ok: false; error: string };
 
 export async function buildLeaderboard(): Promise<BuildResult> {
-  // 1. Records — include batch_id for per-batch averaging
-  const { data: records, error: recErr } = await supabaseAdmin
-    .from("member_potential_records")
-    .select("batch_id,userdiscordid,class_id,kill,assist,supply,damage_player,damage_fort,heal,damage_taken,death,revive");
+  // ⚡ 3 query นี้ไม่ขึ้นต่อกัน — ยิงพร้อมกันด้วย Promise.all เพื่อลด latency
+  //    (records + members + weights)
+  const [recRes, memRes, wRes] = await Promise.all([
+    supabaseAdmin
+      .from("member_potential_records")
+      .select("batch_id,userdiscordid,class_id,kill,assist,supply,damage_player,damage_fort,heal,damage_taken,death,revive"),
+    supabaseAdmin
+      .from("member")
+      .select("discord_user_id,name,class_id,guild,class:class!member_class_id_fkey(id,name,icon_url)")
+      .not("discord_user_id", "is", null)
+      .eq("status", "active"),
+    supabaseAdmin
+      .from("member_potential_weights")
+      .select("class_id,category,weight,enabled"),
+  ]);
+
+  // 1. Records
+  const { data: records, error: recErr } = recRes;
   if (recErr) return { ok: false, error: recErr.message };
 
   // 2. Active members
-  const { data: members, error: memErr } = await supabaseAdmin
-    .from("member")
-    .select("discord_user_id,name,class_id,guild,class:class!member_class_id_fkey(id,name,icon_url)")
-    .not("discord_user_id", "is", null)
-    .eq("status", "active");
+  const { data: members, error: memErr } = memRes;
   if (memErr) return { ok: false, error: memErr.message };
 
   const memberMap = new Map<string, {
@@ -86,10 +96,8 @@ export async function buildLeaderboard(): Promise<BuildResult> {
     recordClassMap.set(uid, bestCid);
   }
 
-  // 4. Weights
-  const { data: weights } = await supabaseAdmin
-    .from("member_potential_weights")
-    .select("class_id,category,weight,enabled");
+  // 4. Weights — มาจาก Promise.all ด้านบนแล้ว
+  const { data: weights } = wRes;
 
   type WeightMap = Map<Category, number>;
   const defaultWeights: WeightMap = new Map();

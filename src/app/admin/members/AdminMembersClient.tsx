@@ -1,9 +1,16 @@
 // src/app/admin/members/AdminMembersClient.tsx
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Members from "./Members";
 import { supabase } from "@/lib/supabase";
+import { qk } from "@/lib/queryClient";
+import {
+  useMembers,
+  useClubMembers,
+  useClub2Members,
+} from "@/hooks/api/members";
 import type { DbLeave, DbMember } from "@/type/db";
 
 type ViewTab = "members" | "club" | "club2";
@@ -18,22 +25,34 @@ type Props = {
 };
 
 export default function AdminMembersClient(initial: Props) {
+  const qc = useQueryClient();
   const [viewTab, setViewTab] = useState<ViewTab>("members");
 
-  // Members tab state
-  const [members, setMembers] = useState<DbMember[]>(initial.members ?? []);
-  const [leaves, setLeaves] = useState<DbLeave[]>(initial.leaves ?? []);
-  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  // ทั้ง 3 endpoint ถูก fetch ทันทีตอน mount เพื่อ pre-populate cache
+  // (เลียนแบบพฤติกรรมเดิมที่ component ทำ Promise.all เปิดมาทุกอัน)
+  const membersQuery = useMembers(null);
+  const clubMembersQuery = useClubMembers();
+  const club2MembersQuery = useClub2Members();
 
-  // Club tab state
-  const [clubMembers, setClubMembers] = useState<DbMember[]>(initial.clubMembers ?? []);
-  const [clubLeaves, setClubLeaves] = useState<DbLeave[]>(initial.clubLeaves ?? []);
-  const [isLoadingClub, setIsLoadingClub] = useState(false);
+  // initial SSR data — ใช้ก่อนที่ query จะกลับมา (avoid flash empty)
+  const members: DbMember[] =
+    (membersQuery.data?.members as DbMember[] | undefined) ?? initial.members ?? [];
+  const leaves: DbLeave[] =
+    (membersQuery.data?.leaves as DbLeave[] | undefined) ?? initial.leaves ?? [];
 
-  // Club 2 tab state
-  const [club2Members, setClub2Members] = useState<DbMember[]>(initial.club2Members ?? []);
-  const [club2Leaves, setClub2Leaves] = useState<DbLeave[]>(initial.club2Leaves ?? []);
-  const [isLoadingClub2, setIsLoadingClub2] = useState(false);
+  const clubMembers: DbMember[] =
+    (clubMembersQuery.data?.members as DbMember[] | undefined) ?? initial.clubMembers ?? [];
+  const clubLeaves: DbLeave[] =
+    (clubMembersQuery.data?.leaves as DbLeave[] | undefined) ?? initial.clubLeaves ?? [];
+
+  const club2Members: DbMember[] =
+    (club2MembersQuery.data?.members as DbMember[] | undefined) ?? initial.club2Members ?? [];
+  const club2Leaves: DbLeave[] =
+    (club2MembersQuery.data?.leaves as DbLeave[] | undefined) ?? initial.club2Leaves ?? [];
+
+  const isLoadingMembers = membersQuery.isFetching;
+  const isLoadingClub = clubMembersQuery.isFetching;
+  const isLoadingClub2 = club2MembersQuery.isFetching;
 
   const isLoading = useMemo(
     () =>
@@ -45,64 +64,17 @@ export default function AdminMembersClient(initial: Props) {
     [viewTab, isLoadingMembers, isLoadingClub, isLoadingClub2]
   );
 
-  const onReloadMembers = useCallback(async () => {
-    setIsLoadingMembers(true);
-    try {
-      const res = await fetch("/api/admin/members", { cache: "no-store" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error ?? "Failed to reload members");
+  const onReloadMembers = async () => {
+    await qc.invalidateQueries({ queryKey: qk.members(null) });
+  };
+  const onReloadClub = async () => {
+    await qc.invalidateQueries({ queryKey: qk.clubMembers() });
+  };
+  const onReloadClub2 = async () => {
+    await qc.invalidateQueries({ queryKey: qk.club2Members() });
+  };
 
-      setMembers((json.members ?? []) as DbMember[]);
-      setLeaves((json.leaves ?? []) as DbLeave[]);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoadingMembers(false);
-    }
-  }, []);
-
-  const onReloadClub = useCallback(async () => {
-    setIsLoadingClub(true);
-    try {
-      const res = await fetch("/api/admin/club-members", { cache: "no-store" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error ?? "Failed to reload club members");
-
-      setClubMembers((json.members ?? []) as DbMember[]);
-      setClubLeaves((json.leaves ?? []) as DbLeave[]);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoadingClub(false);
-    }
-  }, []);
-
-  const onReloadClub2 = useCallback(async () => {
-    setIsLoadingClub2(true);
-    try {
-      const res = await fetch("/api/admin/club-members-2", { cache: "no-store" });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error ?? "Failed to reload club 2 members");
-
-      setClub2Members((json.members ?? []) as DbMember[]);
-      setClub2Leaves((json.leaves ?? []) as DbLeave[]);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoadingClub2(false);
-    }
-  }, []);
-
-  // ✅ On mount: reload from API to get skill mapping fields
-  //    (initial SSR data from page.tsx doesn't include ultimate_skill_ids / special_skill_ids / weapon_stones)
-  useEffect(() => {
-    void onReloadMembers();
-    void onReloadClub();
-    void onReloadClub2();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ✅ Realtime: member/leave เปลี่ยน → reload เฉพาะแท็บที่กำลังดู (ลดภาระ)
+  // Realtime: member/leave เปลี่ยน → invalidate เฉพาะแท็บที่กำลังดู (ลดภาระ)
   useEffect(() => {
     const ch = supabase
       .channel("admin-members-tabbed-realtime")
@@ -121,7 +93,8 @@ export default function AdminMembersClient(initial: Props) {
     return () => {
       void supabase.removeChannel(ch);
     };
-  }, [viewTab, onReloadMembers, onReloadClub, onReloadClub2]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewTab]);
 
   const TabBtn = ({ value, label }: { value: ViewTab; label: string }) => {
     const active = viewTab === value;

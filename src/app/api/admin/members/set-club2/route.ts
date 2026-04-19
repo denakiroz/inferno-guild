@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { invalidateMembers } from "@/lib/redisCache";
 
 export const runtime = "nodejs";
 
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
 
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
+      await invalidateMembers();
       return NextResponse.json({ ok: true, updated: ids.length });
     }
 
@@ -61,6 +63,7 @@ export async function POST(req: Request) {
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
+    await invalidateMembers();
     return NextResponse.json({ ok: true, updated: 1 });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });

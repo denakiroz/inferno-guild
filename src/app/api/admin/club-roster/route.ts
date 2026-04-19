@@ -37,16 +37,24 @@ export async function GET() {
     const members = (data ?? []) as any[];
     const ids = members.map((m) => Number(m.id)).filter((n) => Number.isFinite(n) && n > 0);
 
-    // fetch ultimate mapping (server-side, no RLS)
     let ultimateByMember = new Map<number, number[]>();
-    if (ids.length > 0) {
-      const { data: mu, error: muErr } = await supabaseAdmin
-        .from("member_ultimate_skill")
-        .select("member_id, ultimate_skill_id")
-        .in("member_id", ids);
+    let specialByMember = new Map<number, number[]>();
 
-      if (!muErr) {
-        for (const r of (mu ?? []) as any[]) {
+    if (ids.length > 0) {
+      // ⚡ ยิง 2 query พร้อมกัน — ไม่ขึ้นต่อกัน
+      const [muRes, msRes] = await Promise.all([
+        supabaseAdmin
+          .from("member_ultimate_skill")
+          .select("member_id, ultimate_skill_id")
+          .in("member_id", ids),
+        supabaseAdmin
+          .from("member_special_skill")
+          .select("member_id, special_skill_id")
+          .in("member_id", ids),
+      ]);
+
+      if (!muRes.error) {
+        for (const r of (muRes.data ?? []) as any[]) {
           const mid = Number(r.member_id);
           const uid = Number(r.ultimate_skill_id);
           if (!Number.isFinite(mid) || !Number.isFinite(uid)) continue;
@@ -55,17 +63,8 @@ export async function GET() {
           ultimateByMember.set(mid, arr);
         }
       }
-    }
 
-    // fetch special skill mapping
-    let specialByMember = new Map<number, number[]>();
-    if (ids.length > 0) {
-      const { data: ms } = await supabaseAdmin
-        .from("member_special_skill")
-        .select("member_id, special_skill_id")
-        .in("member_id", ids);
-
-      for (const r of (ms ?? []) as any[]) {
+      for (const r of (msRes.data ?? []) as any[]) {
         const mid = Number(r.member_id);
         const sid = Number(r.special_skill_id);
         if (!Number.isFinite(mid) || !Number.isFinite(sid)) continue;

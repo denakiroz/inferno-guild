@@ -5,9 +5,12 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { buildLeaderboard } from "@/lib/memberPotential";
+import { buildLeaderboard, type LeaderboardItem } from "@/lib/memberPotential";
+import { cacheGetOrSet, CK, invalidateMemberPotential } from "@/lib/redisCache";
 
 export const runtime = "nodejs";
+
+const LEADERBOARD_TTL = 300; // 5 นาที
 
 async function requireEditor() {
   const cookieStore = await cookies();
@@ -24,10 +27,19 @@ export async function GET() {
     const session = await requireEditor();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
-    const result = await buildLeaderboard();
-    if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
+    // Redis cache (TTL 5 นาที) — invalidate เมื่อ POST/PATCH/DELETE batches/records/weights
+    const items = await cacheGetOrSet<LeaderboardItem[] | null>(
+      CK.leaderboard(),
+      LEADERBOARD_TTL,
+      async () => {
+        const result = await buildLeaderboard();
+        if (!result.ok) throw new Error(result.error);
+        return result.items;
+      }
+    );
+    if (!items) return NextResponse.json({ ok: false, error: "no data" }, { status: 500 });
 
-    return NextResponse.json({ ok: true, items: result.items });
+    return NextResponse.json({ ok: true, items });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
   }
@@ -103,6 +115,9 @@ export async function POST(req: Request) {
       await supabaseAdmin.from("member_potential_batches").delete().eq("id", batch.id);
       return NextResponse.json({ ok: false, error: rErr.message }, { status: 500 });
     }
+
+    // ลบ leaderboard cache — batch ใหม่ทำให้ค่าเปลี่ยน
+    await invalidateMemberPotential();
 
     return NextResponse.json({ ok: true, batch_id: batch.id, count: records.length });
   } catch (e: any) {

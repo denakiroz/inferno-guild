@@ -4,8 +4,11 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { cacheGetOrSet, CK } from "@/lib/redisCache";
 
 export const runtime = "nodejs";
+
+const MEMBERS_TTL = 600; // 10 นาที — members + skills + equipment เปลี่ยนไม่บ่อย
 
 /**
  * Keep shape compatible with old response.
@@ -42,9 +45,126 @@ function normalizeStatusForFilter(status: unknown): string {
   return String(status).toLowerCase();
 }
 
+/**
+ * ฟังก์ชัน heavy — ดึง members + ultimate/special skills + equipment แล้ว attach เข้าด้วยกัน
+ * ผลลัพธ์ cache ได้ (ไม่รวม leaves ซึ่งเปลี่ยนบ่อยกว่า)
+ */
+async function loadMembersWithAttachments(guild: number | null): Promise<any[]> {
+  let q = supabaseAdmin.from("member").select(SELECT_MEMBER_WITH_CLASS).order("id", { ascending: true });
+  if (guild != null) q = q.eq("guild", guild);
+
+  const { data: rawMembers, error: memErr } = await q;
+  if (memErr) throw new Error(memErr.message);
+
+  const baseMembers = (rawMembers ?? []).filter((m: any) => normalizeStatusForFilter(m?.status) !== "inactive");
+  let members = baseMembers as any[];
+
+  const memberIds = members.map((m: any) => Number(m?.id)).filter((x: number) => Number.isFinite(x) && x > 0);
+
+  if (memberIds.length === 0) {
+    return members.map((m: any) => ({
+      ...m,
+      ultimate_skill_ids: [],
+      special_skill_ids: [],
+      equipment_create_ids: [],
+      weapon_gold_ids: [],
+      weapon_stones: [],
+    }));
+  }
+
+  // Parallel: ultimate + special + equipment (ไม่ขึ้นต่อกัน)
+  const [ultRes, ssRes, ecRes] = await Promise.all([
+    supabaseAdmin
+      .from("member_ultimate_skill")
+      .select("member_id, ultimate_skill_id")
+      .in("member_id", memberIds),
+    supabaseAdmin
+      .from("member_special_skill")
+      .select("member_id, special_skill_id")
+      .in("member_id", memberIds),
+    supabaseAdmin
+      .from("member_equipment_create")
+      .select("member_id, equipment_create_id, color, equipment_create(type)")
+      .in("member_id", memberIds),
+  ]);
+
+  if (ultRes.error) throw new Error(ultRes.error.message);
+
+  // ultimate
+  const ultMap = new Map<number, number[]>();
+  for (const r of (Array.isArray(ultRes.data) ? ultRes.data : []) as any[]) {
+    const mid = Number(r?.member_id);
+    const uid = Number(r?.ultimate_skill_id);
+    if (!Number.isFinite(mid) || mid <= 0) continue;
+    if (!Number.isFinite(uid) || uid <= 0) continue;
+    const arr = ultMap.get(mid);
+    if (arr) arr.push(uid);
+    else ultMap.set(mid, [uid]);
+  }
+
+  // special (tolerate errors — degrade to empty)
+  const ssMap = new Map<number, number[]>();
+  if (!ssRes.error) {
+    for (const r of (Array.isArray(ssRes.data) ? ssRes.data : []) as any[]) {
+      const mid = Number(r?.member_id);
+      const sid = Number(r?.special_skill_id);
+      if (!Number.isFinite(mid) || mid <= 0) continue;
+      if (!Number.isFinite(sid) || sid <= 0) continue;
+      const arr = ssMap.get(mid);
+      if (arr) arr.push(sid);
+      else ssMap.set(mid, [sid]);
+    }
+  }
+
+  // equipment (tolerate errors — degrade to empty)
+  const ecMap = new Map<number, number[]>();
+  const goldMap = new Map<number, number[]>();
+  const weaponMap = new Map<number, { id: number; color: string }[]>();
+  if (!ecRes.error) {
+    for (const r of (Array.isArray(ecRes.data) ? ecRes.data : []) as any[]) {
+      const mid = Number(r?.member_id);
+      const eid = Number(r?.equipment_create_id);
+      const color = String(r?.color ?? "").toLowerCase();
+      const ec = r?.equipment_create;
+      const type = Number(Array.isArray(ec) ? ec[0]?.type : ec?.type);
+
+      if (!Number.isFinite(mid) || mid <= 0) continue;
+      if (!Number.isFinite(eid) || eid <= 0) continue;
+
+      const allArr = ecMap.get(mid) ?? [];
+      allArr.push(eid);
+      ecMap.set(mid, allArr);
+
+      if (type === 1) {
+        if (color === "gold") {
+          const goldArr = goldMap.get(mid) ?? [];
+          goldArr.push(eid);
+          goldMap.set(mid, goldArr);
+        }
+        const wArr = weaponMap.get(mid) ?? [];
+        wArr.push({ id: eid, color });
+        weaponMap.set(mid, wArr);
+      }
+    }
+  }
+
+  return members.map((m: any) => {
+    const mid = Number(m?.id);
+    return {
+      ...m,
+      ultimate_skill_ids: Array.from(new Set(ultMap.get(mid) ?? [])).sort((a, b) => a - b),
+      special_skill_ids: Array.from(new Set(ssMap.get(mid) ?? [])).sort((a, b) => a - b),
+      equipment_create_ids: Array.from(new Set(ecMap.get(mid) ?? [])).sort((a, b) => a - b),
+      weapon_gold_ids: Array.from(new Set(goldMap.get(mid) ?? [])).sort((a, b) => a - b),
+      weapon_stones: weaponMap.get(mid) ?? [],
+    };
+  });
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const guild = url.searchParams.get("guild"); // optional
+  const guildParam = url.searchParams.get("guild");
+  const guild = guildParam ? Number(guildParam) : null;
 
   const cookieStore = await cookies();
   const sid = cookieStore.get(env.AUTH_COOKIE_NAME)?.value;
@@ -55,163 +175,36 @@ export async function GET(req: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!session.isAdmin && !session.isHead) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  let q = supabaseAdmin.from("member").select(SELECT_MEMBER_WITH_CLASS).order("id", { ascending: true });
-
-  if (guild) q = q.eq("guild", Number(guild));
-
-  const { data: rawMembers, error: memErr } = await q;
-
-  if (memErr) return NextResponse.json({ error: memErr.message }, { status: 500 });
-
-  const baseMembers = (rawMembers ?? []).filter((m: any) => normalizeStatusForFilter(m?.status) !== "inactive");
-
-  // ✅ Attach ultimate_skill_ids per member (source of truth: member_ultimate_skill)
-  //    This enables WarBuilder Ultimate filter to count based on member_ultimate_skill mapping.
-  let members = baseMembers as any[];
-
   try {
-    const memberIds = (members ?? [])
+    // Heavy: members + skills + equipment (cached, TTL 10 นาที, invalidate on write)
+    const members = await cacheGetOrSet<any[]>(
+      CK.members(guild),
+      MEMBERS_TTL,
+      () => loadMembersWithAttachments(guild),
+    );
+
+    // ⚡ Filter leaves เฉพาะ member_id ที่อยู่ในผลลัพธ์ — ไม่ดึง leave ของกิลด์อื่น
+    //    ลด payload + query time อย่างมีนัยสำคัญตอน guild filter
+    const memberIds: number[] = (members ?? [])
       .map((m: any) => Number(m?.id))
       .filter((x: number) => Number.isFinite(x) && x > 0);
 
-    if (memberIds.length > 0) {
-      const { data: ultRows, error: ultErr } = await supabaseAdmin
-        .from("member_ultimate_skill")
-        .select("member_id, ultimate_skill_id")
-        .in("member_id", memberIds);
-
-      if (ultErr) return NextResponse.json({ error: ultErr.message }, { status: 500 });
-
-      const map = new Map<number, number[]>();
-
-      for (const r of (Array.isArray(ultRows) ? ultRows : []) as any[]) {
-        const mid = Number(r?.member_id);
-        const uid = Number(r?.ultimate_skill_id);
-        if (!Number.isFinite(mid) || mid <= 0) continue;
-        if (!Number.isFinite(uid) || uid <= 0) continue;
-
-        const arr = map.get(mid);
-        if (arr) arr.push(uid);
-        else map.set(mid, [uid]);
-      }
-
-      members = (members ?? []).map((m: any) => {
-        const ids = map.get(Number(m?.id)) ?? [];
-        const uniq = Array.from(new Set(ids)).sort((a, b) => a - b);
-        return { ...m, ultimate_skill_ids: uniq };
-      });
-    } else {
-      // keep compatibility: still return ultimate_skill_ids as empty
-      members = (members ?? []).map((m: any) => ({ ...m, ultimate_skill_ids: [] }));
+    if (memberIds.length === 0) {
+      return NextResponse.json({ members, leaves: [] }, { status: 200 });
     }
+
+    const leavesRes = await supabaseAdmin
+      .from("leave")
+      .select("id,date_time,member_id,reason,status,update_date")
+      .in("member_id", memberIds)
+      .order("date_time", { ascending: false });
+
+    if (leavesRes.error) {
+      return NextResponse.json({ members, leaves: [] }, { status: 200 });
+    }
+
+    return NextResponse.json({ members, leaves: leavesRes.data ?? [] }, { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ error: String(e?.message ?? e) }, { status: 500 });
+    return NextResponse.json({ error: e?.message ?? "unknown" }, { status: 500 });
   }
-
-  // ✅ Attach special_skill_ids per member (source of truth: member_special_skill)
-  try {
-    const memberIds = (members ?? [])
-      .map((m: any) => Number(m?.id))
-      .filter((x: number) => Number.isFinite(x) && x > 0);
-
-    if (memberIds.length > 0) {
-      const { data: ssRows } = await supabaseAdmin
-        .from("member_special_skill")
-        .select("member_id, special_skill_id")
-        .in("member_id", memberIds);
-
-      const ssMap = new Map<number, number[]>();
-      for (const r of (Array.isArray(ssRows) ? ssRows : []) as any[]) {
-        const mid = Number(r?.member_id);
-        const sid = Number(r?.special_skill_id);
-        if (!Number.isFinite(mid) || mid <= 0) continue;
-        if (!Number.isFinite(sid) || sid <= 0) continue;
-        const arr = ssMap.get(mid);
-        if (arr) arr.push(sid);
-        else ssMap.set(mid, [sid]);
-      }
-
-      members = (members ?? []).map((m: any) => {
-        const ids = ssMap.get(Number(m?.id)) ?? [];
-        return { ...m, special_skill_ids: Array.from(new Set(ids)).sort((a, b) => a - b) };
-      });
-    } else {
-      members = (members ?? []).map((m: any) => ({ ...m, special_skill_ids: [] }));
-    }
-  } catch {
-    members = (members ?? []).map((m: any) => ({ ...m, special_skill_ids: [] }));
-  }
-
-  // ✅ Attach equipment_create_ids + weapon_gold_ids per member
-  try {
-    const memberIds = (members ?? [])
-      .map((m: any) => Number(m?.id))
-      .filter((x: number) => Number.isFinite(x) && x > 0);
-
-    if (memberIds.length > 0) {
-      // Fetch with color + join type from equipment_create
-      const { data: ecRows } = await supabaseAdmin
-        .from("member_equipment_create")
-        .select("member_id, equipment_create_id, color, equipment_create(type)")
-        .in("member_id", memberIds);
-
-      const ecMap     = new Map<number, number[]>();
-      const goldMap   = new Map<number, number[]>();
-      const weaponMap = new Map<number, { id: number; color: string }[]>();
-
-      for (const r of (Array.isArray(ecRows) ? ecRows : []) as any[]) {
-        const mid   = Number(r?.member_id);
-        const eid   = Number(r?.equipment_create_id);
-        const color = String(r?.color ?? "").toLowerCase();
-        const ec    = r?.equipment_create;
-        const type  = Number(Array.isArray(ec) ? ec[0]?.type : ec?.type);
-
-        if (!Number.isFinite(mid) || mid <= 0) continue;
-        if (!Number.isFinite(eid) || eid <= 0) continue;
-
-        const allArr = ecMap.get(mid) ?? [];
-        allArr.push(eid);
-        ecMap.set(mid, allArr);
-
-        if (type === 1) {
-          if (color === "gold") {
-            const goldArr = goldMap.get(mid) ?? [];
-            goldArr.push(eid);
-            goldMap.set(mid, goldArr);
-          }
-          const wArr = weaponMap.get(mid) ?? [];
-          wArr.push({ id: eid, color });
-          weaponMap.set(mid, wArr);
-        }
-      }
-
-      members = (members ?? []).map((m: any) => {
-        const ids          = ecMap.get(Number(m?.id))     ?? [];
-        const goldIds      = goldMap.get(Number(m?.id))   ?? [];
-        const weaponStones = weaponMap.get(Number(m?.id)) ?? [];
-        return {
-          ...m,
-          equipment_create_ids: Array.from(new Set(ids)).sort((a, b) => a - b),
-          weapon_gold_ids:      Array.from(new Set(goldIds)).sort((a, b) => a - b),
-          weapon_stones:        weaponStones,
-        };
-      });
-    } else {
-      members = (members ?? []).map((m: any) => ({ ...m, equipment_create_ids: [], weapon_gold_ids: [], weapon_stones: [] }));
-    }
-  } catch {
-    members = (members ?? []).map((m: any) => ({ ...m, equipment_create_ids: [], weapon_gold_ids: [], weapon_stones: [] }));
-  }
-
-  const { data: leaves, error: leaveErr } = await supabaseAdmin
-    .from("leave")
-    // ✅ ดึง status + update_date มาด้วย (สำคัญ)
-    .select("id,date_time,member_id,reason,status,update_date")
-    .order("date_time", { ascending: false });
-
-  if (leaveErr) {
-    return NextResponse.json({ members, leaves: [] }, { status: 200 });
-  }
-
-  return NextResponse.json({ members, leaves: leaves ?? [] }, { status: 200 });
 }

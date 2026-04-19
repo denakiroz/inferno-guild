@@ -52,59 +52,56 @@ export default async function AdminMembersPage() {
   // ไม่ใช่ admin ให้ไปใช้ client ที่ lock guild ตามเดิม
   if (!session.isAdmin) return <MembersClient />;
 
-  // ====== All members ======
-  const { data: members, error: memErr } = await supabaseAdmin
-    .from("member")
-    .select(SELECT_MEMBER_WITH_CLASS)
-    .order("id", { ascending: true });
+  // ⚡ Stage 1 — 4 query อิสระ ยิงพร้อมกัน (members, leaves, club, club2)
+  const [memRes, leaveRes, clubRes, club2Res] = await Promise.all([
+    supabaseAdmin
+      .from("member")
+      .select(SELECT_MEMBER_WITH_CLASS)
+      .order("id", { ascending: true }),
+    supabaseAdmin
+      .from("leave")
+      .select(SELECT_LEAVE)
+      .order("date_time", { ascending: false }),
+    supabaseAdmin
+      .from("member")
+      .select(SELECT_MEMBER_WITH_CLASS)
+      .eq("club", true)
+      .order("power", { ascending: false })
+      .order("id", { ascending: true }),
+    supabaseAdmin
+      .from("member")
+      .select(SELECT_MEMBER_WITH_CLASS)
+      .eq("club_2", true)
+      .order("power", { ascending: false })
+      .order("id", { ascending: true }),
+  ]);
 
+  const { data: members, error: memErr } = memRes;
   if (memErr) return <div className="p-6 text-sm">Failed to load members: {memErr.message}</div>;
 
-  const { data: leaves, error: leaveErr } = await supabaseAdmin
-    .from("leave")
-    .select(SELECT_LEAVE)
-    .order("date_time", { ascending: false });
+  const safeLeaves = leaveRes.error ? [] : (leaveRes.data ?? []);
+  const safeClubMembers = clubRes.error ? [] : (clubRes.data ?? []);
+  const safeClub2Members = club2Res.error ? [] : (club2Res.data ?? []);
 
-  const safeLeaves = leaveErr ? [] : (leaves ?? []);
-
-  // ====== Club members (member.club = true) ======
-  const { data: clubMembers, error: clubErr } = await supabaseAdmin
-    .from("member")
-    .select(SELECT_MEMBER_WITH_CLASS)
-    .eq("club", true)
-    .order("power", { ascending: false })
-    .order("id", { ascending: true });
-
-  // กันหน้าแตก ถ้า query club ผิดพลาด
-  const safeClubMembers = clubErr ? [] : (clubMembers ?? []);
   const clubIds = safeClubMembers.map((m: any) => m.id).filter(Boolean);
-
-  const { data: clubLeaves, error: clubLeaveErr } = await supabaseAdmin
-    .from("leave")
-    .select(SELECT_LEAVE)
-    .in("member_id", clubIds.length ? clubIds : [0])
-    .order("date_time", { ascending: false });
-
-  const safeClubLeaves = clubLeaveErr ? [] : (clubLeaves ?? []);
-
-  // ====== Club 2 members (member.club_2 = true) ======
-  const { data: club2Members, error: club2Err } = await supabaseAdmin
-    .from("member")
-    .select(SELECT_MEMBER_WITH_CLASS)
-    .eq("club_2", true)
-    .order("power", { ascending: false })
-    .order("id", { ascending: true });
-
-  const safeClub2Members = club2Err ? [] : (club2Members ?? []);
   const club2Ids = safeClub2Members.map((m: any) => m.id).filter(Boolean);
 
-  const { data: club2Leaves, error: club2LeaveErr } = await supabaseAdmin
-    .from("leave")
-    .select(SELECT_LEAVE)
-    .in("member_id", club2Ids.length ? club2Ids : [0])
-    .order("date_time", { ascending: false });
+  // ⚡ Stage 2 — leaves ของ club/club2 ยิงพร้อมกัน (ขึ้นต่อ ids จาก stage 1)
+  const [clubLeavesRes, club2LeavesRes] = await Promise.all([
+    supabaseAdmin
+      .from("leave")
+      .select(SELECT_LEAVE)
+      .in("member_id", clubIds.length ? clubIds : [0])
+      .order("date_time", { ascending: false }),
+    supabaseAdmin
+      .from("leave")
+      .select(SELECT_LEAVE)
+      .in("member_id", club2Ids.length ? club2Ids : [0])
+      .order("date_time", { ascending: false }),
+  ]);
 
-  const safeClub2Leaves = club2LeaveErr ? [] : (club2Leaves ?? []);
+  const safeClubLeaves = clubLeavesRes.error ? [] : (clubLeavesRes.data ?? []);
+  const safeClub2Leaves = club2LeavesRes.error ? [] : (club2LeavesRes.data ?? []);
 
   return (
     <AdminMembersClient

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { RefreshCw, Pencil, X, Info } from "lucide-react";
 
 import type { DbClass, DbLeave, DbMember, GuildNo } from "@/type/db";
@@ -374,81 +374,100 @@ export default function Members({
     return map;
   }, [leaves, todayBkk, nextSaturdayBkk]);
 
+  // ⚡ useDeferredValue ทำให้พิมพ์ใน search box ไม่กระตุก —
+  // React จะคำนวณ filter list ที่ deferred priority (รอ commit หลัง idle frame)
+  const deferredQuery = useDeferredValue(query);
+
   const visibleMembers = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
+    const ultId = ultimateFilterId === "all" ? null : Number(ultimateFilterId);
+    const ssId = specialSkillFilterId === "all" ? null : Number(specialSkillFilterId);
+    const stoneId = weaponStoneFilterId === "all" ? null : Number(weaponStoneFilterId);
+    const noStoneFilter = ultId === null && ssId === null && stoneId === null && weaponColorFilter === "all";
+    const noLeaveFilter = leaveTypeFilter === "all";
 
-    return members
-      .filter((m) => (m.status ?? "active") === "active")
-      .filter((m) => {
-        if (tabMode === "club" || tabMode === "club2") return true;
-        if (tab === "all") return canViewAllGuilds;
-        if (tab === "other") return !!(m.club || m.club_2) && !m.guild;
-        return m.guild === tab;
-      })
-      .filter((m) => {
-        // filter อยู่ในกิล/ไม่อยู่ — ใช้เฉพาะ tab club / club2
-        if (tabMode !== "club" && tabMode !== "club2") return true;
-        if (guildMemberFilter === "inguild") return !!m.guild;
-        if (guildMemberFilter === "noguild") return !m.guild;
-        return true;
-      })
-      .filter((m) => {
-        if (!q) return true;
-        const c = (m.class_id != null ? classById.get(m.class_id) : undefined) || null;
+    // ⚡ Single-pass filter — รวม 8 .filter() เดิมเป็นรอบเดียว ลด array allocation/iteration
+    const out: typeof members = [];
+    for (const m of members) {
+      // status
+      if ((m.status ?? "active") !== "active") continue;
+
+      // guild tab
+      if (tabMode !== "club" && tabMode !== "club2") {
+        if (tab === "all") {
+          if (!canViewAllGuilds) continue;
+        } else if (tab === "other") {
+          if (!((m.club || m.club_2) && !m.guild)) continue;
+        } else if (m.guild !== tab) continue;
+      }
+
+      // in-guild filter (club tabs only)
+      if (tabMode === "club" || tabMode === "club2") {
+        if (guildMemberFilter === "inguild" && !m.guild) continue;
+        if (guildMemberFilter === "noguild" && m.guild) continue;
+      }
+
+      // search
+      if (q) {
+        const c = m.class_id != null ? classById.get(m.class_id) : undefined;
         const className = c?.name ?? "";
-        return `${m.name} ${className}`.toLowerCase().includes(q);
-      })
-      .filter((m) => (classId === "All" ? true : String(m.class_id ?? 0) === classId))
-      .filter((m) => {
-        if (specialFilter === "all") return true;
-        if (specialFilter === "special") return !!m.is_special;
-        return !m.is_special;
-      })
-      .filter((m) => {
-        if (leaveTypeFilter === "all") return true;
+        if (!`${m.name} ${className}`.toLowerCase().includes(q)) continue;
+      }
 
+      // class
+      if (classId !== "All" && String(m.class_id ?? 0) !== classId) continue;
+
+      // special
+      if (specialFilter === "special" && !m.is_special) continue;
+      if (specialFilter === "normal" && m.is_special) continue;
+
+      // leave type today
+      if (!noLeaveFilter) {
         const meta = todayMetaByMemberId.get(m.id);
         const hasWarToday = !!(meta?.war20Today || meta?.war2030Today) || (!!meta?.warLabelToday && meta.warLabelToday !== null);
         const hasErrandToday = !!meta?.hasErrandToday;
-
         const isReady = !m.is_special && !hasWarToday && !hasErrandToday;
+        if (leaveTypeFilter === "ready" && !isReady) continue;
+        if (leaveTypeFilter === "war" && !hasWarToday) continue;
+        if (leaveTypeFilter === "errand" && !hasErrandToday) continue;
+      }
 
-        if (leaveTypeFilter === "ready") return isReady;
-        if (leaveTypeFilter === "war") return hasWarToday;
-        if (leaveTypeFilter === "errand") return hasErrandToday;
-        return true;
-      })
-      // ✅ Ultimate filter
-      .filter((m) => {
-        if (ultimateFilterId === "all") return true;
+      // ultimate
+      if (ultId !== null) {
         const ids = (m as any)?.ultimate_skill_ids;
-        if (!Array.isArray(ids) || ids.length === 0) return false;
-        return ids.map(Number).includes(Number(ultimateFilterId));
-      })
-      // ✅ ศิษย์พี่ filter
-      .filter((m) => {
-        if (specialSkillFilterId === "all") return true;
+        if (!Array.isArray(ids) || ids.length === 0) continue;
+        if (!ids.some((x: any) => Number(x) === ultId)) continue;
+      }
+
+      // ศิษย์พี่
+      if (ssId !== null) {
         const ids = (m as any)?.special_skill_ids;
-        if (!Array.isArray(ids) || ids.length === 0) return false;
-        return ids.map(Number).includes(Number(specialSkillFilterId));
-      })
-      // ✅ หินสกิลอาวุธ + สี filter
-      .filter((m) => {
+        if (!Array.isArray(ids) || ids.length === 0) continue;
+        if (!ids.some((x: any) => Number(x) === ssId)) continue;
+      }
+
+      // weapon stone + color
+      if (!noStoneFilter && (stoneId !== null || weaponColorFilter !== "all")) {
         const stones = ((m as any)?.weapon_stones ?? []) as { id: number; color: string }[];
-        if (weaponStoneFilterId === "all" && weaponColorFilter === "all") return true;
-        if (stones.length === 0) return false;
-        return stones.some((s) => {
-          const idMatch    = weaponStoneFilterId === "all" || Number(s.id) === Number(weaponStoneFilterId);
-          const colorMatch = weaponColorFilter   === "all" || s.color === weaponColorFilter;
-          return idMatch && colorMatch;
-        });
-      });
+        if (stones.length === 0) continue;
+        let ok = false;
+        for (const s of stones) {
+          const idMatch = stoneId === null || Number(s.id) === stoneId;
+          const colorMatch = weaponColorFilter === "all" || s.color === weaponColorFilter;
+          if (idMatch && colorMatch) { ok = true; break; }
+        }
+        if (!ok) continue;
+      }
+
+      out.push(m);
+    }
+    return out;
   }, [
     members,
     tab,
     tabMode,
     canViewAllGuilds,
-    query,
+    deferredQuery,
     classId,
     classById,
     specialFilter,
@@ -739,7 +758,7 @@ export default function Members({
                     <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center overflow-hidden">
                       {iconUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={iconUrl} alt={className} className="w-full h-full object-contain" />
+                        <img src={iconUrl} alt={className} className="w-full h-full object-contain" loading="lazy" decoding="async" />
                       ) : (
                         <span className="text-xs text-zinc-500">{className.slice(0, 2)}</span>
                       )}
@@ -896,7 +915,7 @@ export default function Members({
                                       onClick={() => setImgPreview({ url: set.image!, title: `กำลังภายใน เซ็ต ${idx + 1} รูป 1` })}
                                     >
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={set.image} alt="img1" className="h-full w-full object-cover" />
+                                      <img src={set.image} alt="img1" className="h-full w-full object-cover" loading="lazy" decoding="async" />
                                     </button>
                                   ) : (
                                     <div className="h-full w-full flex items-center justify-center text-xs text-zinc-500">No</div>
@@ -914,7 +933,7 @@ export default function Members({
                                       onClick={() => setImgPreview({ url: set.image_2!, title: `กำลังภายใน เซ็ต ${idx + 1} รูป 2` })}
                                     >
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={set.image_2} alt="img2" className="h-full w-full object-cover" />
+                                      <img src={set.image_2} alt="img2" className="h-full w-full object-cover" loading="lazy" decoding="async" />
                                     </button>
                                   ) : (
                                     <div className="h-full w-full flex items-center justify-center text-xs text-zinc-500">No</div>
@@ -1074,7 +1093,7 @@ export default function Members({
 {imgPreview?.url ? (
             <div className="rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imgPreview.url} alt={imgPreview.title ?? "preview"} className="w-full max-h-[86vh] h-auto object-contain" />
+              <img src={imgPreview.url} alt={imgPreview.title ?? "preview"} className="w-full max-h-[86vh] h-auto object-contain" loading="lazy" decoding="async" />
             </div>
           ) : (
             <div className="text-sm text-zinc-500">ไม่มีรูป</div>

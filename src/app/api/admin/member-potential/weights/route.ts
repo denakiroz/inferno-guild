@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { invalidateMemberPotential } from "@/lib/redisCache";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,10 @@ export async function PATCH(req: Request) {
       );
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+    // weight เปลี่ยน → leaderboard score เปลี่ยน
+    await invalidateMemberPotential();
+
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { invalidateMembers } from "@/lib/redisCache";
 
 export const runtime = "nodejs";
 
@@ -81,6 +82,7 @@ export async function POST(req: Request) {
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    await invalidateMembers();
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 
@@ -110,6 +112,7 @@ export async function POST(req: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    await invalidateMembers();
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 

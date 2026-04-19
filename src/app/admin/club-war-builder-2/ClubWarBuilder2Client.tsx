@@ -585,7 +585,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
             src={cls.icon_url}
             alt={cls.name}
             className="h-7 w-7 rounded-md object-cover border border-zinc-200 dark:border-zinc-800 shrink-0"
-          />
+          loading="lazy" decoding="async" />
         ) : (
           <div className="h-7 w-7 rounded-md bg-zinc-200 dark:bg-zinc-800 shrink-0" />
         )}
@@ -629,7 +629,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
             src={cls.icon_url}
             alt={cls.name}
             className="h-5 w-5 rounded-md object-cover border border-zinc-200 dark:border-zinc-800"
-          />
+          loading="lazy" decoding="async" />
         ) : (
           <div className="h-5 w-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
         )}
@@ -1263,7 +1263,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                       >
                         {c.icon_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={c.icon_url} alt={c.name} className="h-5 w-5 rounded-md object-cover" />
+                          <img src={c.icon_url} alt={c.name} className="h-5 w-5 rounded-md object-cover" loading="lazy" decoding="async" />
                         ) : (
                           <div className="h-5 w-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
                         )}
@@ -1303,7 +1303,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                       >
                         {u.ultimate_skill_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={u.ultimate_skill_url} alt={u.name} className="h-5 w-5 rounded-md object-cover" />
+                          <img src={u.ultimate_skill_url} alt={u.name} className="h-5 w-5 rounded-md object-cover" loading="lazy" decoding="async" />
                         ) : (
                           <div className="h-5 w-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
                         )}
@@ -1345,7 +1345,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                       >
                         {s.special_skill_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={s.special_skill_url} alt={s.name} className="h-5 w-5 rounded-md object-cover" />
+                          <img src={s.special_skill_url} alt={s.name} className="h-5 w-5 rounded-md object-cover" loading="lazy" decoding="async" />
                         ) : (
                           <div className="h-5 w-5 rounded-md bg-zinc-200 dark:bg-zinc-800" />
                         )}
@@ -1515,7 +1515,7 @@ export default function ClubWarBuilder2Client({ canEdit }: { canEdit: boolean })
                                     src={cls.icon_url}
                                     alt={cls.name}
                                     className="h-5 w-5 shrink-0 rounded-md object-cover border border-zinc-200 dark:border-zinc-800"
-                                  />
+                                  loading="lazy" decoding="async" />
                                 ) : (
                                   <div className="h-5 w-5 shrink-0 rounded-md bg-zinc-200 dark:bg-zinc-800" />
                                 )}

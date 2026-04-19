@@ -1,8 +1,22 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import * as XLSX from "xlsx";
-import * as XLSXStyle from "xlsx-js-style";
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+// ⚡ xlsx + xlsx-js-style เป็น library ขนาดใหญ่ (~800kB) เลย lazy-load ตอนใช้จริงเท่านั้น
+// (ดู handleFileChange และ handleDownloadTemplate ด้านล่าง)
+import { useQueryClient } from "@tanstack/react-query";
+import { qk } from "@/lib/queryClient";
+import {
+  useLeaderboard,
+  useBatches,
+  useWeights,
+  useImportBatch,
+  useUpdateBatch,
+  useDeleteBatch,
+  useUpdateBatchRecords,
+  useUpsertWeight,
+  usePlayerHistory,
+} from "@/hooks/api/memberPotential";
+import { useClasses } from "@/hooks/api/masters";
 
 // ── Player History Modal ───────────────────────────────────────────
 type BatchStat = {
@@ -28,25 +42,25 @@ function PlayerModal({
   row: LeaderboardRow;
   onClose: () => void;
 }) {
-  const [allBatches, setAllBatches] = useState<BatchStat[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [fromDate, setFromDate]     = useState("");
-  const [toDate, setToDate]         = useState("");
+  const historyQuery = usePlayerHistory(row.userdiscordid);
+  const loading = historyQuery.isLoading;
+  const allBatches: BatchStat[] = (historyQuery.data as any)?.ok
+    ? ((historyQuery.data as any).batches as BatchStat[] | undefined) ?? []
+    : [];
 
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate]     = useState("");
+
+  // Set default date range once data arrives
+  const initRangeRef = useRef(false);
   useEffect(() => {
-    fetch(`/api/admin/member-potential/player?uid=${encodeURIComponent(row.userdiscordid)}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.ok && Array.isArray(j.batches) && j.batches.length > 0) {
-          setAllBatches(j.batches);
-          // default range: batch เก่าสุด → ใหม่สุด (sorted desc แล้ว)
-          const dates = j.batches.map((b: BatchStat) => b.imported_at.slice(0, 10)).sort();
-          setFromDate(dates[0]);
-          setToDate(dates[dates.length - 1]);
-        }
-      })
-      .finally(() => setLoading(false));
-  }, [row.userdiscordid]);
+    if (initRangeRef.current) return;
+    if (allBatches.length === 0) return;
+    const dates = allBatches.map((b) => b.imported_at.slice(0, 10)).sort();
+    setFromDate(dates[0]);
+    setToDate(dates[dates.length - 1]);
+    initRangeRef.current = true;
+  }, [allBatches]);
 
   // filter by range แล้วเรียง newest → oldest
   const batches = allBatches
@@ -78,7 +92,7 @@ function PlayerModal({
         <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-5 py-4 flex items-center gap-3">
           {row.class_icon && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={row.class_icon} alt="" className="w-8 h-8 rounded-lg ring-1 ring-zinc-200 dark:ring-zinc-700" />
+            <img src={row.class_icon} alt="" className="w-8 h-8 rounded-lg ring-1 ring-zinc-200 dark:ring-zinc-700" loading="lazy" decoding="async" />
           )}
           <div className="flex-1 min-w-0">
             <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{row.discordname}</div>
@@ -448,11 +462,14 @@ const EditableWeightCell = React.memo(function EditableWeightCell({
 });
 
 export default function MemberPotentialClient() {
+  const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("leaderboard");
 
-  // Leaderboard
-  const [rows, setRows] = useState<LeaderboardRow[]>([]);
-  const [loadingLB, setLoadingLB] = useState(true);
+  // Leaderboard — React Query
+  const leaderboardQuery = useLeaderboard();
+  const rows: LeaderboardRow[] = (leaderboardQuery.data as LeaderboardRow[] | undefined) ?? [];
+  const loadingLB = leaderboardQuery.isLoading;
+
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortAsc, setSortAsc] = useState(false);
   const [playerModal, setPlayerModal] = useState<LeaderboardRow | null>(null);
@@ -460,9 +477,11 @@ export default function MemberPotentialClient() {
   const [guildFilter, setGuildFilter] = useState<number | null>(null);
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
 
-  // Batches
-  const [batches, setBatches] = useState<BatchRow[]>([]);
-  const [loadingBatches, setLoadingBatches] = useState(false);
+  // Batches — React Query (lazy: only when batches tab is active)
+  const batchesQuery = useBatches({ enabled: tab === "batches" });
+  const batches: BatchRow[] = (batchesQuery.data as BatchRow[] | undefined) ?? [];
+  const loadingBatches = batchesQuery.isLoading && tab === "batches";
+
   const [importing, setImporting] = useState(false);
   const [batchLabel, setBatchLabel] = useState("");
   const [deletingBatch, setDeletingBatch] = useState<string | null>(null);
@@ -482,10 +501,12 @@ export default function MemberPotentialClient() {
   const [editBatchGuild, setEditBatchGuild] = useState<number | null>(null);
   const [savingBatch, setSavingBatch] = useState(false);
 
-  // Batch details modal (view records)
+  // Batch details modal (view records) — React Query (enabled when a batch is selected)
   const [viewingBatch, setViewingBatch] = useState<BatchRow | null>(null);
-  const [viewingBatchRecords, setViewingBatchRecords] = useState<BatchRecordRow[]>([]);
-  const [loadingBatchDetail, setLoadingBatchDetail] = useState(false);
+  const batchDetailQuery = useBatchDetail(viewingBatch?.id ?? null);
+  const viewingBatchRecords: BatchRecordRow[] =
+    (batchDetailQuery.data as { items?: BatchRecordRow[] } | undefined)?.items ?? [];
+  const loadingBatchDetail = !!viewingBatch && batchDetailQuery.isLoading;
   const [batchDetailSearch, setBatchDetailSearch] = useState("");
   // "default" = sort by class name then discord name (matches Download Template order)
   const [batchDetailSortKey, setBatchDetailSortKey] = useState<SortKey | "default">("default");
@@ -502,14 +523,18 @@ export default function MemberPotentialClient() {
   // Batch guild filter
   const [batchGuildFilter, setBatchGuildFilter] = useState<number | null>(null);
 
-  // Weights
-  const [weights, setWeights] = useState<WeightRow[]>([]);
-  const [loadingW, setLoadingW] = useState(false);
+  // Weights — React Query (lazy: only when weights tab is active)
+  const weightsQuery = useWeights({ enabled: tab === "weights" });
+  const weights: WeightRow[] = ((weightsQuery.data as WeightRow[] | undefined) ?? []);
+  const loadingW = weightsQuery.isLoading && tab === "weights";
   const [savingW, setSavingW] = useState(false);
   const [editWeights, setEditWeights] = useState<Record<string, number>>({});
   // Bumped after load/save so EditableWeightCell can re-sync local state
   const [weightsResetKey, setWeightsResetKey] = useState(0);
-  const [classes, setClasses] = useState<{ id: number; name: string; icon_url?: string }[]>([]);
+
+  // Classes — React Query (always loaded for icons in filters/preview)
+  const classesQuery = useClasses();
+  const classes = (classesQuery.data as { id: number; name: string; icon_url: string | null }[] | undefined) ?? [];
 
   // Stable onCommit for EditableWeightCell — keeps React.memo effective
   const onCommitWeight = useCallback((wKey: string, value: number) => {
@@ -523,63 +548,16 @@ export default function MemberPotentialClient() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // ---------- Load leaderboard ----------
-  const loadLeaderboard = useCallback(async () => {
-    setLoadingLB(true);
-    try {
-      const res = await fetch("/api/admin/member-potential", { cache: "no-store" });
-      const json = await res.json();
-      if (json.ok) setRows(json.items ?? []);
-    } finally { setLoadingLB(false); }
-  }, []);
-
-  // ---------- Load batches ----------
-  const loadBatches = useCallback(async () => {
-    setLoadingBatches(true);
-    try {
-      const res = await fetch("/api/admin/member-potential/batches", { cache: "no-store" });
-      const json = await res.json();
-      if (json.ok) setBatches(json.items ?? []);
-    } finally { setLoadingBatches(false); }
-  }, []);
-
-  // ---------- Load weights ----------
-  const loadWeights = useCallback(async () => {
-    setLoadingW(true);
-    try {
-      const [wRes, cRes] = await Promise.all([
-        fetch("/api/admin/member-potential/weights", { cache: "no-store" }),
-        fetch("/api/admin/classes", { cache: "no-store" }),
-      ]);
-      const wJson = await wRes.json();
-      const cJson = await cRes.json();
-      if (wJson.ok) {
-        setWeights(wJson.items ?? []);
-        const init: Record<string, number> = {};
-        for (const w of wJson.items ?? []) {
-          init[`${w.class_id ?? "null"}:${w.category}`] = w.weight;
-        }
-        setEditWeights(init);
-        setWeightsResetKey((k) => k + 1);
-      }
-      if (cJson.ok) setClasses(cJson.classes ?? []);
-    } finally { setLoadingW(false); }
-  }, []);
-
-  useEffect(() => { loadLeaderboard(); }, [loadLeaderboard]);
-
-  // Load class list once for icons in filters/preview
+  // Initialize edit draft when weights data arrives/changes
   useEffect(() => {
-    fetch("/api/admin/classes", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => { if (j.ok) setClasses(j.classes ?? []); })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (tab === "batches") loadBatches();
-    if (tab === "weights") loadWeights();
-  }, [tab, loadBatches, loadWeights]);
+    if (!weightsQuery.data) return;
+    const init: Record<string, number> = {};
+    for (const w of weightsQuery.data as WeightRow[]) {
+      init[`${w.class_id ?? "null"}:${w.category}`] = w.weight;
+    }
+    setEditWeights(init);
+    setWeightsResetKey((k) => k + 1);
+  }, [weightsQuery.data]);
 
   // ---------- Import: parse file → open confirm modal ----------
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -587,6 +565,8 @@ export default function MemberPotentialClient() {
     if (!file) return;
     e.target.value = "";
     try {
+      // ⚡ lazy-load xlsx เมื่อผู้ใช้เลือกไฟล์จริง ๆ เท่านั้น
+      const XLSX = await import("xlsx");
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -651,64 +631,53 @@ export default function MemberPotentialClient() {
   };
 
   // ---------- Import: confirm POST ----------
+  const importMutation = useImportBatch();
   const handleConfirmImport = async () => {
     if (!pendingImport) return;
     const { records } = pendingImport;   // capture before clearing
     setImporting(true);
     setPendingImport(null);
     try {
-      const res = await fetch("/api/admin/member-potential", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          // format YYYY-MM-DD → d/m/yy (Thai-friendly short date)
-          label: importLabel
-            ? (() => { const [y, m, d] = importLabel.split("-"); return `${+d}/${+m}/${String(+y).slice(2)}`; })()
-            : undefined,
-          opponent_guild: importOpponentGuild.trim() || undefined,
-          guild: guildFilter,
-          rows: records,
-        }),
+      const json = await importMutation.mutateAsync({
+        // format YYYY-MM-DD → d/m/yy (Thai-friendly short date)
+        label: importLabel
+          ? (() => { const [y, m, d] = importLabel.split("-"); return `${+d}/${+m}/${String(+y).slice(2)}`; })()
+          : undefined,
+        opponent_guild: importOpponentGuild.trim() || undefined,
+        guild: guildFilter,
+        rows: records,
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) { showToast(`Import ไม่สำเร็จ: ${json.error ?? "unknown"}`, false); return; }
+      if (!json.ok) { showToast(`Import ไม่สำเร็จ: ${json.error ?? "unknown"}`, false); return; }
 
       showToast(`Import สำเร็จ ${json.count} คน ✓`);
       setBatchLabel("");
       setImportLabel("");
       setImportOpponentGuild("");
-      await loadLeaderboard();
-      if (tab === "batches") await loadBatches();
+      // useImportBatch.onSuccess invalidates leaderboard + batches
     } catch (err: any) {
       showToast(`เกิดข้อผิดพลาด: ${err?.message ?? "unknown"}`, false);
     } finally { setImporting(false); }
   };
 
   // ---------- View batch detail ----------
-  const openViewBatch = async (b: BatchRow) => {
+  const openViewBatch = (b: BatchRow) => {
     setViewingBatch(b);
-    setViewingBatchRecords([]);
     setBatchDetailSearch("");
     setBatchDetailSortKey("default");
     setBatchDetailSortAsc(true);
     setBatchDetailClassFilter(null);
     setBatchEditMode(false);
     setBatchEdits(new Map());
-    setLoadingBatchDetail(true);
-    try {
-      const res = await fetch(`/api/admin/member-potential/batches/${b.id}`, { cache: "no-store" });
-      const json = await res.json();
-      if (res.ok && json.ok) {
-        setViewingBatchRecords(Array.isArray(json.items) ? json.items : []);
-      } else {
-        showToast(`โหลดข้อมูลไม่สำเร็จ: ${json.error ?? "unknown"}`, false);
-      }
-    } catch (err: any) {
-      showToast(`เกิดข้อผิดพลาด: ${err?.message ?? "unknown"}`, false);
-    } finally {
-      setLoadingBatchDetail(false);
-    }
+    // Data fetched via useBatchDetail(viewingBatch?.id) — see query hook above
   };
+
+  // Show error toast if batch detail query fails
+  useEffect(() => {
+    if (batchDetailQuery.isError && viewingBatch) {
+      showToast(`โหลดข้อมูลไม่สำเร็จ: ${(batchDetailQuery.error as Error)?.message ?? "unknown"}`, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchDetailQuery.isError]);
 
   // Get effective value for a record+category (edits take precedence)
   const getRecValue = (uid: string, original: number, cat: Category): number => {
@@ -748,6 +717,7 @@ export default function MemberPotentialClient() {
     setBatchEditMode(false);
   };
 
+  const updateRecordsMutation = useUpdateBatchRecords();
   const saveBatchEdits = async () => {
     if (!viewingBatch) return;
     // Build updates from edits, only sending rows/fields that actually changed
@@ -773,30 +743,28 @@ export default function MemberPotentialClient() {
 
     setSavingBatchRecords(true);
     try {
-      const res = await fetch(`/api/admin/member-potential/batches/${viewingBatch.id}/records`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ updates }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
+      const json = await updateRecordsMutation.mutateAsync({ id: viewingBatch.id, updates });
+      if (!json.ok) {
         showToast(`บันทึกไม่สำเร็จ: ${json.error ?? "unknown"}`, false);
         return;
       }
       showToast(`บันทึกสำเร็จ ${json.updated} แถว ✓`);
-      // Apply changes locally + exit edit mode
-      setViewingBatchRecords((prev) =>
-        prev.map((r) => {
-          const edits = batchEdits.get(r.userdiscordid);
-          if (!edits) return r;
-          return { ...r, ...edits };
-        })
-      );
+      // Apply changes to cached batch detail so the table updates immediately
+      qc.setQueryData(qk.batchDetail(viewingBatch.id), (prev: unknown) => {
+        const data = (prev ?? {}) as { items?: BatchRecordRow[] };
+        const items = data.items ?? [];
+        return {
+          ...(data as object),
+          items: items.map((r) => {
+            const edits = batchEdits.get(r.userdiscordid);
+            return edits ? { ...r, ...edits } : r;
+          }),
+        };
+      });
       setBatchEdits(new Map());
       setEditsResetKey((k) => k + 1);
       setBatchEditMode(false);
-      // Refresh leaderboard (averages/scores may have changed)
-      loadLeaderboard();
+      // Mutation.onSuccess invalidates leaderboard + batchDetail
     } catch (err: any) {
       showToast(`เกิดข้อผิดพลาด: ${err?.message ?? "unknown"}`, false);
     } finally {
@@ -845,6 +813,7 @@ export default function MemberPotentialClient() {
     setEditBatchGuild(b.guild ?? null);
   };
 
+  const updateBatchMutation = useUpdateBatch();
   const saveBatchEdit = async () => {
     if (!editingBatch) return;
     setSavingBatch(true);
@@ -852,56 +821,64 @@ export default function MemberPotentialClient() {
       const label = editBatchLabel
         ? (() => { const [y, m, d] = editBatchLabel.split("-"); return `${+d}/${+m}/${String(+y).slice(2)}`; })()
         : editingBatch.label;
-      const res = await fetch(`/api/admin/member-potential/batches/${editingBatch.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ label, opponent_guild: editBatchOpponent.trim() || null, guild: editBatchGuild }),
+      const json = await updateBatchMutation.mutateAsync({
+        id: editingBatch.id,
+        label,
+        opponent_guild: editBatchOpponent.trim() || undefined,
+        guild: editBatchGuild,
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) { showToast("บันทึกไม่สำเร็จ", false); return; }
+      if (!json.ok) { showToast("บันทึกไม่สำเร็จ", false); return; }
       showToast("บันทึกสำเร็จ ✓");
       setEditingBatch(null);
-      await loadBatches();
+      // Mutation.onSuccess handles invalidation
     } finally { setSavingBatch(false); }
   };
 
   // ---------- Delete batch ----------
+  const deleteBatchMutation = useDeleteBatch();
   const deleteBatch = async (id: string) => {
     setDeletingBatch(null);
-    const res = await fetch(`/api/admin/member-potential/batches/${id}`, { method: "DELETE" });
-    const json = await res.json();
-    if (!res.ok || !json.ok) { showToast("ลบไม่สำเร็จ", false); return; }
-    setDeleteToast(true);
-    setTimeout(() => setDeleteToast(false), 2500);
-    await loadBatches();
-    await loadLeaderboard();
+    try {
+      const json = await deleteBatchMutation.mutateAsync(id);
+      if (!json.ok) { showToast("ลบไม่สำเร็จ", false); return; }
+      setDeleteToast(true);
+      setTimeout(() => setDeleteToast(false), 2500);
+      // Mutation.onSuccess invalidates leaderboard + batches
+    } catch {
+      showToast("ลบไม่สำเร็จ", false);
+    }
   };
 
   // ---------- Save weights ----------
+  const upsertWeightMutation = useUpsertWeight();
   const saveAllWeights = async () => {
     setSavingW(true);
     try {
       await Promise.all(
         weights.map((w) => {
           const key = `${w.class_id ?? "null"}:${w.category}`;
-          return fetch("/api/admin/member-potential/weights", {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ...w, weight: Number(editWeights[key] ?? w.weight) }),
+          return upsertWeightMutation.mutateAsync({
+            class_id: w.class_id,
+            category: w.category,
+            label: w.label,
+            weight: Number(editWeights[key] ?? w.weight),
+            enabled: w.enabled,
+            sort_order: w.sort_order,
           });
         })
       );
       showToast(`บันทึกสำเร็จ ${weights.length} รายการ ✓`);
-      // Update the local "weights" baseline so future override-highlight logic uses the saved values
-      setWeights((prev) =>
-        prev.map((w) => {
+      // Optimistically update the cached weights so the override-highlight logic sees the saved values immediately
+      qc.setQueryData(qk.weights(), (prev: unknown) => {
+        const list = Array.isArray(prev) ? prev : weights;
+        return list.map((w: any) => {
           const key = `${w.class_id ?? "null"}:${w.category}`;
           const newW = editWeights[key];
           return newW !== undefined ? { ...w, weight: Number(newW) } : w;
-        })
-      );
+        });
+      });
       setWeightsResetKey((k) => k + 1);
-      await loadLeaderboard();
+      // Leaderboard is already invalidated by the mutation's onSuccess
     } catch {
       showToast("บันทึกไม่สำเร็จ", false);
     } finally { setSavingW(false); }
@@ -915,15 +892,22 @@ export default function MemberPotentialClient() {
   const handleDownloadTemplate = async () => {
     if (guildFilter === null) return;
     try {
-      const res = await fetch(`/api/admin/members?guild=${guildFilter}`, { cache: "no-store" });
-      const json = await res.json();
+      // ใช้ qc.fetchQuery → ถ้ามีข้อมูลใน cache (และยัง fresh) จะ reuse ทันที
+      const data = await qc.fetchQuery({
+        queryKey: qk.members(guildFilter),
+        queryFn: async () => {
+          const { jsonFetch } = await import("@/hooks/api/fetcher");
+          return jsonFetch<{ members?: unknown[] }>(`/api/admin/members?guild=${guildFilter}`);
+        },
+        staleTime: 2 * 60 * 1000,
+      });
       const members: {
         discord_user_id: string;
         name: string;
         status: string;
         guild: number;
         class?: { id: number; name: string; icon_url?: string } | null;
-      }[] = Array.isArray(json) ? json : (json?.members ?? []);
+      }[] = Array.isArray(data) ? (data as any) : ((data as any)?.members ?? []);
 
       const active = members
         .filter((m) => m.discord_user_id && String(m.status ?? "").toLowerCase() === "active")
@@ -941,6 +925,8 @@ export default function MemberPotentialClient() {
         ...CATEGORIES.map(() => 0),
       ]);
 
+      // ⚡ lazy-load xlsx-js-style เฉพาะตอนกดดาวน์โหลด template
+      const XLSXStyle = await import("xlsx-js-style");
       const ws = XLSXStyle.utils.aoa_to_sheet([headers, ...dataRows]);
       ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length + 4, 18) }));
 
@@ -973,25 +959,37 @@ export default function MemberPotentialClient() {
   };
 
   // ---------- Sort + filter ----------
-  const filtered = rows.filter((r) => {
-    if (guildFilter !== null && r.guild !== guildFilter) return false;
-    if (roleFilter !== null) {
-      if (roleFilter === "dps" && r.role !== "dps") return false;
-      if (roleFilter === "tank" && r.role !== "tank") return false;
-      if (roleFilter === "healer" && r.role !== "healer") return false;
-      if (roleFilter.startsWith("dps:") && !(r.role === "dps" && r.class_name === roleFilter.slice(4))) return false;
-    }
-    if (search && !r.discordname.toLowerCase().includes(search.toLowerCase()) && !r.userdiscordid.includes(search)) return false;
-    return true;
-  });
-  const sorted = [...filtered].sort((a, b) => {
-    let va: number | string, vb: number | string;
-    if (sortKey === "score") { va = a.score; vb = b.score; }
-    else if (sortKey === "discordname") { va = a.discordname; vb = b.discordname; }
-    else { va = a.avgs[sortKey as Category]; vb = b.avgs[sortKey as Category]; }
-    if (typeof va === "string") return sortAsc ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
-    return sortAsc ? (va as number) - (vb as number) : (vb as number) - (va as number);
-  });
+  // ⚡ useDeferredValue + useMemo — ลดการ recompute ทุก render
+  //    พิมพ์ใน search box ไม่กระตุก, filter/sort รอ idle frame ค่อยรัน
+  const deferredSearch = useDeferredValue(search);
+
+  const filtered = useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (guildFilter !== null && r.guild !== guildFilter) return false;
+      if (roleFilter !== null) {
+        if (roleFilter === "dps" && r.role !== "dps") return false;
+        if (roleFilter === "tank" && r.role !== "tank") return false;
+        if (roleFilter === "healer" && r.role !== "healer") return false;
+        if (roleFilter.startsWith("dps:") && !(r.role === "dps" && r.class_name === roleFilter.slice(4))) return false;
+      }
+      if (q && !r.discordname.toLowerCase().includes(q) && !r.userdiscordid.includes(q)) return false;
+      return true;
+    });
+  }, [rows, guildFilter, roleFilter, deferredSearch]);
+
+  const sorted = useMemo(() => {
+    const copy = [...filtered];
+    copy.sort((a, b) => {
+      let va: number | string, vb: number | string;
+      if (sortKey === "score") { va = a.score; vb = b.score; }
+      else if (sortKey === "discordname") { va = a.discordname; vb = b.discordname; }
+      else { va = a.avgs[sortKey as Category]; vb = b.avgs[sortKey as Category]; }
+      if (typeof va === "string") return sortAsc ? va.localeCompare(vb as string) : (vb as string).localeCompare(va);
+      return sortAsc ? (va as number) - (vb as number) : (vb as number) - (va as number);
+    });
+    return copy;
+  }, [filtered, sortKey, sortAsc]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc((v) => !v);
@@ -1117,7 +1115,7 @@ export default function MemberPotentialClient() {
                   const key = `dps:${class_name}`;
                   return (
                     <button key={key} onClick={() => setRoleFilter(key)} className={btnCls(key)}>
-                      {class_icon && <img src={class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />}
+                      {class_icon && <img src={class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" loading="lazy" decoding="async" />}
                       {class_name} {countSpan(key)}
                     </button>
                   );
@@ -1128,13 +1126,13 @@ export default function MemberPotentialClient() {
 
                 {/* ไอรอนแคลด (tank) */}
                 <button onClick={() => setRoleFilter("tank")} className={btnCls("tank")}>
-                  {tankCls.class_icon && <img src={tankCls.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />}
+                  {tankCls.class_icon && <img src={tankCls.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" loading="lazy" decoding="async" />}
                   {tankCls.class_name} {countSpan("tank")}
                 </button>
 
                 {/* ซิลฟ์ (healer) */}
                 <button onClick={() => setRoleFilter("healer")} className={btnCls("healer")}>
-                  {healerCls.class_icon && <img src={healerCls.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />}
+                  {healerCls.class_icon && <img src={healerCls.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" loading="lazy" decoding="async" />}
                   {healerCls.class_name} {countSpan("healer")}
                 </button>
               </div>
@@ -1211,7 +1209,7 @@ export default function MemberPotentialClient() {
                       <td className="px-3 py-2 text-xs text-zinc-500 whitespace-nowrap">
                         {r.class_icon && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={r.class_icon} alt="" className="inline w-4 h-4 rounded mr-1 align-middle" />
+                          <img src={r.class_icon} alt="" className="inline w-4 h-4 rounded mr-1 align-middle" loading="lazy" decoding="async" />
                         )}
                         {r.class_name || "-"}
                         <span className={`ml-1.5 rounded px-1 py-px text-[10px] font-semibold ${
@@ -1535,7 +1533,7 @@ export default function MemberPotentialClient() {
                       >
                         {icon && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+                          <img src={icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" loading="lazy" decoding="async" />
                         )}
                         {name || "-"}
                         <span className={`text-[11px] ${active ? "opacity-70" : "text-zinc-400"}`}>{count}</span>
@@ -1606,7 +1604,7 @@ export default function MemberPotentialClient() {
                           <td className="px-3 py-2 text-zinc-500 whitespace-nowrap">
                             {r.class_icon && (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={r.class_icon} alt="" className="inline w-4 h-4 rounded mr-1 align-middle" />
+                              <img src={r.class_icon} alt="" className="inline w-4 h-4 rounded mr-1 align-middle" loading="lazy" decoding="async" />
                             )}
                             {r.class_name || <span className="text-zinc-400">-</span>}
                           </td>
@@ -1808,7 +1806,7 @@ export default function MemberPotentialClient() {
                               <span className="flex flex-col items-center gap-1">
                                 {cls?.icon_url && (
                                   // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={cls.icon_url} alt="" className="w-6 h-6 rounded-lg" />
+                                  <img src={cls.icon_url} alt="" className="w-6 h-6 rounded-lg" loading="lazy" decoding="async" />
                                 )}
                                 <span>{cls?.name ?? `Class ${class_id}`}</span>
                               </span>
@@ -2039,7 +2037,7 @@ export default function MemberPotentialClient() {
                       >
                         {icon && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+                          <img src={icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" loading="lazy" decoding="async" />
                         )}
                         {name || "-"}
                         <span className={`text-[11px] ${active ? "opacity-70" : "text-zinc-400"}`}>{count}</span>
@@ -2096,7 +2094,7 @@ export default function MemberPotentialClient() {
                               <td className="px-2 py-1.5 text-zinc-500 whitespace-nowrap">
                                 {icon && (
                                   // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={icon} alt="" className="inline w-3.5 h-3.5 rounded mr-1 align-middle" />
+                                  <img src={icon} alt="" className="inline w-3.5 h-3.5 rounded mr-1 align-middle" loading="lazy" decoding="async" />
                                 )}
                                 {r.class_name || <span className="text-zinc-400">-</span>}
                               </td>

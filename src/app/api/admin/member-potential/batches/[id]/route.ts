@@ -4,6 +4,7 @@ import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { CATEGORIES, type Category } from "@/lib/memberPotential";
+import { invalidateMemberPotential } from "@/lib/redisCache";
 
 export const runtime = "nodejs";
 
@@ -24,25 +25,34 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
     const { id } = await params;
 
+    // ⚡ 3 query อิสระ — ยิงพร้อมกัน (batch / records / weights)
+    const [batchRes, recordsRes, weightsRes] = await Promise.all([
+      supabaseAdmin
+        .from("member_potential_batches")
+        .select("id,label,imported_at,opponent_guild,guild,imported_by")
+        .eq("id", id)
+        .single(),
+      supabaseAdmin
+        .from("member_potential_records")
+        .select(
+          "userdiscordid,discordname,class_id,kill,assist,supply,damage_player,damage_fort,heal,damage_taken,death,revive"
+        )
+        .eq("batch_id", id),
+      supabaseAdmin
+        .from("member_potential_weights")
+        .select("class_id,category,weight,enabled"),
+    ]);
+
     // 1) batch meta
-    const { data: batch, error: bErr } = await supabaseAdmin
-      .from("member_potential_batches")
-      .select("id,label,imported_at,opponent_guild,guild,imported_by")
-      .eq("id", id)
-      .single();
+    const { data: batch, error: bErr } = batchRes;
     if (bErr || !batch)
       return NextResponse.json({ ok: false, error: bErr?.message ?? "batch not found" }, { status: 404 });
 
     // 2) records in this batch
-    const { data: records, error: rErr } = await supabaseAdmin
-      .from("member_potential_records")
-      .select(
-        "userdiscordid,discordname,class_id,kill,assist,supply,damage_player,damage_fort,heal,damage_taken,death,revive"
-      )
-      .eq("batch_id", id);
+    const { data: records, error: rErr } = recordsRes;
     if (rErr) return NextResponse.json({ ok: false, error: rErr.message }, { status: 500 });
 
-    // 3) class info (name, icon) — bulk fetch
+    // 3) class info (name, icon) — bulk fetch (depends on records)
     const classIds = Array.from(
       new Set((records ?? []).map((r) => r.class_id).filter((v): v is number => v != null))
     );
@@ -57,10 +67,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       }
     }
 
-    // 4) Weights — for per-record score calculation (same formula as leaderboard)
-    const { data: weightRows } = await supabaseAdmin
-      .from("member_potential_weights")
-      .select("class_id,category,weight,enabled");
+    // 4) Weights — มาจาก Promise.all ด้านบนแล้ว
+    const { data: weightRows } = weightsRes;
 
     const defaultWeights = new Map<Category, number>();
     const classWeights = new Map<number, Map<Category, number>>();
@@ -141,6 +149,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       .eq("id", id);
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+    // batch meta เปลี่ยน — โดย label/guild อาจไม่กระทบ score แต่ invalidate ไว้ก่อนเพื่อความปลอดภัย
+    await invalidateMemberPotential();
+
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
@@ -159,6 +171,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       .eq("id", id);
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+    await invalidateMemberPotential();
+
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });

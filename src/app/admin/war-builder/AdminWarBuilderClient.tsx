@@ -1,7 +1,18 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import WarBuilderClient from "./WarBuilderClient";
+import dynamic from "next/dynamic";
+import { useMe } from "@/hooks/api/members";
+
+// ⚡ WarBuilderClient ไฟล์ใหญ่มาก (~3.5k บรรทัด) — แยก chunk + show skeleton
+const WarBuilderClient = dynamic(() => import("./WarBuilderClient"), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+      กำลังโหลด War Builder…
+    </div>
+  ),
+});
 
 type MeRes = {
   ok: boolean;
@@ -9,19 +20,16 @@ type MeRes = {
 };
 
 export default function AdminWarBuilderClient() {
-  const [me, setMe] = useState<MeRes | null>(null);
+  const meQuery = useMe();
+  const me = (meQuery.data as MeRes | undefined) ?? null;
   const [selectedGuild, setSelectedGuild] = useState<number | null>(null);
 
+  // Sync default selectedGuild from "me" once data arrives
   useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
-        const res = j as MeRes;
-        setMe(res);
-        if (res.ok && res.user?.guild) setSelectedGuild(res.user.guild);
-      })
-      .catch(() => setMe({ ok: false }));
-  }, []);
+    if (me?.ok && me.user?.guild && selectedGuild === null) {
+      setSelectedGuild(me.user.guild);
+    }
+  }, [me, selectedGuild]);
 
   const canEdit = !!(me?.ok && (me.user?.isAdmin || me.user?.isHead));
   const canPickGuild = !!(me?.ok && me.user?.isAdmin);

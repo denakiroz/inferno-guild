@@ -2,12 +2,22 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { CalendarDays, X } from "lucide-react";
-import { DayPicker, DateRange } from "react-day-picker";
-import "react-day-picker/dist/style.css";
+import type { DateRange } from "react-day-picker";
 
 import type { DbLeave } from "@/type/db";
 import { Button, Input, Modal, Select } from "@/app/components/UI";
+
+// ⚡ react-day-picker + CSS ของมันค่อนข้างใหญ่ — lazy-load เฉพาะตอนเปิด modal แจ้งลา
+const DayPicker = dynamic(() => import("@/app/components/DayPickerLazy"), {
+  ssr: false,
+  loading: () => (
+    <div className="py-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
+      กำลังโหลดปฏิทิน…
+    </div>
+  ),
+});
 
 const BKK_OFFSET = "+07:00";
 const BKK_TZ = "Asia/Bangkok";

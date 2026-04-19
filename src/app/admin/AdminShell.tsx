@@ -22,6 +22,7 @@ import {
 
 import { Button } from "@/app/components/UI";
 import { useTheme } from "@/app/theme/ThemeProvider";
+import { useMe } from "@/hooks/api/members";
 
 type MeRes = {
   ok: boolean;
@@ -42,7 +43,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
 
-  const [me, setMe] = useState<MeRes | null>(null);
+  const meQuery = useMe();
+  const me: MeRes | null = meQuery.isLoading
+    ? null
+    : ((meQuery.data as MeRes | undefined) ?? { ok: false });
   const [openProfile, setOpenProfile] = useState(false);
 
   // ✅ Hamburger sidebar (ซ้าย) — desktop: push content, mobile: overlay
@@ -58,13 +62,6 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       next.has(title) ? next.delete(title) : next.add(title);
       return next;
     });
-
-  useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => setMe(j as MeRes))
-      .catch(() => setMe({ ok: false }));
-  }, []);
 
   // ✅ เปลี่ยนหน้าแล้วปิดเมนู/โปรไฟล์ เพื่อไม่ค้าง
   useEffect(() => {

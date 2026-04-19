@@ -1,8 +1,11 @@
 // src/app/leaves/AdminLeavesClient.tsx
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Leaves from "./Leaves";
+import { qk } from "@/lib/queryClient";
+import { useMembers } from "@/hooks/api/members";
 import type { DbLeave, DbMember } from "@/type/db";
 
 type Props = {
@@ -11,28 +14,18 @@ type Props = {
 };
 
 export default function AdminLeavesClient(initial: Props) {
-  const [members, setMembers] = useState<DbMember[]>(initial.members);
-  const [leaves, setLeaves] = useState<DbLeave[]>(initial.leaves);
-  const [isLoading, setIsLoading] = useState(false);
+  const qc = useQueryClient();
+  const membersQuery = useMembers(null);
 
-  const onReload = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      // reuse endpoint เดียวกับหน้า /admin/members (คืน member+leave)
-      const res = await fetch("/api/admin/members", { cache: "no-store" });
-      const json = await res.json();
+  const members: DbMember[] =
+    (membersQuery.data?.members as DbMember[] | undefined) ?? initial.members;
+  const leaves: DbLeave[] =
+    (membersQuery.data?.leaves as DbLeave[] | undefined) ?? initial.leaves;
+  const isLoading = membersQuery.isFetching;
 
-      if (!res.ok) {
-        console.error("Reload leaves failed:", json);
-        return;
-      }
-
-      setMembers((json.members ?? []) as DbMember[]);
-      setLeaves((json.leaves ?? []) as DbLeave[]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const onReload = async () => {
+    await qc.invalidateQueries({ queryKey: qk.members(null) });
+  };
 
   return (
     <Leaves
