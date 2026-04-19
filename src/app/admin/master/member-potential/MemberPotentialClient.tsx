@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import * as XLSXStyle from "xlsx-js-style";
 
 // ── Player History Modal ───────────────────────────────────────────
 type BatchStat = {
@@ -281,6 +282,24 @@ type BatchRow = {
   guild?: number | null;
 };
 
+type BatchRecordRow = {
+  userdiscordid: string;
+  discordname: string;
+  class_id: number | null;
+  class_name: string;
+  class_icon: string;
+  kill: number;
+  assist: number;
+  supply: number;
+  damage_player: number;
+  damage_fort: number;
+  heal: number;
+  damage_taken: number;
+  death: number;
+  revive: number;
+  score: number; // per-batch score = Σ(stat × weight_for_class)
+};
+
 type WeightRow = {
   id: string;
   class_id: number | null;
@@ -313,6 +332,121 @@ function fmtAvg(n: number) {
 }
 function fmtScore(n: number) { return n.toLocaleString(undefined, { maximumFractionDigits: 1 }); }
 
+// Stat input cell with local state to keep typing responsive.
+// Only commits to parent state on blur/Enter to avoid re-rendering the whole modal on every keystroke.
+type EditableStatCellProps = {
+  uid: string;
+  cat: Category;
+  original: number;
+  initialDraft: number | undefined;
+  resetKey: number; // bumped when parent wants to reset local state (cancel / save)
+  onCommit: (uid: string, cat: Category, value: number) => void;
+};
+const EditableStatCell = React.memo(function EditableStatCell({
+  uid, cat, original, initialDraft, resetKey, onCommit,
+}: EditableStatCellProps) {
+  const baseline = initialDraft !== undefined ? initialDraft : original;
+  const [val, setVal] = useState<string>(String(baseline));
+
+  // Re-sync local state when parent bumps the reset key (e.g. after save/cancel)
+  useEffect(() => {
+    setVal(String(initialDraft !== undefined ? initialDraft : original));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
+
+  const numVal = val === "" ? 0 : Math.max(0, Math.floor(Number(val) || 0));
+  const isEdited = numVal !== original;
+
+  const commit = () => {
+    // Normalize displayed text (e.g. "05" -> "5")
+    if (String(numVal) !== val) setVal(String(numVal));
+    onCommit(uid, cat, numVal);
+  };
+
+  return (
+    <td className="px-2 py-1 text-right">
+      <input
+        type="number"
+        min={0}
+        step={1}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className={`h-7 w-20 rounded-md border px-1.5 text-right tabular-nums text-xs focus:outline-none focus:ring-1 focus:ring-red-400 ${
+          isEdited
+            ? "border-amber-400 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 font-semibold"
+            : cat === "death" && numVal > 0
+            ? "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-red-500"
+            : numVal > 0
+            ? "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200"
+            : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500"
+        }`}
+      />
+    </td>
+  );
+});
+
+// Weight input cell — same pattern as EditableStatCell. Commits on blur to avoid lag
+// when typing because there are 9 cats × N classes of inputs rendered at once.
+type EditableWeightCellProps = {
+  wKey: string;
+  cat: Category;
+  initialValue: number;
+  defaultValue: number; // default column's value (for class cols, used for override highlight)
+  isDefaultCol: boolean;
+  isDeath: boolean;
+  resetKey: number;
+  onCommit: (wKey: string, value: number) => void;
+};
+const EditableWeightCell = React.memo(function EditableWeightCell({
+  wKey, cat, initialValue, defaultValue, isDefaultCol, isDeath, resetKey, onCommit,
+}: EditableWeightCellProps) {
+  const [val, setVal] = useState<string>(String(initialValue));
+
+  useEffect(() => {
+    setVal(String(initialValue));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey]);
+
+  const numVal = val === "" ? 0 : Number(val) || 0;
+  const isOverride = !isDefaultCol && numVal !== defaultValue;
+  const expectedPts = Math.round(CAT_AVG[cat] * numVal * 10) / 10;
+
+  const commit = () => onCommit(wKey, numVal);
+
+  return (
+    <td className="px-4 py-2">
+      <div className={`rounded-xl border p-2 flex flex-col gap-1 ${
+        isDeath
+          ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30"
+          : isOverride
+          ? "border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/20"
+          : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+      }`}>
+        <input
+          type="number"
+          step="0.001"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          className={`h-7 w-full rounded-lg border-0 bg-transparent px-1 text-sm text-right tabular-nums font-semibold focus:outline-none focus:ring-1 focus:ring-red-400 ${
+            isDeath ? "text-red-600 dark:text-red-400" : "text-zinc-800 dark:text-zinc-100"
+          }`}
+        />
+        <div className={`text-[10px] text-right tabular-nums ${isDeath ? "text-red-400" : "text-zinc-400"}`}>
+          ≈ {expectedPts > 0 ? "+" : ""}{expectedPts} pts
+        </div>
+      </div>
+    </td>
+  );
+});
+
 export default function MemberPotentialClient() {
   const [tab, setTab] = useState<Tab>("leaderboard");
 
@@ -339,6 +473,7 @@ export default function MemberPotentialClient() {
   const [pendingImport, setPendingImport] = useState<{ records: any[]; defaultLabel: string } | null>(null);
   const [importLabel, setImportLabel] = useState("");
   const [importOpponentGuild, setImportOpponentGuild] = useState("");
+  const [importClassFilter, setImportClassFilter] = useState<string | null>(null);
 
   // Batch edit modal
   const [editingBatch, setEditingBatch] = useState<BatchRow | null>(null);
@@ -346,6 +481,23 @@ export default function MemberPotentialClient() {
   const [editBatchOpponent, setEditBatchOpponent] = useState("");
   const [editBatchGuild, setEditBatchGuild] = useState<number | null>(null);
   const [savingBatch, setSavingBatch] = useState(false);
+
+  // Batch details modal (view records)
+  const [viewingBatch, setViewingBatch] = useState<BatchRow | null>(null);
+  const [viewingBatchRecords, setViewingBatchRecords] = useState<BatchRecordRow[]>([]);
+  const [loadingBatchDetail, setLoadingBatchDetail] = useState(false);
+  const [batchDetailSearch, setBatchDetailSearch] = useState("");
+  // "default" = sort by class name then discord name (matches Download Template order)
+  const [batchDetailSortKey, setBatchDetailSortKey] = useState<SortKey | "default">("default");
+  const [batchDetailSortAsc, setBatchDetailSortAsc] = useState(true);
+  const [batchDetailClassFilter, setBatchDetailClassFilter] = useState<string | null>(null);
+  // Edit mode toggle — "ดู" opens in view-only, must press "แก้ไข" to enable editing
+  const [batchEditMode, setBatchEditMode] = useState(false);
+  // Draft edits: Map<userdiscordid, Record<Category, number>> — only contains rows that user touched
+  const [batchEdits, setBatchEdits] = useState<Map<string, Partial<Record<Category, number>>>>(new Map());
+  // Bumped on cancel / save so EditableStatCell can re-sync its local state
+  const [editsResetKey, setEditsResetKey] = useState(0);
+  const [savingBatchRecords, setSavingBatchRecords] = useState(false);
 
   // Batch guild filter
   const [batchGuildFilter, setBatchGuildFilter] = useState<number | null>(null);
@@ -355,7 +507,14 @@ export default function MemberPotentialClient() {
   const [loadingW, setLoadingW] = useState(false);
   const [savingW, setSavingW] = useState(false);
   const [editWeights, setEditWeights] = useState<Record<string, number>>({});
+  // Bumped after load/save so EditableWeightCell can re-sync local state
+  const [weightsResetKey, setWeightsResetKey] = useState(0);
   const [classes, setClasses] = useState<{ id: number; name: string; icon_url?: string }[]>([]);
+
+  // Stable onCommit for EditableWeightCell — keeps React.memo effective
+  const onCommitWeight = useCallback((wKey: string, value: number) => {
+    setEditWeights((prev) => ({ ...prev, [wKey]: value }));
+  }, []);
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -401,12 +560,22 @@ export default function MemberPotentialClient() {
           init[`${w.class_id ?? "null"}:${w.category}`] = w.weight;
         }
         setEditWeights(init);
+        setWeightsResetKey((k) => k + 1);
       }
       if (cJson.ok) setClasses(cJson.classes ?? []);
     } finally { setLoadingW(false); }
   }, []);
 
   useEffect(() => { loadLeaderboard(); }, [loadLeaderboard]);
+
+  // Load class list once for icons in filters/preview
+  useEffect(() => {
+    fetch("/api/admin/classes", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (j.ok) setClasses(j.classes ?? []); })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (tab === "batches") loadBatches();
     if (tab === "weights") loadWeights();
@@ -427,6 +596,7 @@ export default function MemberPotentialClient() {
       const headerRow: string[] = (raw[0] as string[]).map((c) => String(c ?? "").trim());
       const idxDiscordId = headerRow.indexOf("userdiscordid");
       const idxDiscordName = headerRow.indexOf("discordname");
+      const idxClassName = headerRow.indexOf("อาชีพ");
 
       if (idxDiscordId === -1) { showToast("ไม่พบ column 'userdiscordid'", false); return; }
 
@@ -446,6 +616,7 @@ export default function MemberPotentialClient() {
         const rec: any = {
           userdiscordid: uid,
           discordname: idxDiscordName >= 0 ? String(r[idxDiscordName] ?? "").trim() : "",
+          class_name: idxClassName >= 0 ? String(r[idxClassName] ?? "").trim() : "",
         };
         for (const cat of CATEGORIES) {
           const idx = catIndices[cat];
@@ -458,10 +629,21 @@ export default function MemberPotentialClient() {
 
       if (records.length === 0) { showToast("ไม่พบข้อมูลในไฟล์", false); return; }
 
+      // Sort: by class name (Thai locale), then by discord name (with leading icons stripped)
+      records.sort((a, b) => {
+        const ca = String(a.class_name ?? "").localeCompare(String(b.class_name ?? ""), "th");
+        if (ca !== 0) return ca;
+        return stripLeadingIcon(String(a.discordname ?? "")).localeCompare(
+          stripLeadingIcon(String(b.discordname ?? "")),
+          "th"
+        );
+      });
+
       // Open confirm modal instead of immediately POSTing
       const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
       setImportLabel(today);
       setImportOpponentGuild("");
+      setImportClassFilter(null);
       setPendingImport({ records, defaultLabel: today });
     } catch (err: any) {
       showToast(`เกิดข้อผิดพลาด: ${err?.message ?? "unknown"}`, false);
@@ -500,6 +682,151 @@ export default function MemberPotentialClient() {
     } catch (err: any) {
       showToast(`เกิดข้อผิดพลาด: ${err?.message ?? "unknown"}`, false);
     } finally { setImporting(false); }
+  };
+
+  // ---------- View batch detail ----------
+  const openViewBatch = async (b: BatchRow) => {
+    setViewingBatch(b);
+    setViewingBatchRecords([]);
+    setBatchDetailSearch("");
+    setBatchDetailSortKey("default");
+    setBatchDetailSortAsc(true);
+    setBatchDetailClassFilter(null);
+    setBatchEditMode(false);
+    setBatchEdits(new Map());
+    setLoadingBatchDetail(true);
+    try {
+      const res = await fetch(`/api/admin/member-potential/batches/${b.id}`, { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        setViewingBatchRecords(Array.isArray(json.items) ? json.items : []);
+      } else {
+        showToast(`โหลดข้อมูลไม่สำเร็จ: ${json.error ?? "unknown"}`, false);
+      }
+    } catch (err: any) {
+      showToast(`เกิดข้อผิดพลาด: ${err?.message ?? "unknown"}`, false);
+    } finally {
+      setLoadingBatchDetail(false);
+    }
+  };
+
+  // Get effective value for a record+category (edits take precedence)
+  const getRecValue = (uid: string, original: number, cat: Category): number => {
+    const edits = batchEdits.get(uid);
+    if (edits && cat in edits) return edits[cat] as number;
+    return original;
+  };
+
+  // Stable onCommit ref for EditableStatCell.
+  // Keeping this stable prevents React.memo'd cells from re-rendering when the parent re-renders.
+  const setRecValueRef = useRef<(uid: string, cat: Category, value: number) => void>(() => {});
+  setRecValueRef.current = (uid: string, cat: Category, value: number) => {
+    const originalRec = viewingBatchRecords.find((r) => r.userdiscordid === uid);
+    const original = originalRec ? originalRec[cat] : 0;
+    setBatchEdits((prev) => {
+      const next = new Map(prev);
+      const curr = { ...(next.get(uid) ?? {}) } as Partial<Record<Category, number>>;
+      if (value === original) {
+        // Value reverted to original → drop this field from drafts
+        delete curr[cat];
+        if (Object.keys(curr).length === 0) next.delete(uid);
+        else next.set(uid, curr);
+      } else {
+        curr[cat] = value;
+        next.set(uid, curr);
+      }
+      return next;
+    });
+  };
+  const onCommitStat = useCallback((uid: string, cat: Category, value: number) => {
+    setRecValueRef.current(uid, cat, value);
+  }, []);
+
+  const cancelBatchEdits = () => {
+    setBatchEdits(new Map());
+    setEditsResetKey((k) => k + 1);
+    setBatchEditMode(false);
+  };
+
+  const saveBatchEdits = async () => {
+    if (!viewingBatch) return;
+    // Build updates from edits, only sending rows/fields that actually changed
+    const updates: Array<{ userdiscordid: string } & Partial<Record<Category, number>>> = [];
+    for (const [uid, edits] of batchEdits) {
+      const original = viewingBatchRecords.find((r) => r.userdiscordid === uid);
+      if (!original) continue;
+      const diff: Partial<Record<Category, number>> = {};
+      let changed = false;
+      for (const c of CATEGORIES) {
+        if (c in edits && edits[c] !== original[c]) {
+          diff[c] = edits[c];
+          changed = true;
+        }
+      }
+      if (changed) updates.push({ userdiscordid: uid, ...diff });
+    }
+
+    if (updates.length === 0) {
+      showToast("ไม่มีข้อมูลที่เปลี่ยนแปลง", false);
+      return;
+    }
+
+    setSavingBatchRecords(true);
+    try {
+      const res = await fetch(`/api/admin/member-potential/batches/${viewingBatch.id}/records`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ updates }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        showToast(`บันทึกไม่สำเร็จ: ${json.error ?? "unknown"}`, false);
+        return;
+      }
+      showToast(`บันทึกสำเร็จ ${json.updated} แถว ✓`);
+      // Apply changes locally + exit edit mode
+      setViewingBatchRecords((prev) =>
+        prev.map((r) => {
+          const edits = batchEdits.get(r.userdiscordid);
+          if (!edits) return r;
+          return { ...r, ...edits };
+        })
+      );
+      setBatchEdits(new Map());
+      setEditsResetKey((k) => k + 1);
+      setBatchEditMode(false);
+      // Refresh leaderboard (averages/scores may have changed)
+      loadLeaderboard();
+    } catch (err: any) {
+      showToast(`เกิดข้อผิดพลาด: ${err?.message ?? "unknown"}`, false);
+    } finally {
+      setSavingBatchRecords(false);
+    }
+  };
+
+  const toggleBatchDetailSort = (key: SortKey) => {
+    // Cycle 3 states: default → first dir → second dir → default
+    // discordname: asc → desc, อื่นๆ: desc → asc (highest first ก่อน)
+    const firstDirAsc = key === "discordname";
+    if (batchDetailSortKey !== key) {
+      setBatchDetailSortKey(key);
+      setBatchDetailSortAsc(firstDirAsc);
+      return;
+    }
+    if (batchDetailSortAsc === firstDirAsc) {
+      // first → second
+      setBatchDetailSortAsc(!batchDetailSortAsc);
+    } else {
+      // second → default (no sort)
+      setBatchDetailSortKey("default");
+      setBatchDetailSortAsc(true);
+    }
+  };
+  const batchDetailSortIcon = (key: SortKey) => {
+    if (batchDetailSortKey === key) {
+      return <span>{batchDetailSortAsc ? " ▲" : " ▼"}</span>;
+    }
+    return <span className="text-zinc-300 dark:text-zinc-600"> ⇅</span>;
   };
 
   // ---------- Edit batch ----------
@@ -565,6 +892,15 @@ export default function MemberPotentialClient() {
         })
       );
       showToast(`บันทึกสำเร็จ ${weights.length} รายการ ✓`);
+      // Update the local "weights" baseline so future override-highlight logic uses the saved values
+      setWeights((prev) =>
+        prev.map((w) => {
+          const key = `${w.class_id ?? "null"}:${w.category}`;
+          const newW = editWeights[key];
+          return newW !== undefined ? { ...w, weight: Number(newW) } : w;
+        })
+      );
+      setWeightsResetKey((k) => k + 1);
       await loadLeaderboard();
     } catch {
       showToast("บันทึกไม่สำเร็จ", false);
@@ -605,12 +941,32 @@ export default function MemberPotentialClient() {
         ...CATEGORIES.map(() => 0),
       ]);
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+      const ws = XLSXStyle.utils.aoa_to_sheet([headers, ...dataRows]);
       ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length + 4, 18) }));
 
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Member Potential");
-      XLSX.writeFile(wb, `member_potential_template_guild${guildFilter}.xlsx`);
+      // Style header row: yellow fill, red bold text, centered
+      const headerStyle = {
+        fill: { patternType: "solid", fgColor: { rgb: "FFFF00" } }, // yellow
+        font: { color: { rgb: "FF0000" }, bold: true },             // red bold
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "999999" } },
+          bottom: { style: "thin", color: { rgb: "999999" } },
+          left: { style: "thin", color: { rgb: "999999" } },
+          right: { style: "thin", color: { rgb: "999999" } },
+        },
+      };
+      for (let col = 0; col < headers.length; col++) {
+        const addr = XLSXStyle.utils.encode_cell({ r: 0, c: col });
+        if (!ws[addr]) ws[addr] = { t: "s", v: headers[col] };
+        ws[addr].s = headerStyle;
+      }
+      // Set header row height
+      ws["!rows"] = [{ hpt: 24 }];
+
+      const wb = XLSXStyle.utils.book_new();
+      XLSXStyle.utils.book_append_sheet(wb, ws, "Member Potential");
+      XLSXStyle.writeFile(wb, `member_potential_template_guild${guildFilter}.xlsx`);
     } catch (err: any) {
       showToast(`ดาวน์โหลด Template ไม่สำเร็จ: ${err?.message ?? "unknown"}`, false);
     }
@@ -928,13 +1284,19 @@ export default function MemberPotentialClient() {
                     .filter((b) => batchGuildFilter === null || b.guild === batchGuildFilter)
                     .map((b) => (
                   <tr key={b.id} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition">
-                    <td className="px-4 py-3 font-medium text-zinc-800 dark:text-zinc-200">{b.label || "-"}</td>
+                    <td className="px-4 py-3 font-medium text-zinc-800 dark:text-zinc-200">
+                      {b.label || "-"}
+                    </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">{b.guild ? `Guild ${b.guild}` : <span className="text-zinc-400">-</span>}</td>
                     <td className="px-4 py-3 text-xs text-amber-600 dark:text-amber-400">{b.opponent_guild || <span className="text-zinc-400">-</span>}</td>
                     <td className="px-4 py-3 text-xs text-zinc-500">{new Date(b.imported_at).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-3 text-center text-xs text-zinc-600">{b.record_count} คน</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openViewBatch(b)}
+                          className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:underline"
+                        >👁️ ดู</button>
                         <button
                           onClick={() => openEditBatch(b)}
                           className="text-xs text-blue-500 hover:underline"
@@ -973,7 +1335,7 @@ export default function MemberPotentialClient() {
             <div className="px-5 py-4 space-y-4">
               {/* Label (date picker) */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">วันที่ Batch</label>
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">วันที่ war</label>
                 <input
                   type="date"
                   value={editBatchLabel}
@@ -1026,6 +1388,370 @@ export default function MemberPotentialClient() {
           </div>
         </div>
       )}
+
+      {/* ===== VIEW BATCH DETAIL MODAL ===== */}
+      {viewingBatch && (() => {
+        // Derive class filter options from records (with counts)
+        const bdClassCounts = new Map<string, number>();
+        for (const r of viewingBatchRecords) {
+          const k = (r.class_name ?? "").trim() || "-";
+          bdClassCounts.set(k, (bdClassCounts.get(k) ?? 0) + 1);
+        }
+        const bdClassOptions = Array.from(bdClassCounts.entries())
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "th"));
+
+        const bdClassIconMap = new Map<string, string | undefined>();
+        for (const c of classes) bdClassIconMap.set(c.name, c.icon_url);
+
+        const filteredRecs = viewingBatchRecords.filter((r) => {
+          // class filter
+          if (batchDetailClassFilter !== null) {
+            const k = (r.class_name ?? "").trim() || "-";
+            if (k !== batchDetailClassFilter) return false;
+          }
+          // search
+          if (!batchDetailSearch) return true;
+          const q = batchDetailSearch.toLowerCase();
+          return (
+            r.discordname.toLowerCase().includes(q) ||
+            r.userdiscordid.includes(batchDetailSearch) ||
+            (r.class_name ?? "").toLowerCase().includes(q)
+          );
+        });
+        const sortedRecs = [...filteredRecs].sort((a, b) => {
+          if (batchDetailSortKey === "default") {
+            // Match Download Template order: class name → stripped discord name
+            const ca = String(a.class_name ?? "").localeCompare(String(b.class_name ?? ""), "th");
+            if (ca !== 0) return ca;
+            return stripLeadingIcon(a.discordname ?? "").localeCompare(
+              stripLeadingIcon(b.discordname ?? ""),
+              "th"
+            );
+          }
+          if (batchDetailSortKey === "discordname") {
+            return batchDetailSortAsc
+              ? a.discordname.localeCompare(b.discordname, "th")
+              : b.discordname.localeCompare(a.discordname, "th");
+          }
+          if (batchDetailSortKey === "score") {
+            return batchDetailSortAsc ? a.score - b.score : b.score - a.score;
+          }
+          const va = a[batchDetailSortKey as Category];
+          const vb = b[batchDetailSortKey as Category];
+          return batchDetailSortAsc ? va - vb : vb - va;
+        });
+
+        // totals (respect class filter so they represent what's shown)
+        const totalsBaseRecs = batchDetailClassFilter === null
+          ? viewingBatchRecords
+          : viewingBatchRecords.filter((r) => ((r.class_name ?? "").trim() || "-") === batchDetailClassFilter);
+        const totals = CATEGORIES.reduce((acc, c) => {
+          acc[c] = totalsBaseRecs.reduce(
+            (s, r) => s + (getRecValue(r.userdiscordid, r[c], c) || 0),
+            0
+          );
+          return acc;
+        }, {} as Record<Category, number>);
+        const totalScore = totalsBaseRecs.reduce((s, r) => s + (r.score || 0), 0);
+
+        const hasUnsavedChanges = Array.from(batchEdits.values()).some((edits) =>
+          Object.keys(edits).length > 0
+        );
+
+        const safeClose = () => {
+          setViewingBatch(null);
+          setBatchEditMode(false);
+          setBatchEdits(new Map());
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={safeClose}
+          >
+            <div
+              className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-6xl h-[92vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-4 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">
+                      📦 {viewingBatch.label || "Batch"}
+                    </span>
+                    {viewingBatch.guild ? (
+                      <span className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 text-[11px] font-semibold">
+                        Guild {viewingBatch.guild}
+                      </span>
+                    ) : null}
+                    {viewingBatch.opponent_guild ? (
+                      <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-full px-2 py-0.5 text-[11px] font-semibold">
+                        ⚔️ {viewingBatch.opponent_guild}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-1">
+                    Import เมื่อ {new Date(viewingBatch.imported_at).toLocaleString("th-TH")} · {viewingBatch.record_count} คน
+                  </div>
+                </div>
+                <button
+                  onClick={safeClose}
+                  className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+                >✕</button>
+              </div>
+
+              {/* Class filter pills */}
+              {bdClassOptions.length > 0 && (
+                <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-3 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-zinc-400 mr-1">กรองอาชีพ:</span>
+                  <button
+                    type="button"
+                    onClick={() => setBatchDetailClassFilter(null)}
+                    className={`h-7 px-2.5 rounded-lg text-xs border transition flex items-center gap-1.5 ${
+                      batchDetailClassFilter === null
+                        ? "bg-zinc-800 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    ทั้งหมด
+                    <span className={`text-[11px] ${batchDetailClassFilter === null ? "opacity-70" : "text-zinc-400"}`}>
+                      {viewingBatchRecords.length}
+                    </span>
+                  </button>
+                  {bdClassOptions.map(([name, count]) => {
+                    const active = batchDetailClassFilter === name;
+                    const icon = bdClassIconMap.get(name);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => setBatchDetailClassFilter(name)}
+                        className={`h-7 px-2.5 rounded-lg text-xs border transition flex items-center gap-1.5 ${
+                          active
+                            ? "bg-zinc-800 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+                            : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        }`}
+                      >
+                        {icon && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+                        )}
+                        {name || "-"}
+                        <span className={`text-[11px] ${active ? "opacity-70" : "text-zinc-400"}`}>{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Search bar */}
+              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-3 flex items-center gap-2">
+                <input
+                  value={batchDetailSearch}
+                  onChange={(e) => setBatchDetailSearch(e.target.value)}
+                  placeholder="ค้นหาชื่อ / อาชีพ..."
+                  className="h-9 w-72 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                />
+                <span className="text-xs text-zinc-500">
+                  แสดง {sortedRecs.length} / {viewingBatchRecords.length} คน
+                </span>
+              </div>
+
+              {/* Records table */}
+              <div className="flex-1 overflow-auto">
+                {loadingBatchDetail ? (
+                  <div className="py-16 text-center text-sm text-zinc-400">กำลังโหลด...</div>
+                ) : viewingBatchRecords.length === 0 ? (
+                  <div className="py-16 text-center text-sm text-zinc-400">ไม่มีข้อมูลใน batch นี้</div>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="sticky top-0 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 z-10">
+                        <th className="px-3 py-2.5 text-left font-semibold text-zinc-400 w-10">#</th>
+                        <th
+                          onClick={() => toggleBatchDetailSort("discordname")}
+                          className="px-3 py-2.5 text-left font-semibold text-zinc-500 cursor-pointer whitespace-nowrap hover:text-zinc-800"
+                        >
+                          ชื่อ{batchDetailSortIcon("discordname")}
+                        </th>
+                        <th className="px-3 py-2.5 text-left font-semibold text-zinc-500 whitespace-nowrap">อาชีพ</th>
+                        {CATEGORIES.map((c) => (
+                          <th
+                            key={c}
+                            onClick={() => toggleBatchDetailSort(c)}
+                            className={`px-3 py-2.5 text-right font-semibold cursor-pointer whitespace-nowrap hover:text-zinc-800 transition ${c === "death" ? "text-red-400" : "text-zinc-500"}`}
+                          >
+                            {CAT_LABELS[c]}{batchDetailSortIcon(c)}
+                          </th>
+                        ))}
+                        <th
+                          onClick={() => toggleBatchDetailSort("score")}
+                          className="px-3 py-2.5 text-right font-semibold text-red-500 cursor-pointer whitespace-nowrap hover:text-red-600 transition border-l border-zinc-200 dark:border-zinc-700"
+                        >
+                          คะแนน{batchDetailSortIcon("score")}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedRecs.map((r, i) => (
+                        <tr
+                          key={r.userdiscordid}
+                          className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition"
+                        >
+                          <td className="px-3 py-2 text-zinc-400">{i + 1}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-zinc-800 dark:text-zinc-200 font-medium">
+                            {r.discordname || <span className="text-zinc-400 italic">(ไม่มีชื่อ)</span>}
+                          </td>
+                          <td className="px-3 py-2 text-zinc-500 whitespace-nowrap">
+                            {r.class_icon && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={r.class_icon} alt="" className="inline w-4 h-4 rounded mr-1 align-middle" />
+                            )}
+                            {r.class_name || <span className="text-zinc-400">-</span>}
+                          </td>
+                          {CATEGORIES.map((c) => {
+                            if (!batchEditMode) {
+                              // view-only
+                              return (
+                                <td
+                                  key={c}
+                                  className={`px-3 py-2 text-right tabular-nums ${
+                                    c === "death"
+                                      ? r[c] > 0
+                                        ? "text-red-500"
+                                        : "text-zinc-300"
+                                      : r[c] > 0
+                                      ? "text-zinc-700 dark:text-zinc-300"
+                                      : "text-zinc-300 dark:text-zinc-600"
+                                  }`}
+                                >
+                                  {r[c].toLocaleString()}
+                                </td>
+                              );
+                            }
+                            const edits = batchEdits.get(r.userdiscordid);
+                            const initialDraft = edits && c in edits ? (edits[c] as number) : undefined;
+                            return (
+                              <EditableStatCell
+                                key={`${r.userdiscordid}-${c}`}
+                                uid={r.userdiscordid}
+                                cat={c}
+                                original={r[c]}
+                                initialDraft={initialDraft}
+                                resetKey={editsResetKey}
+                                onCommit={onCommitStat}
+                              />
+                            );
+                          })}
+                          <td className="px-3 py-2 text-right tabular-nums font-bold text-red-600 dark:text-red-400 border-l border-zinc-100 dark:border-zinc-800">
+                            {fmtScore(r.score)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {viewingBatchRecords.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-zinc-100 dark:bg-zinc-900 border-t-2 border-zinc-300 dark:border-zinc-700 font-semibold sticky bottom-8 z-10">
+                          <td className="px-3 py-2.5 bg-zinc-100 dark:bg-zinc-900" colSpan={3}>
+                            <span className="text-xs text-zinc-700 dark:text-zinc-200">
+                              รวม{batchDetailClassFilter !== null ? ` (${batchDetailClassFilter})` : ""} ({totalsBaseRecs.length} คน)
+                            </span>
+                          </td>
+                          {CATEGORIES.map((c) => (
+                            <td
+                              key={c}
+                              className={`px-3 py-2.5 text-right tabular-nums bg-zinc-100 dark:bg-zinc-900 ${c === "death" ? "text-red-500" : "text-zinc-700 dark:text-zinc-200"}`}
+                            >
+                              {totals[c].toLocaleString()}
+                            </td>
+                          ))}
+                          <td className="px-3 py-2.5 text-right tabular-nums text-red-600 dark:text-red-400 font-bold bg-zinc-100 dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-700">
+                            {fmtScore(Math.round(totalScore * 10) / 10)}
+                          </td>
+                        </tr>
+                        <tr className="bg-zinc-50 dark:bg-zinc-900/80 border-t border-zinc-200 dark:border-zinc-700 sticky bottom-0 z-10">
+                          <td className="px-3 py-2 bg-zinc-50 dark:bg-zinc-900/80" colSpan={3}>
+                            <span className="text-xs text-zinc-500">เฉลี่ย/คน</span>
+                          </td>
+                          {CATEGORIES.map((c) => {
+                            const avg = totalsBaseRecs.length > 0
+                              ? Math.round((totals[c] / totalsBaseRecs.length) * 10) / 10
+                              : 0;
+                            return (
+                              <td
+                                key={c}
+                                className={`px-3 py-2 text-right tabular-nums text-xs bg-zinc-50 dark:bg-zinc-900/80 ${c === "death" ? "text-red-400" : "text-zinc-500"}`}
+                              >
+                                {fmtAvg(avg)}
+                              </td>
+                            );
+                          })}
+                          <td className="px-3 py-2 text-right tabular-nums text-xs text-red-500 font-semibold bg-zinc-50 dark:bg-zinc-900/80 border-l border-zinc-200 dark:border-zinc-700">
+                            {totalsBaseRecs.length > 0
+                              ? fmtScore(Math.round((totalScore / totalsBaseRecs.length) * 10) / 10)
+                              : "0"}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 px-6 py-3 flex items-center gap-2">
+                {batchEditMode && hasUnsavedChanges && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400">
+                    ✏️ Draft <span className="font-semibold">{batchEdits.size} คน</span> · ยังไม่ได้บันทึก
+                  </span>
+                )}
+                {batchEditMode && !hasUnsavedChanges && (
+                  <span className="text-xs text-zinc-500">
+                    โหมดแก้ไข — คลิกที่ตัวเลขเพื่อพิมพ์แก้
+                  </span>
+                )}
+                <div className="ml-auto flex gap-2">
+                  {batchEditMode ? (
+                    <>
+                      <button
+                        onClick={cancelBatchEdits}
+                        disabled={savingBatchRecords}
+                        className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition"
+                      >
+                        ยกเลิก
+                      </button>
+                      <button
+                        onClick={saveBatchEdits}
+                        disabled={savingBatchRecords || !hasUnsavedChanges}
+                        className="h-9 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+                      >
+                        {savingBatchRecords ? "กำลังบันทึก..." : "💾 บันทึก"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setBatchEditMode(true)}
+                        disabled={viewingBatchRecords.length === 0}
+                        className="h-9 px-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-sm hover:bg-blue-100 dark:hover:bg-blue-950/60 disabled:opacity-50 transition"
+                      >
+                        ✏️ แก้ไข
+                      </button>
+                      <button
+                        onClick={safeClose}
+                        className="h-9 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition"
+                      >
+                        ปิด
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ===== WEIGHTS ===== */}
       {tab === "weights" && (
@@ -1125,34 +1851,18 @@ export default function MemberPotentialClient() {
                             const wKey = `${w.class_id ?? "null"}:${w.category}`;
                             const val = editWeights[wKey] ?? w.weight;
                             const defaultW = editWeights[`null:${cat}`] ?? weights.find((x) => x.class_id == null && x.category === cat)?.weight ?? 0;
-                            const isOverride = class_id != null && Number(val) !== Number(defaultW);
-                            const expectedPts = Math.round(CAT_AVG[cat] * Number(val) * 10) / 10;
                             return (
-                              <td key={class_id ?? "default"} className="px-4 py-2">
-                                <div className={`rounded-xl border p-2 flex flex-col gap-1 ${
-                                  isDeath
-                                    ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30"
-                                    : isOverride
-                                    ? "border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/20"
-                                    : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
-                                }`}>
-                                  <input
-                                    type="number"
-                                    step="0.001"
-                                    value={val}
-                                    onChange={(e) => {
-                                      const newVal = e.target.value === "" ? 0 : Number(e.target.value);
-                                      setEditWeights((prev) => ({ ...prev, [wKey]: newVal }));
-                                    }}
-                                    className={`h-7 w-full rounded-lg border-0 bg-transparent px-1 text-sm text-right tabular-nums font-semibold focus:outline-none focus:ring-1 focus:ring-red-400 ${
-                                      isDeath ? "text-red-600 dark:text-red-400" : "text-zinc-800 dark:text-zinc-100"
-                                    }`}
-                                  />
-                                  <div className={`text-[10px] text-right tabular-nums ${isDeath ? "text-red-400" : "text-zinc-400"}`}>
-                                    ≈ {expectedPts > 0 ? "+" : ""}{expectedPts} pts
-                                  </div>
-                                </div>
-                              </td>
+                              <EditableWeightCell
+                                key={class_id ?? "default"}
+                                wKey={wKey}
+                                cat={cat}
+                                initialValue={Number(val)}
+                                defaultValue={Number(defaultW)}
+                                isDefaultCol={class_id == null}
+                                isDeath={isDeath}
+                                resetKey={weightsResetKey}
+                                onCommit={onCommitWeight}
+                              />
                             );
                           })}
                         </tr>
@@ -1221,66 +1931,250 @@ export default function MemberPotentialClient() {
         <PlayerModal row={playerModal} onClose={() => setPlayerModal(null)} />
       )}
 
-      {/* Import confirm modal */}
-      {pendingImport && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          onClick={() => setPendingImport(null)}
-        >
+      {/* Import confirm modal — with preview */}
+      {pendingImport && (() => {
+        // Derive class filter options from records (with counts)
+        const classCounts = new Map<string, number>();
+        for (const r of pendingImport.records) {
+          const k = (r.class_name ?? "").trim() || "-";
+          classCounts.set(k, (classCounts.get(k) ?? 0) + 1);
+        }
+        const classOptions = Array.from(classCounts.entries())
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "th"));
+
+        const filteredRecords = importClassFilter === null
+          ? pendingImport.records
+          : pendingImport.records.filter((r) => {
+              const k = (r.class_name ?? "").trim() || "-";
+              return k === importClassFilter;
+            });
+
+        const classIconMap = new Map<string, string | undefined>();
+        for (const c of classes) {
+          classIconMap.set(c.name, c.icon_url);
+        }
+
+        return (
           <div
-            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setPendingImport(null)}
           >
-            <div className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">📥 ยืนยัน Import</div>
-            <p className="text-xs text-zinc-500">พบข้อมูล {pendingImport.records.length} คน</p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
-                  วันที่ Batch
-                </label>
-                <input
-                  type="date"
-                  value={importLabel}
-                  onChange={(e) => setImportLabel(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
-                />
+            <div
+              className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-4 flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">📥 ยืนยัน Import</div>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    ตรวจสอบข้อมูลก่อนนำเข้า — พบข้อมูลทั้งหมด <span className="font-semibold text-red-600 dark:text-red-400">{pendingImport.records.length}</span> คน
+                    {guildFilter !== null && <span className="ml-2 text-zinc-400">· นำเข้าเข้า Guild {guildFilter}</span>}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setPendingImport(null)}
+                  className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+                >✕</button>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
-                  ชื่อกิลที่เจอ <span className="text-zinc-400">(ใส่หรือปล่อยว่าง)</span>
-                </label>
-                <input
-                  type="text"
-                  value={importOpponentGuild}
-                  onChange={(e) => setImportOpponentGuild(e.target.value)}
-                  placeholder="เช่น Guild XYZ"
-                  autoFocus
-                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
-                />
-              </div>
-            </div>
 
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handleConfirmImport}
-                disabled={importing}
-                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50 transition"
-              >
-                {importing ? "กำลัง Import..." : "✓ Import"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingImport(null)}
-                className="h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
-              >
-                ยกเลิก
-              </button>
+              {/* Meta inputs */}
+              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+                    วันที่ war
+                  </label>
+                  <input
+                    type="date"
+                    value={importLabel}
+                    onChange={(e) => setImportLabel(e.target.value)}
+                    className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+                    ชื่อกิลที่เจอ <span className="text-zinc-400">(ใส่หรือปล่อยว่าง)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={importOpponentGuild}
+                    onChange={(e) => setImportOpponentGuild(e.target.value)}
+                    placeholder="เช่น Guild XYZ"
+                    className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                  />
+                </div>
+              </div>
+
+              {/* Class filter pills */}
+              {classOptions.length > 0 && (
+                <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-3 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-zinc-400 mr-1">กรองอาชีพ:</span>
+                  <button
+                    type="button"
+                    onClick={() => setImportClassFilter(null)}
+                    className={`h-7 px-2.5 rounded-lg text-xs border transition flex items-center gap-1.5 ${
+                      importClassFilter === null
+                        ? "bg-zinc-800 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+                        : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    ทั้งหมด
+                    <span className={`text-[11px] ${importClassFilter === null ? "opacity-70" : "text-zinc-400"}`}>
+                      {pendingImport.records.length}
+                    </span>
+                  </button>
+                  {classOptions.map(([name, count]) => {
+                    const active = importClassFilter === name;
+                    const icon = classIconMap.get(name);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => setImportClassFilter(name)}
+                        className={`h-7 px-2.5 rounded-lg text-xs border transition flex items-center gap-1.5 ${
+                          active
+                            ? "bg-zinc-800 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+                            : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        }`}
+                      >
+                        {icon && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+                        )}
+                        {name || "-"}
+                        <span className={`text-[11px] ${active ? "opacity-70" : "text-zinc-400"}`}>{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Preview table */}
+              <div className="flex-1 overflow-auto">
+                <div className="px-6 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 sticky top-0 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 z-10 flex items-center justify-between">
+                  <span>👁️ Preview ข้อมูลที่จะนำเข้า</span>
+                  <span className="font-normal text-zinc-400">
+                    แสดง {filteredRecords.length} / {pendingImport.records.length} คน
+                  </span>
+                </div>
+                <div className="px-6 pb-4">
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800">
+                          <th className="px-2 py-2 text-left font-semibold text-zinc-400 w-10">#</th>
+                          <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">ชื่อ</th>
+                          <th className="px-2 py-2 text-left font-semibold text-zinc-500 whitespace-nowrap">อาชีพ</th>
+                          {CATEGORIES.map((c) => (
+                            <th
+                              key={c}
+                              className={`px-2 py-2 text-right font-semibold whitespace-nowrap ${c === "death" ? "text-red-400" : "text-zinc-500"}`}
+                            >
+                              {CAT_LABELS[c]}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRecords.length === 0 ? (
+                          <tr>
+                            <td colSpan={CATEGORIES.length + 3} className="px-3 py-6 text-center text-zinc-400 text-xs">
+                              ไม่มีข้อมูลตาม filter ที่เลือก
+                            </td>
+                          </tr>
+                        ) : filteredRecords.map((r, i) => {
+                          const icon = classIconMap.get(r.class_name);
+                          return (
+                            <tr
+                              key={`${r.userdiscordid}-${i}`}
+                              className="border-b border-zinc-100 dark:border-zinc-800/70 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition"
+                            >
+                              <td className="px-2 py-1.5 text-zinc-400">{i + 1}</td>
+                              <td className="px-2 py-1.5 text-zinc-800 dark:text-zinc-200 whitespace-nowrap">
+                                {r.discordname || <span className="text-zinc-400 italic">(ไม่มีชื่อ)</span>}
+                              </td>
+                              <td className="px-2 py-1.5 text-zinc-500 whitespace-nowrap">
+                                {icon && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={icon} alt="" className="inline w-3.5 h-3.5 rounded mr-1 align-middle" />
+                                )}
+                                {r.class_name || <span className="text-zinc-400">-</span>}
+                              </td>
+                              {CATEGORIES.map((c) => (
+                                <td
+                                  key={c}
+                                  className={`px-2 py-1.5 text-right tabular-nums ${
+                                    c === "death"
+                                      ? Number(r[c]) > 0
+                                        ? "text-red-500"
+                                        : "text-zinc-300"
+                                      : Number(r[c]) > 0
+                                      ? "text-zinc-700 dark:text-zinc-300"
+                                      : "text-zinc-300 dark:text-zinc-600"
+                                  }`}
+                                >
+                                  {Number(r[c]).toLocaleString()}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      {/* Totals row */}
+                      {filteredRecords.length > 0 && (
+                        <tfoot>
+                          <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-t-2 border-zinc-200 dark:border-zinc-700 font-semibold">
+                            <td className="px-2 py-2" colSpan={3}>
+                              <span className="text-xs text-zinc-600 dark:text-zinc-300">
+                                รวม{importClassFilter !== null ? ` (${importClassFilter})` : "ทั้งหมด"}
+                              </span>
+                            </td>
+                            {CATEGORIES.map((c) => {
+                              const total = filteredRecords.reduce((s, r) => s + (Number(r[c]) || 0), 0);
+                              return (
+                                <td
+                                  key={c}
+                                  className={`px-2 py-2 text-right tabular-nums ${c === "death" ? "text-red-500" : "text-zinc-700 dark:text-zinc-200"}`}
+                                >
+                                  {total.toLocaleString()}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer actions */}
+              <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 px-6 py-4 flex items-center gap-2">
+                <span className="text-xs text-zinc-400">
+                  ตรวจสอบข้อมูลให้ถูกต้องก่อนกด Import (จะ import ทั้งหมด {pendingImport.records.length} คน ไม่ว่าเลือก filter อะไร)
+                </span>
+                <div className="ml-auto flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPendingImport(null)}
+                    className="h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmImport}
+                    disabled={importing}
+                    className="h-10 px-6 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50 transition"
+                  >
+                    {importing ? "กำลัง Import..." : `✓ ยืนยัน Import ${pendingImport.records.length} คน`}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { CATEGORIES, type Category } from "@/lib/memberPotential";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,108 @@ async function requireEditor() {
   if (!session) return null;
   if (!(session.isAdmin || session.isHead)) return null;
   return session;
+}
+
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await requireEditor();
+    if (!session) return NextResponse.json({ ok: false }, { status: 403 });
+
+    const { id } = await params;
+
+    // 1) batch meta
+    const { data: batch, error: bErr } = await supabaseAdmin
+      .from("member_potential_batches")
+      .select("id,label,imported_at,opponent_guild,guild,imported_by")
+      .eq("id", id)
+      .single();
+    if (bErr || !batch)
+      return NextResponse.json({ ok: false, error: bErr?.message ?? "batch not found" }, { status: 404 });
+
+    // 2) records in this batch
+    const { data: records, error: rErr } = await supabaseAdmin
+      .from("member_potential_records")
+      .select(
+        "userdiscordid,discordname,class_id,kill,assist,supply,damage_player,damage_fort,heal,damage_taken,death,revive"
+      )
+      .eq("batch_id", id);
+    if (rErr) return NextResponse.json({ ok: false, error: rErr.message }, { status: 500 });
+
+    // 3) class info (name, icon) — bulk fetch
+    const classIds = Array.from(
+      new Set((records ?? []).map((r) => r.class_id).filter((v): v is number => v != null))
+    );
+    const classMap = new Map<number, { name: string; icon_url: string | null }>();
+    if (classIds.length > 0) {
+      const { data: classes } = await supabaseAdmin
+        .from("class")
+        .select("id,name,icon_url")
+        .in("id", classIds);
+      for (const c of classes ?? []) {
+        classMap.set(Number(c.id), { name: c.name ?? "", icon_url: c.icon_url ?? null });
+      }
+    }
+
+    // 4) Weights — for per-record score calculation (same formula as leaderboard)
+    const { data: weightRows } = await supabaseAdmin
+      .from("member_potential_weights")
+      .select("class_id,category,weight,enabled");
+
+    const defaultWeights = new Map<Category, number>();
+    const classWeights = new Map<number, Map<Category, number>>();
+    for (const w of weightRows ?? []) {
+      if (!w.enabled) continue;
+      const cat = w.category as Category;
+      const val = Number(w.weight);
+      if (w.class_id == null) {
+        defaultWeights.set(cat, val);
+      } else {
+        const cid = Number(w.class_id);
+        if (!classWeights.has(cid)) classWeights.set(cid, new Map());
+        classWeights.get(cid)!.set(cat, val);
+      }
+    }
+    const getWeight = (classId: number | null, cat: Category): number => {
+      if (classId != null) {
+        const override = classWeights.get(classId)?.get(cat);
+        if (override !== undefined) return override;
+      }
+      return defaultWeights.get(cat) ?? 0;
+    };
+
+    const items = (records ?? []).map((r) => {
+      const cls = r.class_id != null ? classMap.get(Number(r.class_id)) : null;
+      const cid = r.class_id != null ? Number(r.class_id) : null;
+      const stats: Record<Category, number> = {
+        kill: Number(r.kill) || 0,
+        assist: Number(r.assist) || 0,
+        supply: Number(r.supply) || 0,
+        damage_player: Number(r.damage_player) || 0,
+        damage_fort: Number(r.damage_fort) || 0,
+        heal: Number(r.heal) || 0,
+        damage_taken: Number(r.damage_taken) || 0,
+        death: Number(r.death) || 0,
+        revive: Number(r.revive) || 0,
+      };
+      const rawScore = CATEGORIES.reduce(
+        (acc, c) => acc + stats[c] * getWeight(cid, c),
+        0
+      );
+      return {
+        userdiscordid: r.userdiscordid,
+        discordname: r.discordname ?? "",
+        class_id: cid,
+        class_name: cls?.name ?? "",
+        class_icon: cls?.icon_url ?? "",
+        ...stats,
+        score: Math.round(rawScore * 10) / 10,
+      };
+    });
+
+    return NextResponse.json({ ok: true, batch, items });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
