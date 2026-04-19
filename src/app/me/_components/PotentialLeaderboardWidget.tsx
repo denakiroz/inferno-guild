@@ -18,6 +18,7 @@ const CAT_LABELS: Record<Category, string> = {
 type BatchData = {
   label: string;
   imported_at: string;
+  opponent_guild?: string | null;
   avgs: Record<Category, number>;
   rawScore: number;
   scoreDps: number;
@@ -41,6 +42,7 @@ type RankedRow = {
   guild: number | null;
   score: number;
   role: Role;
+  avgs?: Record<Category, number>;
 };
 
 const MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
@@ -62,25 +64,76 @@ function fmtNum(n: number) {
   return n % 1 === 0 ? String(Math.round(n)) : n.toFixed(1);
 }
 
+// Label format: "<date> <opponent_guild>" ทุก batch
+// ถ้าไม่มี opponent_guild → fallback เป็น #N เมื่อ base ซ้ำกัน (กันกรณีวันเดียวกันไม่ได้กรอกกิล)
+function buildBatchLabels(
+  batches: Array<{ label?: string; imported_at: string; opponent_guild?: string | null }>
+): {
+  short: string[];
+  full: string[];
+} {
+  const shortBase = batches.map((b) => fmtDate(b.imported_at) || "—");
+  const fullBase  = batches.map((b) => b.label || fmtDate(b.imported_at) || "—");
+  const suffixes  = batches.map((b) => b.opponent_guild?.trim() || null);
+
+  // ถ้าไม่มีชื่อกิล + base ซ้ำ ให้ใส่ #N fallback
+  const shortCounts = new Map<string, number>();
+  for (const s of shortBase) shortCounts.set(s, (shortCounts.get(s) ?? 0) + 1);
+  const fullCounts = new Map<string, number>();
+  for (const s of fullBase) fullCounts.set(s, (fullCounts.get(s) ?? 0) + 1);
+
+  const shortSeen = new Map<string, number>();
+  const fullSeen  = new Map<string, number>();
+
+  const short = shortBase.map((s, i) => {
+    const suffix = suffixes[i];
+    if (suffix) return `${s} ${suffix}`;
+    if ((shortCounts.get(s) ?? 0) > 1) {
+      const idx = (shortSeen.get(s) ?? 0) + 1;
+      shortSeen.set(s, idx);
+      return `${s} #${idx}`;
+    }
+    return s;
+  });
+  const full = fullBase.map((s, i) => {
+    const suffix = suffixes[i];
+    if (suffix) return `${s} ${suffix}`;
+    if ((fullCounts.get(s) ?? 0) > 1) {
+      const idx = (fullSeen.get(s) ?? 0) + 1;
+      fullSeen.set(s, idx);
+      return `${s} #${idx}`;
+    }
+    return s;
+  });
+
+  return { short, full };
+}
+
 // ── Area + Bar + Line combo chart ─────────────────────────────────
 function ComboChart({
   batches,
   animated,
   selectedIdx,
   onSelect,
+  dateLabels,
+  guildLabels,
+  fullLabels,
 }: {
   batches: BatchData[];
   animated: boolean;
   selectedIdx: number | null;
   onSelect: (i: number | null) => void;
+  dateLabels: string[];
+  guildLabels: string[];
+  fullLabels: string[];
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const W = 300;
-  const H = 160;
-  const PAD_L = 12;
-  const PAD_R = 12;
-  const PAD_T = 36;  // ให้ score labels อยู่ใน viewBox สบายๆ
-  const PAD_B = 28;  // ให้ date labels อยู่ใน viewBox สบายๆ
+  const H = 172;
+  const PAD_L = 16;
+  const PAD_R = 16;
+  const PAD_T = 32;  // ให้ score labels อยู่ใน viewBox สบายๆ
+  const PAD_B = 42;  // 2 บรรทัด (date + guild)
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
 
@@ -90,6 +143,18 @@ function ComboChart({
   // x/y helpers
   const cx = (i: number) => PAD_L + (i / (count - 1 || 1)) * innerW;
   const cy = (score: number) => PAD_T + innerH - (score / maxScore) * innerH;
+
+  // Edge anchor: label ตัวซ้ายสุด/ขวาสุด ไม่ให้ตัดขอบ
+  const anchorAt = (i: number): "start" | "end" | "middle" => {
+    if (i === 0) return "start";
+    if (i === count - 1) return "end";
+    return "middle";
+  };
+  const labelXAt = (i: number): number => {
+    if (i === 0) return PAD_L;
+    if (i === count - 1) return W - PAD_R;
+    return cx(i);
+  };
 
   // Build smooth path (catmull-rom → bezier)
   function smoothPath(pts: Array<[number, number]>) {
@@ -277,7 +342,7 @@ function ComboChart({
       {hovered !== null && (() => {
         const b = batches[hovered];
         const [tx, ty] = pts[hovered];
-        const boxW = 72;
+        const boxW = 84;
         const boxH = 28;
         const bx = Math.min(Math.max(tx - boxW / 2, PAD_L), W - PAD_R - boxW);
         const by = ty - boxH - 10;
@@ -287,7 +352,7 @@ function ComboChart({
               fill="#18181b" opacity={0.92} />
             <text x={bx + boxW / 2} y={by + 11} textAnchor="middle"
               fontSize={9} fill="#a1a1aa" fontWeight={500}>
-              {b.label || fmtDate(b.imported_at)}
+              {fullLabels[hovered] ?? fmtDate(b.imported_at)}
             </text>
             <text x={bx + boxW / 2} y={by + 22} textAnchor="middle"
               fontSize={11} fill="white" fontWeight={700}>
@@ -299,7 +364,6 @@ function ComboChart({
 
       {/* Score labels above bars (when not hovered) */}
       {hovered === null && batches.map((b, i) => {
-        const [x] = pts[i];
         const isLast    = i === count - 1;
         const isSel     = selectedIdx === i;
         const hasSelect = selectedIdx !== null;
@@ -307,8 +371,8 @@ function ComboChart({
         const active = hasSelect ? isSel : isLast;
         return (
           <text key={i}
-            x={x} y={PAD_T - 10}
-            textAnchor="middle"
+            x={labelXAt(i)} y={PAD_T - 10}
+            textAnchor={anchorAt(i)}
             fontSize={active ? 11 : 9.5}
             fontWeight={active ? 700 : 500}
             fill={active ? "#ef4444" : "#6b7280"}
@@ -319,81 +383,215 @@ function ComboChart({
         );
       })}
 
-      {/* Date labels */}
-      {batches.map((b, i) => {
-        const [x] = pts[i];
+      {/* X-axis labels: 2 บรรทัด (date บน, guild ล่าง) */}
+      {batches.map((_b, i) => {
+        const tx = labelXAt(i);
+        const anchor = anchorAt(i);
+        const isSel = selectedIdx === i;
+        const hasSelect = selectedIdx !== null;
+        const dim = hasSelect && !isSel;
         return (
-          <text key={i}
-            x={x} y={H - 8}
-            textAnchor="middle"
-            fontSize={9}
-            fill="#9ca3af"
-          >
-            {fmtDate(b.imported_at) || `#${i + 1}`}
-          </text>
+          <g key={i} opacity={dim ? 0.35 : 1} style={{ transition: "opacity 0.25s" }}>
+            {/* Date — บรรทัดบน เด่น */}
+            <text
+              x={tx} y={H - 24}
+              textAnchor={anchor}
+              fontSize={10}
+              fontWeight={isSel ? 700 : 600}
+              fill={isSel ? "#ef4444" : "#9ca3af"}
+            >
+              {dateLabels[i] || `#${i + 1}`}
+            </text>
+            {/* Guild — บรรทัดล่าง สีส้ม */}
+            {guildLabels[i] && (
+              <text
+                x={tx} y={H - 10}
+                textAnchor={anchor}
+                fontSize={9}
+                fontWeight={500}
+                fill={isSel ? "#f97316" : "#fb923c"}
+                opacity={isSel ? 1 : 0.9}
+              >
+                {guildLabels[i]}
+              </text>
+            )}
+          </g>
         );
       })}
     </svg>
   );
 }
 
-// สีแต่ละ batch (เก่า → ใหม่)
-const BATCH_COLORS = [
-  { bar: "linear-gradient(to top, #fbbf24, #f59e0b)", dot: "#f59e0b" }, // amber
-  { bar: "linear-gradient(to top, #fb923c, #f97316)", dot: "#f97316" }, // orange
-  { bar: "linear-gradient(to top, #f87171, #ef4444)", dot: "#ef4444" }, // red
-];
+// ── Radar chart (me vs team avg) ───────────────────────────────────
+// สถิติที่ยิ่งน้อย = ยิ่งดี (จะแสดงสัญลักษณ์ ↓ กำกับ)
+const INVERTED_CATS: Set<Category> = new Set(["death", "damage_taken"]);
 
-// ── Stat mini-bar row ──────────────────────────────────────────────
-function StatMiniBar({
-  label,
-  values,
-  selectedIdx,
+function RadarChart({
+  myAvgs,
+  teamAvgs,
+  teamSize,
 }: {
-  label: string;
-  values: number[];
-  selectedIdx: number | null;
+  myAvgs: Record<Category, number>;
+  teamAvgs: Record<Category, number> | null;
+  teamSize: number;
 }) {
-  const max = Math.max(...values, 1);
-  const hasSelect = selectedIdx !== null;
+  const W = 320;
+  const H = 230;
+  const cx = W / 2;
+  const cy = H / 2 + 4;
+  const R = 78;
 
-  const avgVal     = values.reduce((s, v) => s + v, 0) / (values.length || 1);
-  const displayVal = hasSelect ? (values[selectedIdx] ?? 0) : avgVal;
+  const cats: Category[] = [...CATEGORIES];
+  const n = cats.length;
+
+  // max per cat = max(me, team) × 1.15 (gives 15% headroom) — min 1 กัน div0
+  const maxByCat = Object.fromEntries(
+    cats.map((c) => [
+      c,
+      Math.max(myAvgs[c] ?? 0, teamAvgs?.[c] ?? 0, 1) * 1.15,
+    ])
+  ) as Record<Category, number>;
+
+  const angleAt = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
+
+  const pointFor = (vals: Record<Category, number>): [number, number][] =>
+    cats.map((c, i) => {
+      const r = (Math.max(0, vals[c] ?? 0) / maxByCat[c]) * R;
+      const a = angleAt(i);
+      return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+    });
+
+  const myPts = pointFor(myAvgs);
+  const teamPts = teamAvgs ? pointFor(teamAvgs) : null;
+
+  const toPath = (pts: [number, number][]) =>
+    pts.map(([x, y], i) => (i === 0 ? "M" : "L") + x + "," + y).join(" ") + "Z";
+
+  const gridLevels = [0.25, 0.5, 0.75, 1.0];
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-14 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{label}</span>
-      <div className="flex-1 flex items-end gap-1 h-4">
-        {values.map((v, i) => {
-          const h        = Math.max(2, (v / max) * 16);
-          const isActive = !hasSelect || i === selectedIdx;
-          const color    = BATCH_COLORS[i] ?? BATCH_COLORS[BATCH_COLORS.length - 1];
-          return (
-            <div
-              key={i}
-              title={`${fmtNum(v)}`}
-              className="flex-1 rounded-sm"
-              style={{
-                height: h,
-                background: isActive ? color.bar : "#e4e4e7",
-                opacity: hasSelect && !isActive ? 0.2 : 1,
-                transition: "height 0.4s ease, opacity 0.25s",
-              }}
-            />
-          );
-        })}
-      </div>
-      <span className={[
-        "w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums",
-        hasSelect
-          ? `text-[${BATCH_COLORS[selectedIdx]?.dot ?? "#ef4444"}]`
-          : "text-zinc-700 dark:text-zinc-300",
-      ].join(" ")}
-        style={{ color: hasSelect ? (BATCH_COLORS[selectedIdx]?.dot ?? "#ef4444") : undefined }}
-      >
-        {fmtNum(displayVal)}
-      </span>
-    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
+      <defs>
+        <radialGradient id="meFill" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor="#fb923c" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#ef4444" stopOpacity="0.2" />
+        </radialGradient>
+      </defs>
+
+      {/* Grid polygons */}
+      {gridLevels.map((lvl) => {
+        const pts = cats.map((_c, i): [number, number] => {
+          const a = angleAt(i);
+          return [cx + lvl * R * Math.cos(a), cy + lvl * R * Math.sin(a)];
+        });
+        return (
+          <path
+            key={lvl}
+            d={toPath(pts)}
+            fill="none"
+            stroke="#e4e4e7"
+            strokeWidth={lvl === 1 ? 1.25 : 1}
+            className="dark:stroke-zinc-800"
+          />
+        );
+      })}
+
+      {/* Axis spokes */}
+      {cats.map((_c, i) => {
+        const a = angleAt(i);
+        const ex = cx + R * Math.cos(a);
+        const ey = cy + R * Math.sin(a);
+        return (
+          <line
+            key={i}
+            x1={cx} y1={cy} x2={ex} y2={ey}
+            stroke="#e4e4e7"
+            strokeWidth={1}
+            className="dark:stroke-zinc-800"
+          />
+        );
+      })}
+
+      {/* Team polygon (background) */}
+      {teamPts && (
+        <>
+          <path
+            d={toPath(teamPts)}
+            fill="#9ca3af"
+            fillOpacity={0.15}
+            stroke="#9ca3af"
+            strokeWidth={1.5}
+            strokeDasharray="3 3"
+            strokeLinejoin="round"
+          />
+          {teamPts.map(([x, y], i) => (
+            <circle key={i} cx={x} cy={y} r={2.25} fill="#9ca3af" />
+          ))}
+        </>
+      )}
+
+      {/* Me polygon (foreground) */}
+      <path
+        d={toPath(myPts)}
+        fill="url(#meFill)"
+        stroke="#ef4444"
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      {myPts.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={3.25}
+          fill="#ef4444" stroke="white" strokeWidth={1.5} />
+      ))}
+
+      {/* Category labels */}
+      {cats.map((c, i) => {
+        const a = angleAt(i);
+        const lr = R + 14;
+        const lx = cx + lr * Math.cos(a);
+        const ly = cy + lr * Math.sin(a);
+        const cosA = Math.cos(a);
+        const anchor: "start" | "end" | "middle" =
+          cosA > 0.3 ? "start" : cosA < -0.3 ? "end" : "middle";
+        const isInv = INVERTED_CATS.has(c);
+        return (
+          <g key={c}>
+            <text
+              x={lx} y={ly + 3}
+              textAnchor={anchor}
+              fontSize={10}
+              fontWeight={600}
+              fill="#6b7280"
+              className="dark:fill-zinc-400"
+            >
+              {CAT_LABELS[c]}
+              {isInv && (
+                <tspan fontSize={8} fill="#10b981" dx={2} fontWeight={700}>
+                  ↓ดี
+                </tspan>
+              )}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Empty state hint (no team data) */}
+      {!teamAvgs && (
+        <text x={cx} y={H - 6} textAnchor="middle"
+          fontSize={9} fill="#9ca3af" fontStyle="italic"
+        >
+          (ยังไม่มีข้อมูลทีมให้เปรียบเทียบ)
+        </text>
+      )}
+
+      {/* Team size hint */}
+      {teamAvgs && teamSize > 0 && (
+        <text x={cx} y={H - 6} textAnchor="middle"
+          fontSize={9} fill="#9ca3af"
+        >
+          เทียบกับค่าเฉลี่ยทีม ({teamSize} คน)
+        </text>
+      )}
+    </svg>
   );
 }
 
@@ -475,10 +673,32 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
     rawScore: roleTab === "tank" ? b.scoreTank : roleTab === "healer" ? b.scoreHealer : b.scoreDps,
   }));
 
+  // Disambiguated labels — ถ้ามี 2 batch วันเดียวกัน (หรือ label ซ้ำ) ใช้ชื่อกิลต่อท้าย fallback #N
+  const { full: fullLabels } = buildBatchLabels(displayBatches);
+
+  // แยก date / guild เพื่อ render 2 บรรทัดในกราฟ (สวยกว่าเอามาต่อกัน)
+  const dateParts  = displayBatches.map((b) => fmtDate(b.imported_at) || "—");
+  const guildParts = displayBatches.map((b) => b.opponent_guild?.trim() || "");
+
+  // #N fallback เฉพาะ date ที่ซ้ำ + ไม่มีชื่อกิล
+  const dateCounts = new Map<string, number>();
+  for (const d of dateParts) dateCounts.set(d, (dateCounts.get(d) ?? 0) + 1);
+  const dateSeen = new Map<string, number>();
+  const dateLabels = dateParts.map((d, i) => {
+    if (!guildParts[i] && (dateCounts.get(d) ?? 0) > 1) {
+      const idx = (dateSeen.get(d) ?? 0) + 1;
+      dateSeen.set(d, idx);
+      return `${d} #${idx}`;
+    }
+    return d;
+  });
+
   // derive unique DPS classes from lbItems (sorted by count desc)
+  // filter ออกกรณียังไม่ได้เลือกอาชีพ (class_id=0 → class_name="ยังไม่เลือกอาชีพ")
   const dpsClassMap = new Map<string, { class_name: string; class_icon: string; count: number }>();
   for (const r of lbItems) {
     if (r.role !== "dps") continue;
+    if (r.class_name === "ยังไม่เลือกอาชีพ") continue;
     const k = r.class_name;
     const entry = dpsClassMap.get(k);
     if (entry) entry.count++;
@@ -533,140 +753,138 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
     : null;
   const trendDelta = trendBase !== null ? trendCur - trendBase : 0;
 
-  // stat bars คงที่ (ไม่เปลี่ยนตาม role)
-  const topCats: Category[] = ["kill", "assist", "supply", "damage_player", "damage_fort", "heal", "damage_taken", "death", "revive"];
+  // ── Radar chart data: ค่าฉัน vs ค่าเฉลี่ยทีม ──
+  // ฉัน: ถ้าเลือก batch แสดงเฉพาะ batch นั้น / ไม่งั้นเฉลี่ยจาก displayBatches
+  const myAvgs: Record<Category, number> = (() => {
+    if (selectedIdx !== null && displayBatches[selectedIdx]) {
+      return displayBatches[selectedIdx].avgs;
+    }
+    const out = Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Record<Category, number>;
+    if (displayBatches.length === 0) return out;
+    for (const b of displayBatches) {
+      for (const c of CATEGORIES) out[c] += b.avgs[c] ?? 0;
+    }
+    for (const c of CATEGORIES) out[c] /= displayBatches.length;
+    return out;
+  })();
+
+  // ทีม: เฉลี่ยจาก lbItems ที่อยู่ guild เดียวกัน + role เดียวกัน (ไม่รวมตัวเอง)
+  const teamMates = lbItems.filter((r) => {
+    if (r.userdiscordid === myDiscordId) return false;
+    if (myGuild != null && r.guild !== myGuild) return false;
+    if (!r.avgs) return false;
+    // role match: ใช้ class_name จาก my own row เพื่อ peer group ที่แม่นกว่า
+    const myRow = lbItems.find((x) => x.userdiscordid === myDiscordId);
+    if (myRow) {
+      // ถ้าฉันเป็น dps แยกกลุ่มตาม class_name; tank/healer ตาม role
+      if (myRow.role === "dps")    return r.role === "dps" && r.class_name === myRow.class_name;
+      if (myRow.role === "tank")   return r.role === "tank";
+      if (myRow.role === "healer") return r.role === "healer";
+    }
+    return r.role === "dps";
+  });
+  const teamAvgs: Record<Category, number> | null = teamMates.length > 0
+    ? (() => {
+        const out = Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Record<Category, number>;
+        for (const r of teamMates) {
+          for (const c of CATEGORIES) out[c] += r.avgs?.[c] ?? 0;
+        }
+        for (const c of CATEGORIES) out[c] /= teamMates.length;
+        return out;
+      })()
+    : null;
 
   return (
     <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
 
-      {/* ── Header ── */}
-      <div className="px-4 pt-3 pb-2">
-        <div className="flex items-center gap-2 mb-0.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40">
-            <BarChart2 className="h-3.5 w-3.5 text-red-500" />
-          </div>
-          <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">สถิติของฉัน</span>
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">
-            {isMock
-              ? "ตัวอย่าง"
-              : selectedIdx !== null
-              ? displayBatches[selectedIdx]?.label || fmtDate(displayBatches[selectedIdx]?.imported_at ?? "")
-              : `เฉลี่ย ${displayBatches.length} batch`}
-          </span>
-
-          {trend && (
-            <div className="ml-auto">
-              {trend === "up" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                  <TrendingUp className="h-3 w-3" />+{fmtNum(trendDelta)}
-                </span>
-              )}
-              {trend === "down" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/40 px-2.5 py-1 text-[11px] font-bold text-red-500 dark:text-red-400">
-                  <TrendingDown className="h-3 w-3" />{fmtNum(trendDelta)}
-                </span>
-              )}
-              {trend === "flat" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-500">
-                  <Minus className="h-3 w-3" />เท่าเดิม
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* คะแนนรวม */}
-        <div className="flex items-baseline gap-2 pl-9">
-          <span className="text-2xl font-black tabular-nums text-red-600 dark:text-red-400">
-            {fmtNum(displayScore)}
-          </span>
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">คะแนน</span>
-        </div>
-      </div>
-
-      {/* ── Role tab selector ── */}
-      <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
-        {/* DPS รวม */}
-        <button
-          type="button"
-          onClick={() => setRoleTab("dps")}
-          className={[
-            "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all border",
-            roleTab === "dps"
-              ? "bg-red-600 text-white border-red-600 shadow-sm"
-              : "bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-red-300 hover:text-red-500",
-          ].join(" ")}
-        >
-          DPS
-        </button>
-
-        {/* แยกแต่ละอาชีพ DPS */}
-        {dpsClasses.map(({ class_name, class_icon }) => {
-          const key = `dps:${class_name}`;
-          const active = roleTab === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setRoleTab(key)}
-              className={[
-                "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border flex items-center gap-1.5",
-                active
-                  ? "bg-red-600 text-white border-red-600 shadow-sm"
-                  : "bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-red-300 hover:text-red-500",
-              ].join(" ")}
-            >
-              {class_icon && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
-              )}
-              {class_name}
-            </button>
-          );
-        })}
-
-        {/* Divider */}
-        {dpsClasses.length > 0 && (
-          <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
-        )}
-
-        {/* ไอรอนแคลด (tank) + ซิลฟ์ (healer) — ใช้ชื่อจริงจาก data */}
-        {([
-          { key: "tank",   info: tankClass },
-          { key: "healer", info: healerClass },
-        ] as const).map(({ key, info }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setRoleTab(key)}
-            className={[
-              "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border flex items-center gap-1.5",
-              roleTab === key
-                ? "bg-red-600 text-white border-red-600 shadow-sm"
-                : "bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-red-300 hover:text-red-500",
-            ].join(" ")}
-          >
-            {info.class_icon && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={info.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
-            )}
-            {info.class_name}
-          </button>
-        ))}
-      </div>
-
       {/* ── Top 3 Leaderboard (filtered by role + re-ranked) ── */}
       {(() => {
         const roleItems = getTabItems(roleTab);
-        if (roleItems.length === 0) return null;
         return (
-        <div className="px-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="px-4 pt-3 pb-3 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-1.5 mb-2">
             <Trophy className="h-3.5 w-3.5 text-amber-500" />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Top 3 · {tabLabel(roleTab)} · {myGuild ? `Inferno-${myGuild}` : "ทั้งหมด"}
             </span>
           </div>
+
+          {/* ── Role tab selector (ใต้ label Top 3) ── */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+            {/* DPS รวม */}
+            <button
+              type="button"
+              onClick={() => setRoleTab("dps")}
+              className={[
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition-all border",
+                roleTab === "dps"
+                  ? "bg-red-600 text-white border-red-600 shadow-sm"
+                  : "bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-red-300 hover:text-red-500",
+              ].join(" ")}
+            >
+              DPS
+            </button>
+
+            {/* แยกแต่ละอาชีพ DPS */}
+            {dpsClasses.map(({ class_name, class_icon }) => {
+              const key = `dps:${class_name}`;
+              const active = roleTab === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setRoleTab(key)}
+                  className={[
+                    "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border flex items-center gap-1.5",
+                    active
+                      ? "bg-red-600 text-white border-red-600 shadow-sm"
+                      : "bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-red-300 hover:text-red-500",
+                  ].join(" ")}
+                >
+                  {class_icon && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+                  )}
+                  {class_name}
+                </button>
+              );
+            })}
+
+            {/* Divider */}
+            {dpsClasses.length > 0 && (
+              <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
+            )}
+
+            {/* ไอรอนแคลด (tank) + ซิลฟ์ (healer) — ใช้ชื่อจริงจาก data */}
+            {([
+              { key: "tank",   info: tankClass },
+              { key: "healer", info: healerClass },
+            ] as const).map(({ key, info }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRoleTab(key)}
+                className={[
+                  "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border flex items-center gap-1.5",
+                  roleTab === key
+                    ? "bg-red-600 text-white border-red-600 shadow-sm"
+                    : "bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-red-300 hover:text-red-500",
+                ].join(" ")}
+              >
+                {info.class_icon && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={info.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+                )}
+                {info.class_name}
+              </button>
+            ))}
+          </div>
+
+          {roleItems.length === 0 && (
+            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-4 text-center text-[11px] text-zinc-400">
+              ไม่มีข้อมูลในหมวดนี้
+            </div>
+          )}
           <div className="space-y-1.5">
             {roleItems.slice(0, 3).map((row) => {
               const isMe = row.userdiscordid === myDiscordId;
@@ -766,6 +984,51 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
         );
       })()}
 
+      {/* ── Header (สถิติของฉัน + คะแนน + trend) — วางใต้ Top 3 ── */}
+      <div className="px-4 pt-3 pb-2">
+        <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40">
+            <BarChart2 className="h-3.5 w-3.5 text-red-500" />
+          </div>
+          <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">สถิติของฉัน</span>
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">
+            {isMock
+              ? "ตัวอย่าง"
+              : selectedIdx !== null
+              ? fullLabels[selectedIdx] ?? ""
+              : `เฉลี่ย ${displayBatches.length} batch`}
+          </span>
+
+          {trend && (
+            <div className="ml-auto">
+              {trend === "up" && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                  <TrendingUp className="h-3 w-3" />+{fmtNum(trendDelta)}
+                </span>
+              )}
+              {trend === "down" && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-50 dark:bg-red-950/40 px-2.5 py-1 text-[11px] font-bold text-red-500 dark:text-red-400">
+                  <TrendingDown className="h-3 w-3" />{fmtNum(trendDelta)}
+                </span>
+              )}
+              {trend === "flat" && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-500">
+                  <Minus className="h-3 w-3" />เท่าเดิม
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* คะแนนรวม */}
+        <div className="flex items-baseline gap-2 pl-9">
+          <span className="text-2xl font-black tabular-nums text-red-600 dark:text-red-400">
+            {fmtNum(displayScore)}
+          </span>
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">คะแนน</span>
+        </div>
+      </div>
+
       {/* Mock banner */}
       {isMock && (
         <div className="mx-4 mb-1 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/40">
@@ -780,49 +1043,47 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
           animated={animated}
           selectedIdx={selectedIdx}
           onSelect={setSelectedIdx}
+          dateLabels={dateLabels}
+          guildLabels={guildParts}
+          fullLabels={fullLabels}
         />
       </div>
 
-      {/* ── Stat bars ── */}
-      <div className="mx-4 mb-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-3 space-y-2">
-        <div className="flex items-center justify-between mb-2">
+      {/* ── Radar: ฉัน vs ค่าเฉลี่ยทีม ── */}
+      <div className="mx-4 mb-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 pt-3 pb-2">
+        <div className="flex items-center justify-between mb-1">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             {selectedIdx !== null
-              ? `สถิติ · ${displayBatches[selectedIdx]?.label || fmtDate(displayBatches[selectedIdx]?.imported_at ?? "")}`
-              : `เฉลี่ย ${displayBatches.length} batch`}
+              ? `โปรไฟล์ · ${fullLabels[selectedIdx] ?? ""}`
+              : `โปรไฟล์เฉลี่ย ${displayBatches.length} batch`}
           </div>
-          {selectedIdx !== null ? (
-            <button
-              type="button"
-              onClick={() => setSelectedIdx(null)}
-              className="text-[10px] text-zinc-400 hover:text-red-500 transition-colors"
-            >
-              ✕ ล้าง
-            </button>
-          ) : (
-            /* Legend */
-            <div className="flex items-center gap-2">
-              {displayBatches.map((b, i) => {
-                const color = BATCH_COLORS[i] ?? BATCH_COLORS[BATCH_COLORS.length - 1];
-                return (
-                  <div key={i} className="flex items-center gap-1">
-                    <div className="h-2 w-2 rounded-full shrink-0" style={{ background: color.dot }} />
-                    <span className="text-[10px] text-zinc-400">{b.label || fmtDate(b.imported_at)}</span>
-                  </div>
-                );
-              })}
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+              <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300">ฉัน</span>
             </div>
-          )}
+            {teamAvgs && (
+              <div className="flex items-center gap-1">
+                <span className="inline-block h-[2px] w-3 bg-zinc-400" style={{ borderTop: "2px dashed #9ca3af", background: "transparent" }} />
+                <span className="text-[10px] text-zinc-400">เฉลี่ยทีม</span>
+              </div>
+            )}
+            {selectedIdx !== null && (
+              <button
+                type="button"
+                onClick={() => setSelectedIdx(null)}
+                className="text-[10px] text-zinc-400 hover:text-red-500 transition-colors"
+              >
+                ✕ ล้าง
+              </button>
+            )}
+          </div>
         </div>
-
-        {topCats.map((cat) => (
-          <StatMiniBar
-            key={cat}
-            label={CAT_LABELS[cat]}
-            values={displayBatches.map((b) => b.avgs[cat] ?? 0)}
-            selectedIdx={selectedIdx}
-          />
-        ))}
+        <RadarChart
+          myAvgs={myAvgs}
+          teamAvgs={teamAvgs}
+          teamSize={teamMates.length}
+        />
       </div>
     </div>
   );

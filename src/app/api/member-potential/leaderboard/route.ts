@@ -32,6 +32,7 @@ export async function GET() {
         guild: r.guild,
         score: r.score,
         role: r.role,
+        avgs: r.avgs, // per-category averages สำหรับ radar chart เทียบค่าเฉลี่ยทีม
       };
     });
 

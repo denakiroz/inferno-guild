@@ -39,7 +39,7 @@ export async function GET() {
         kill, assist, supply, damage_player, damage_fort,
         heal, damage_taken, death, revive,
         batch:member_potential_batches!member_potential_records_batch_id_fkey(
-          id, label, imported_at
+          id, label, imported_at, opponent_guild
         )
       `)
       .eq("userdiscordid", discordUserId)
@@ -49,7 +49,12 @@ export async function GET() {
 
     // Group by batch (aggregate in case of multiple records per batch)
     type BatchStats = Record<Category, { sum: number; count: number }>;
-    const batchMap = new Map<string, { label: string; imported_at: string; stats: BatchStats }>();
+    const batchMap = new Map<string, {
+      label: string;
+      imported_at: string;
+      opponent_guild: string | null;
+      stats: BatchStats;
+    }>();
 
     for (const r of records ?? []) {
       const bid = String(r.batch_id);
@@ -58,6 +63,7 @@ export async function GET() {
         batchMap.set(bid, {
           label: batchInfo?.label ?? bid,
           imported_at: batchInfo?.imported_at ?? "",
+          opponent_guild: batchInfo?.opponent_guild ?? null,
           stats: Object.fromEntries(CATEGORIES.map((c) => [c, { sum: 0, count: 0 }])) as BatchStats,
         });
       }
@@ -98,10 +104,26 @@ export async function GET() {
       return defaultWeights.get(cat) ?? 0;
     };
 
-    // Take last 3 batches (already desc by batch_id, so take first 3 then reverse for asc chart)
+    // เรียง batches ตาม imported_at (DESC → เอา 3 อันล่าสุด → ASC สำหรับ chart)
+    // same-day → ใช้ batch_id เป็น tiebreak เพื่อให้ order deterministic
+    const cmpDesc = (
+      [bidA, a]: [string, { imported_at: string }],
+      [bidB, b]: [string, { imported_at: string }]
+    ) => {
+      const ta = Date.parse(a.imported_at) || 0;
+      const tb = Date.parse(b.imported_at) || 0;
+      if (ta !== tb) return tb - ta;
+      return bidB.localeCompare(bidA, undefined, { numeric: true });
+    };
+    const cmpAsc = (
+      a: Parameters<typeof cmpDesc>[0],
+      b: Parameters<typeof cmpDesc>[1]
+    ) => -cmpDesc(a, b);
+
     const batches = Array.from(batchMap.entries())
-      .slice(0, 3)
-      .reverse()
+      .sort(cmpDesc)    // เอา 6 อันล่าสุดตามวันที่
+      .slice(0, 6)
+      .sort(cmpAsc)     // แสดงผล ASC (เก่า → ใหม่)
       .map(([, entry]) => {
         const avgs = Object.fromEntries(
           CATEGORIES.map((c) => [c, entry.stats[c].count > 0 ? entry.stats[c].sum / entry.stats[c].count : 0])
@@ -113,6 +135,7 @@ export async function GET() {
         return {
           label: entry.label,
           imported_at: entry.imported_at,
+          opponent_guild: entry.opponent_guild,
           avgs,
           rawScore: calc(classId),      // คะแนนตาม class จริง
           scoreDps:    calc(null),       // DPS = default weights

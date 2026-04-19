@@ -12,12 +12,13 @@ function getParam(v: unknown) {
   return String(v);
 }
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[]>;
+  searchParams?: Promise<Record<string, string | string[]>>;
 }) {
-  const error = getParam(searchParams?.error);
+  const sp = searchParams ? await searchParams : undefined;
+  const error = getParam(sp?.error);
   const errMeta = error
     ? ERROR_TEXT[error] ?? { title: "เกิดปัญหา", desc: "กรุณาลองใหม่อีกครั้ง" }
     : null;
