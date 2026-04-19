@@ -1400,7 +1400,7 @@ export default function MemberPotentialClient() {
           .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "th"));
 
         const bdClassIconMap = new Map<string, string | undefined>();
-        for (const c of classes) bdClassIconMap.set(c.name, c.icon_url);
+        for (const c of classes) bdClassIconMap.set(c.name, c.icon_url ?? undefined);
 
         const filteredRecs = viewingBatchRecords.filter((r) => {
           // class filter
@@ -1950,7 +1950,7 @@ export default function MemberPotentialClient() {
 
         const classIconMap = new Map<string, string | undefined>();
         for (const c of classes) {
-          classIconMap.set(c.name, c.icon_url);
+          classIconMap.set(c.name, c.icon_url ?? undefined);
         }
 
         return (
