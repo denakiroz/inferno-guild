@@ -1,4 +1,7 @@
 // Shared leaderboard calculation logic used by both admin and public routes
+// ⚡ Phase 1 (2026-04-19): aggregation ย้ายไปทำใน Postgres RPC แทน JS
+//    → network payload ลด ~500× เมื่อ data โต
+//    → ดู supabase/migrations/20260419_leaderboard_aggregates_rpc.sql
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const CATEGORIES = [
@@ -33,13 +36,30 @@ type BuildResult =
   | { ok: true; items: LeaderboardItem[] }
   | { ok: false; error: string };
 
+// Shape ที่ RPC get_leaderboard_aggregates() คืนกลับ (ตรงกับ migration)
+type AggregateRow = {
+  userdiscordid: string;
+  class_id: number | null;
+  batch_count: number;
+  avg_kill: number;
+  avg_assist: number;
+  avg_supply: number;
+  avg_damage_player: number;
+  avg_damage_fort: number;
+  avg_heal: number;
+  avg_damage_taken: number;
+  avg_death: number;
+  avg_revive: number;
+};
+
 export async function buildLeaderboard(): Promise<BuildResult> {
-  // ⚡ 3 query นี้ไม่ขึ้นต่อกัน — ยิงพร้อมกันด้วย Promise.all เพื่อลด latency
-  //    (records + members + weights)
-  const [recRes, memRes, wRes] = await Promise.all([
-    supabaseAdmin
-      .from("member_potential_records")
-      .select("batch_id,userdiscordid,class_id,kill,assist,supply,damage_player,damage_fort,heal,damage_taken,death,revive"),
+  // ⚡ 3 query อิสระ — ยิงพร้อมกันด้วย Promise.all
+  //    (aggregates via RPC + members + weights)
+  //
+  //    RPC ทำ avg-of-batch-avgs + mode(class_id) ให้หมด → ส่งกลับมาแค่
+  //    1 row ต่อ user (~200 rows) แทน raw records ทั้งก้อน (~100k rows)
+  const [aggRes, memRes, wRes] = await Promise.all([
+    supabaseAdmin.rpc("get_leaderboard_aggregates"),
     supabaseAdmin
       .from("member")
       .select("discord_user_id,name,class_id,guild,class:class!member_class_id_fkey(id,name,icon_url)")
@@ -50,9 +70,14 @@ export async function buildLeaderboard(): Promise<BuildResult> {
       .select("class_id,category,weight,enabled"),
   ]);
 
-  // 1. Records
-  const { data: records, error: recErr } = recRes;
-  if (recErr) return { ok: false, error: recErr.message };
+  // 1. User aggregates (pre-computed ใน DB)
+  const { data: aggregates, error: aggErr } = aggRes;
+  if (aggErr) return { ok: false, error: aggErr.message };
+
+  const userAggMap = new Map<string, AggregateRow>();
+  for (const a of (aggregates ?? []) as AggregateRow[]) {
+    if (a.userdiscordid) userAggMap.set(String(a.userdiscordid), a);
+  }
 
   // 2. Active members
   const { data: members, error: memErr } = memRes;
@@ -74,29 +99,7 @@ export async function buildLeaderboard(): Promise<BuildResult> {
     });
   }
 
-  // 3. Per-record class_id snapshot — ใช้ class ณ เวลา import ไม่ใช่ class ปัจจุบัน
-  //    key = userdiscordid → class_id ที่พบบ่อยที่สุด (mode) จากทุก record
-  const uidClassVotes = new Map<string, Map<number | null, number>>();
-  for (const r of records ?? []) {
-    const uid = String(r.userdiscordid ?? "").trim();
-    if (!uid) continue;
-    const cid: number | null = (r as any).class_id != null ? Number((r as any).class_id) : null;
-    if (!uidClassVotes.has(uid)) uidClassVotes.set(uid, new Map());
-    const votes = uidClassVotes.get(uid)!;
-    votes.set(cid, (votes.get(cid) ?? 0) + 1);
-  }
-  // เลือก class_id ที่ vote เยอะสุด (batch ล่าสุดน่าจะถูก — แต่ใช้ mode ก็ fair พอ)
-  const recordClassMap = new Map<string, number | null>();
-  for (const [uid, votes] of uidClassVotes.entries()) {
-    let bestCid: number | null = null;
-    let bestCount = -1;
-    for (const [cid, count] of votes.entries()) {
-      if (count > bestCount) { bestCount = count; bestCid = cid; }
-    }
-    recordClassMap.set(uid, bestCid);
-  }
-
-  // 4. Weights — มาจาก Promise.all ด้านบนแล้ว
+  // 3. Weights — มาจาก Promise.all ด้านบนแล้ว
   const { data: weights } = wRes;
 
   type WeightMap = Map<Category, number>;
@@ -124,63 +127,29 @@ export async function buildLeaderboard(): Promise<BuildResult> {
     return defaultWeights.get(cat) ?? 0;
   };
 
-  // 4. Step 1: Average per (userdiscordid, batch_id)
-  //    key = `${uid}::${batchId}` → sum + count per category
-  type CatAgg = Record<Category, { sum: number; count: number }>;
-  const batchAggMap = new Map<string, CatAgg>();
-
-  for (const r of records ?? []) {
-    const uid = String(r.userdiscordid ?? "").trim();
-    const bid = String(r.batch_id ?? "");
-    if (!uid || !bid) continue;
-
-    const key = `${uid}::${bid}`;
-    if (!batchAggMap.has(key)) {
-      batchAggMap.set(key, Object.fromEntries(CATEGORIES.map((c) => [c, { sum: 0, count: 0 }])) as CatAgg);
-    }
-    const agg = batchAggMap.get(key)!;
-    for (const c of CATEGORIES) {
-      agg[c].sum += Number((r as any)[c] ?? 0);
-      agg[c].count += 1;
-    }
-  }
-
-  // 4. Step 2: For each user, average the per-batch averages
-  //    user → batch count + sum of batch-avgs per category
-  type UserAgg = { batchSums: Record<Category, number>; batchCount: number };
-  const userAggMap = new Map<string, UserAgg>();
-
-  for (const [key, catAgg] of batchAggMap.entries()) {
-    const uid = key.split("::")[0];
-    if (!userAggMap.has(uid)) {
-      userAggMap.set(uid, {
-        batchSums: Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Record<Category, number>,
-        batchCount: 0,
-      });
-    }
-    const ua = userAggMap.get(uid)!;
-    ua.batchCount += 1;
-    for (const c of CATEGORIES) {
-      const batchAvg = catAgg[c].count > 0 ? catAgg[c].sum / catAgg[c].count : 0;
-      ua.batchSums[c] += batchAvg;
-    }
-  }
-
-  // 5. Build leaderboard — all active members (default 0 if no data)
+  // 4. Build leaderboard — all active members (default 0 ถ้าไม่มี data)
   const zeroAvgs = Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Record<Category, number>;
 
   const leaderboard: LeaderboardItem[] = Array.from(memberMap.entries()).map(([uid, mem]) => {
-    const ua = userAggMap.get(uid);
-    // scoreClassId = snapshot (ใช้ weight ถูกต้องตาม class ตอนเล่นจริง)
-    const scoreClassId = recordClassMap.has(uid) ? recordClassMap.get(uid)! : mem.class_id;
-    // role ใช้ current class_id เสมอ — ถ้าย้ายอาชีพแล้วให้ย้าย group ตาม
+    const agg = userAggMap.get(uid);
+    // scoreClassId = class snapshot จาก records (ใช้ weight ตาม class ตอนเล่นจริง)
+    const scoreClassId = agg && agg.class_id != null ? agg.class_id : mem.class_id;
+    // role ใช้ current class_id — ย้ายอาชีพแล้ว role ย้ายตาม
     const classId = mem.class_id ?? scoreClassId;
     const role = classToRole(classId);
 
-    const avgs: Record<Category, number> = ua
-      ? Object.fromEntries(
-          CATEGORIES.map((c) => [c, ua.batchCount > 0 ? ua.batchSums[c] / ua.batchCount : 0])
-        ) as Record<Category, number>
+    const avgs: Record<Category, number> = agg
+      ? {
+          kill:          Number(agg.avg_kill)          || 0,
+          assist:        Number(agg.avg_assist)        || 0,
+          supply:        Number(agg.avg_supply)        || 0,
+          damage_player: Number(agg.avg_damage_player) || 0,
+          damage_fort:   Number(agg.avg_damage_fort)   || 0,
+          heal:          Number(agg.avg_heal)          || 0,
+          damage_taken:  Number(agg.avg_damage_taken)  || 0,
+          death:         Number(agg.avg_death)         || 0,
+          revive:        Number(agg.avg_revive)        || 0,
+        }
       : { ...zeroAvgs };
 
     const rawScore = CATEGORIES.reduce(
@@ -195,18 +164,13 @@ export async function buildLeaderboard(): Promise<BuildResult> {
       class_name: mem.class_name,
       class_icon: mem.class_icon,
       guild: mem.guild,
-      batch_count: ua?.batchCount ?? 0,
+      batch_count: agg ? Number(agg.batch_count) || 0 : 0,
       avgs,
       rawScore,
-      score: 0, // filled below
+      score: Math.round(rawScore * 10) / 10,
       role,
     };
   });
-
-  // 6. Raw score — ไม่ normalize, score = rawScore ปัดทศนิยม 1 ตำแหน่ง
-  for (const r of leaderboard) {
-    r.score = Math.round(r.rawScore * 10) / 10;
-  }
 
   // Sort by role group first, then by score desc within group
   leaderboard.sort((a, b) => {
