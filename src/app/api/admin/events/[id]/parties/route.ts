@@ -33,13 +33,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 });
 
     const partyIds = (parties ?? []).map((p) => p.id);
-    let memberMap: Record<string, { discord_user_id: string; member_name: string; class_name: string; class_icon: string }[]> = {};
+    let memberMap: Record<string, { discord_user_id: string; member_name: string; class_name: string; class_icon: string; position: number }[]> = {};
 
     if (partyIds.length > 0) {
+      // order ตาม position asc เพื่อให้ลำดับสมาชิกใน party คงที่
       const { data: members } = await supabaseAdmin
         .from("event_party_members")
-        .select("party_id,discord_user_id,member_name")
-        .in("party_id", partyIds);
+        .select("party_id,discord_user_id,member_name,position")
+        .in("party_id", partyIds)
+        .order("position", { ascending: true })
+        .order("member_name", { ascending: true });
 
       // Enrich with class
       const discordIds = (members ?? []).map((m) => m.discord_user_id).filter(Boolean);
@@ -61,6 +64,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         memberMap[m.party_id].push({
           discord_user_id: m.discord_user_id,
           member_name: m.member_name ?? "",
+          position: typeof m.position === "number" ? m.position : 999999,
           ...(classMap[m.discord_user_id] ?? { class_name: "", class_icon: "" }),
         });
       }

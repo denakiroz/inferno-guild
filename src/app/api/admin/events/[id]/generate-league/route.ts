@@ -18,7 +18,16 @@ async function requireEditor() {
   return session;
 }
 
-/** Round-robin scheduling using Circle Method */
+/** Fisher–Yates shuffle (in-place) */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** Round-robin scheduling using Circle Method (input is assumed pre-shuffled) */
 function roundRobin(ids: string[]): { round: number; p1: string; p2: string }[] {
   const n = ids.length;
   const list = n % 2 === 0 ? [...ids] : [...ids, "BYE"];
@@ -26,13 +35,22 @@ function roundRobin(ids: string[]): { round: number; p1: string; p2: string }[] 
   const rounds: { round: number; p1: string; p2: string }[] = [];
 
   for (let r = 0; r < list.length - 1; r++) {
+    const roundMatches: { round: number; p1: string; p2: string }[] = [];
     for (let i = 0; i < half; i++) {
       const p1 = list[i];
       const p2 = list[list.length - 1 - i];
       if (p1 !== "BYE" && p2 !== "BYE") {
-        rounds.push({ round: r + 1, p1, p2 });
+        // สุ่มสลับซ้าย/ขวาของคู่ เพื่อไม่ให้ทีมเดิมเป็น party1 ทุกรอบ
+        if (Math.random() < 0.5) {
+          roundMatches.push({ round: r + 1, p1: p2, p2: p1 });
+        } else {
+          roundMatches.push({ round: r + 1, p1, p2 });
+        }
       }
     }
+    // สลับลำดับคู่แข่งในรอบเดียวกัน ให้ไม่ใช่ (1 vs 10), (2 vs 9), ... เรียงตลอด
+    shuffle(roundMatches);
+    rounds.push(...roundMatches);
     // Rotate: keep first element fixed, rotate the rest
     const last = list.pop()!;
     list.splice(1, 0, last);
@@ -60,8 +78,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     // Delete existing matches
     await supabaseAdmin.from("event_matches").delete().eq("event_id", eventId);
 
-    // Generate schedule
-    const partyIds = parties.map((p) => p.id);
+    // Generate schedule — สุ่มลำดับทีมก่อน เพื่อไม่ให้ pair-up ซ้ำซาก (1v10, 1v9, ...)
+    const partyIds = shuffle(parties.map((p) => p.id));
     const schedule = roundRobin(partyIds);
 
     const rows = schedule.map((m, idx) => ({

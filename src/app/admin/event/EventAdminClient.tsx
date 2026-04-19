@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type EventRow = {
@@ -26,7 +26,10 @@ type PartyMember = {
   member_name: string;
   class_name: string;
   class_icon: string;
+  position: number;
 };
+
+const PARTY_MAX_SIZE = 6;
 
 type Party = {
   id: string;
@@ -111,6 +114,18 @@ export default function EventAdminClient() {
   // Assign member from regs to party
   const [assigningUid, setAssigningUid]     = useState<string | null>(null);
   const [assignToParty, setAssignToParty]   = useState<string>("");
+  const [assignToPosition, setAssignToPosition] = useState<number | null>(null);
+  // Rename party (inline)
+  const [renamingPartyId, setRenamingPartyId] = useState<string | null>(null);
+  const [renamingPartyName, setRenamingPartyName] = useState("");
+  // Recolor party (inline popover)
+  const [colorPickerPid, setColorPickerPid] = useState<string | null>(null);
+  // ลำดับที่ยังไม่บันทึก (แต่ละ party id ที่มีการเลื่อน)
+  const [dirtyPartyIds, setDirtyPartyIds] = useState<Set<string>>(new Set());
+  const [savingOrder, setSavingOrder] = useState(false);
+  // ref ให้ async callback อ่าน parties ล่าสุดได้ (หลัง await)
+  const partiesRef = useRef<Party[]>(parties);
+  useEffect(() => { partiesRef.current = parties; }, [parties]);
 
   // League
   const [matches, setMatches]     = useState<Match[]>([]);
@@ -122,6 +137,39 @@ export default function EventAdminClient() {
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  // Confirm modal สำหรับเปลี่ยนสถานะ event
+  const [confirmStatus, setConfirmStatus] = useState<{
+    eventId: string;
+    eventName: string;
+    currentStatus: "open" | "closed" | "finished";
+    newStatus: "open" | "closed" | "finished";
+  } | null>(null);
+  const [statusChanging, setStatusChanging] = useState(false);
+
+  // Confirm modal สำหรับลบผู้สมัคร
+  const [confirmDeleteReg, setConfirmDeleteReg] = useState<{
+    discord_user_id: string;
+    member_name: string;
+  } | null>(null);
+  const [deletingReg, setDeletingReg] = useState(false);
+
+  // Registrations sort
+  type RegSortField = "name" | "class" | "date";
+  const [regSortField, setRegSortField] = useState<RegSortField>("date");
+  const [regSortDir, setRegSortDir]     = useState<"asc" | "desc">("asc");
+  const toggleRegSort = (field: RegSortField) => {
+    if (regSortField === field) {
+      setRegSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setRegSortField(field);
+      setRegSortDir(field === "date" ? "desc" : "asc");
+    }
+  };
+  const sortIcon = (field: RegSortField) => {
+    if (regSortField !== field) return "↕";
+    return regSortDir === "asc" ? "↑" : "↓";
   };
 
   // ── Load events ──
@@ -194,15 +242,52 @@ export default function EventAdminClient() {
     } finally { setSavingEvent(false); }
   };
 
-  // ── Change event status ──
-  const changeStatus = async (eventId: string, status: string) => {
-    await fetch(`/api/admin/events/${eventId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    await loadEvents();
-    if (selectedEvent?.id === eventId) setSelectedEvent((e) => e ? { ...e, status: status as any } : e);
+  // ── Change event status (ยืนยันก่อน) ──
+  const requestStatusChange = (
+    eventId: string,
+    eventName: string,
+    currentStatus: "open" | "closed" | "finished",
+    newStatus: "open" | "closed" | "finished"
+  ) => {
+    setConfirmStatus({ eventId, eventName, currentStatus, newStatus });
+  };
+
+  const doStatusChange = async () => {
+    if (!confirmStatus) return;
+    setStatusChanging(true);
+    try {
+      await fetch(`/api/admin/events/${confirmStatus.eventId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: confirmStatus.newStatus }),
+      });
+      await loadEvents();
+      if (selectedEvent?.id === confirmStatus.eventId) {
+        setSelectedEvent((e) => e ? { ...e, status: confirmStatus.newStatus } : e);
+      }
+      showToast(`เปลี่ยนเป็น "${STATUS_LABEL[confirmStatus.newStatus]}" แล้ว`);
+      setConfirmStatus(null);
+    } finally {
+      setStatusChanging(false);
+    }
+  };
+
+  // ── Delete registration (ยืนยันก่อน) ──
+  const doDeleteRegistration = async () => {
+    if (!confirmDeleteReg || !selectedEvent) return;
+    setDeletingReg(true);
+    try {
+      await fetch(`/api/admin/events/${selectedEvent.id}/registrations`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ discord_user_id: confirmDeleteReg.discord_user_id }),
+      });
+      await loadRegs(selectedEvent.id);
+      showToast("ลบผู้สมัครแล้ว");
+      setConfirmDeleteReg(null);
+    } finally {
+      setDeletingReg(false);
+    }
   };
 
   // ── Create party ──
@@ -226,35 +311,243 @@ export default function EventAdminClient() {
   // ── Delete party ──
   const deleteParty = async (pid: string) => {
     if (!selectedEvent) return;
-    await fetch(`/api/admin/events/${selectedEvent.id}/parties/${pid}`, { method: "DELETE" });
-    await loadParties(selectedEvent.id);
+    // optimistic
+    setParties((prev) => prev.filter((p) => p.id !== pid));
+    const res = await fetch(`/api/admin/events/${selectedEvent.id}/parties/${pid}`, { method: "DELETE" });
+    const json = await res.json().catch(() => ({ ok: false }));
+    if (!json.ok) {
+      showToast("ลบไม่สำเร็จ", false);
+      await loadParties(selectedEvent.id); // rollback
+      return;
+    }
     showToast("ลบปาร์ตี้แล้ว");
   };
 
-  // ── Assign member to party ──
-  const assignMember = async (uid: string, memberName: string, partyId: string) => {
+  // ── Rename party (optimistic inline) ──
+  const renameParty = async (pid: string, newName: string) => {
+    if (!selectedEvent) return;
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      setRenamingPartyId(null);
+      return;
+    }
+    const original = parties.find((p) => p.id === pid);
+    if (!original || original.name === trimmed) {
+      setRenamingPartyId(null);
+      return;
+    }
+
+    // optimistic
+    setParties((prev) => prev.map((p) => (p.id === pid ? { ...p, name: trimmed } : p)));
+    setRenamingPartyId(null);
+
+    const res = await fetch(`/api/admin/events/${selectedEvent.id}/parties/${pid}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    const json = await res.json().catch(() => ({ ok: false }));
+    if (!json.ok) {
+      showToast(json.error ?? "เปลี่ยนชื่อไม่สำเร็จ", false);
+      // rollback
+      setParties((prev) => prev.map((p) => (p.id === pid ? { ...p, name: original.name } : p)));
+    }
+  };
+
+  // ── Recolor party (optimistic inline) ──
+  const recolorParty = async (pid: string, newColor: string) => {
+    if (!selectedEvent) return;
+    const original = parties.find((p) => p.id === pid);
+    if (!original || original.color === newColor) {
+      setColorPickerPid(null);
+      return;
+    }
+
+    // optimistic
+    setParties((prev) => prev.map((p) => (p.id === pid ? { ...p, color: newColor } : p)));
+    setColorPickerPid(null);
+
+    const res = await fetch(`/api/admin/events/${selectedEvent.id}/parties/${pid}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ color: newColor }),
+    });
+    const json = await res.json().catch(() => ({ ok: false }));
+    if (!json.ok) {
+      showToast(json.error ?? "เปลี่ยนสีไม่สำเร็จ", false);
+      // rollback
+      setParties((prev) => prev.map((p) => (p.id === pid ? { ...p, color: original.color } : p)));
+    }
+  };
+
+  // ── Assign member to party — validate + optimistic ──
+  const assignMember = async (
+    uid: string,
+    memberName: string,
+    partyId: string,
+    position: number,
+    classInfo?: { class_name: string; class_icon: string }
+  ) => {
     if (!selectedEvent || !partyId) return;
+
+    const targetParty = parties.find((p) => p.id === partyId);
+    if (!targetParty) return;
+
+    // client-side validate (เสริม server)
+    if (targetParty.members.length >= PARTY_MAX_SIZE) {
+      showToast(`ปาร์ตี้ "${targetParty.name}" เต็มแล้ว (6/6)`, false);
+      return;
+    }
+    if (targetParty.members.some((m) => m.position === position)) {
+      showToast(`ตำแหน่งที่ ${position + 1} มีคนอยู่แล้ว`, false);
+      return;
+    }
+
+    // optimistic: เพิ่มลง state ทันที (sorted by position asc)
+    setParties((prev) => prev.map((p) => {
+      if (p.id !== partyId) return p;
+      if (p.members.some((m) => m.discord_user_id === uid)) return p;
+      const next: PartyMember[] = [
+        ...p.members,
+        {
+          discord_user_id: uid,
+          member_name: memberName,
+          class_name: classInfo?.class_name ?? "",
+          class_icon: classInfo?.class_icon ?? "",
+          position,
+        },
+      ].sort((a, b) => a.position - b.position);
+      return { ...p, members: next };
+    }));
+    setAssigningUid(null);
+    setAssignToParty("");
+    setAssignToPosition(null);
+
     const res = await fetch(`/api/admin/events/${selectedEvent.id}/parties/${partyId}/members`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ discord_user_id: uid, member_name: memberName }),
+      body: JSON.stringify({ discord_user_id: uid, member_name: memberName, position }),
     });
-    const json = await res.json();
-    if (!json.ok) { showToast(json.error ?? "กำหนดไม่สำเร็จ", false); return; }
-    setAssigningUid(null);
-    setAssignToParty("");
-    await loadParties(selectedEvent.id);
+    const json = await res.json().catch(() => ({ ok: false }));
+    if (!json.ok) {
+      showToast(json.error ?? "กำหนดไม่สำเร็จ", false);
+      await loadParties(selectedEvent.id); // rollback
+    }
   };
 
-  // ── Remove member from party ──
+  // ── Move member up/down within party (local only — instant, ไม่ยิง API) ──
+  //    bounds check แบบ synchronous ผ่าน partiesRef
+  //    (React queue setState updater ไปรอบ render ถัดไป เลยอย่าใช้ flag จากใน updater)
+  const moveMember = (pid: string, uid: string, direction: "up" | "down") => {
+    const cur = partiesRef.current.find((p) => p.id === pid);
+    if (!cur) return;
+    const idx = cur.members.findIndex((m) => m.discord_user_id === uid);
+    if (idx < 0) return;
+    const newIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= cur.members.length) return;
+
+    setParties((prev) => prev.map((p) => {
+      if (p.id !== pid) return p;
+      const i = p.members.findIndex((m) => m.discord_user_id === uid);
+      if (i < 0) return p;
+      const ni = direction === "up" ? i - 1 : i + 1;
+      if (ni < 0 || ni >= p.members.length) return p;
+      const arr = [...p.members];
+      [arr[i], arr[ni]] = [arr[ni], arr[i]];
+      return { ...p, members: arr };
+    }));
+    setDirtyPartyIds((prev) => {
+      if (prev.has(pid)) return prev;
+      const next = new Set(prev);
+      next.add(pid);
+      return next;
+    });
+  };
+
+  // ── Save ลำดับทุกปาร์ตี้ที่ dirty (ครั้งเดียว) ──
+  const saveAllOrders = async () => {
+    if (!selectedEvent) return;
+    const pids = Array.from(dirtyPartyIds);
+    if (pids.length === 0) return;
+
+    // snapshot ที่จะส่งไป — เก็บไว้เทียบหลัง save
+    const snapshots: Record<string, string[]> = {};
+    for (const pid of pids) {
+      const party = parties.find((p) => p.id === pid);
+      if (party) snapshots[pid] = party.members.map((m) => m.discord_user_id);
+    }
+
+    setSavingOrder(true);
+    try {
+      const results = await Promise.all(
+        pids.map(async (pid) => {
+          const order = snapshots[pid];
+          if (!order) return { pid, ok: true };
+          const res = await fetch(`/api/admin/events/${selectedEvent.id}/parties/${pid}/members`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ order }),
+          });
+          const json = await res.json().catch(() => ({ ok: false }));
+          return { pid, ok: !!json.ok, error: json.error };
+        })
+      );
+
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length > 0) {
+        showToast(`บันทึก ${failed.length}/${pids.length} ปาร์ตี้ไม่สำเร็จ`, false);
+      } else {
+        showToast(`บันทึกลำดับ ${pids.length} ปาร์ตี้ ✓`);
+      }
+
+      // clear dirty เฉพาะ party ที่ save ผ่าน และ local ยังตรงกับ snapshot
+      setDirtyPartyIds((prev) => {
+        const next = new Set(prev);
+        for (const r of results) {
+          if (!r.ok) continue;
+          const latest = partiesRef.current.find((x) => x.id === r.pid);
+          const snap = snapshots[r.pid];
+          const stillMatches =
+            !!latest &&
+            latest.members.length === snap.length &&
+            latest.members.every((m, i) => m.discord_user_id === snap[i]);
+          if (stillMatches) next.delete(r.pid);
+        }
+        return next;
+      });
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
+  // ── Discard: reload ทุกปาร์ตี้กลับเป็นของเซิร์ฟเวอร์ ──
+  const discardAllOrders = async () => {
+    if (!selectedEvent) return;
+    await loadParties(selectedEvent.id);
+    setDirtyPartyIds(new Set());
+  };
+
+  // ── Remove member from party (optimistic) ──
   const removeMember = async (pid: string, uid: string) => {
     if (!selectedEvent) return;
-    await fetch(`/api/admin/events/${selectedEvent.id}/parties/${pid}/members`, {
+
+    // optimistic: ลบออกจาก state ทันที
+    setParties((prev) => prev.map((p) =>
+      p.id === pid
+        ? { ...p, members: p.members.filter((m) => m.discord_user_id !== uid) }
+        : p
+    ));
+
+    const res = await fetch(`/api/admin/events/${selectedEvent.id}/parties/${pid}/members`, {
       method: "DELETE",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ discord_user_id: uid }),
     });
-    await loadParties(selectedEvent.id);
+    const json = await res.json().catch(() => ({ ok: false }));
+    if (!json.ok) {
+      showToast("ลบไม่สำเร็จ", false);
+      await loadParties(selectedEvent.id); // rollback
+    }
   };
 
   // ── Generate league ──
@@ -306,6 +599,16 @@ export default function EventAdminClient() {
         }`}>{toast.msg}</div>
       )}
 
+      {/* Saving overlay — block clicks ระหว่างบันทึกลำดับ */}
+      {savingOrder && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl px-6 py-4 flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">กำลังบันทึกลำดับ...</span>
+          </div>
+        </div>
+      )}
+
       {/* ── Page Header ── */}
       <div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">🏆 Event</h1>
@@ -336,7 +639,7 @@ export default function EventAdminClient() {
 
       {/* Selected event banner */}
       {selectedEvent && tab !== "events" && (
-        <div className="flex items-center gap-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-3">
           <span className="text-lg">🏆</span>
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{selectedEvent.name}</div>
@@ -345,10 +648,30 @@ export default function EventAdminClient() {
           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLOR[selectedEvent.status]}`}>
             {STATUS_LABEL[selectedEvent.status]}
           </span>
-          <button
-            onClick={() => { setTab("events"); }}
-            className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          >เปลี่ยน</button>
+
+          {/* ── เปลี่ยนสถานะ (inline ใน banner) ── */}
+          <div className="flex items-center gap-1 pl-1 border-l border-zinc-200 dark:border-zinc-700">
+            <span className="text-[11px] text-zinc-400 mr-1">เปลี่ยน:</span>
+            {selectedEvent.status !== "open" && (
+              <button
+                onClick={() => requestStatusChange(selectedEvent.id, selectedEvent.name, selectedEvent.status, "open")}
+                className="text-xs px-2 py-1 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:opacity-80 transition"
+              >เปิด</button>
+            )}
+            {selectedEvent.status !== "closed" && (
+              <button
+                onClick={() => requestStatusChange(selectedEvent.id, selectedEvent.name, selectedEvent.status, "closed")}
+                className="text-xs px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:opacity-80 transition"
+              >ปิด</button>
+            )}
+            {selectedEvent.status !== "finished" && (
+              <button
+                onClick={() => requestStatusChange(selectedEvent.id, selectedEvent.name, selectedEvent.status, "finished")}
+                className="text-xs px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:opacity-80 transition"
+              >จบ</button>
+            )}
+          </div>
+
         </div>
       )}
 
@@ -412,15 +735,14 @@ export default function EventAdminClient() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">ชื่อ Event</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500">สถานะ</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500">ผู้สมัคร</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-zinc-500">เปลี่ยนสถานะ</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
                 {loadingEvents ? (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-zinc-400">กำลังโหลด...</td></tr>
+                  <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-400">กำลังโหลด...</td></tr>
                 ) : events.length === 0 ? (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-zinc-400">ยังไม่มี Event</td></tr>
+                  <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-400">ยังไม่มี Event</td></tr>
                 ) : events.map((ev) => (
                   <tr key={ev.id} className={`border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition ${selectedEvent?.id === ev.id ? "bg-red-50/40 dark:bg-red-950/10" : ""}`}>
                     <td className="px-4 py-3">
@@ -434,13 +756,6 @@ export default function EventAdminClient() {
                     </td>
                     <td className="px-4 py-3 text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">
                       {ev.registration_count} คน
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        {ev.status !== "open"     && <button onClick={() => changeStatus(ev.id, "open")}     className="text-xs px-2 py-1 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:opacity-80 transition">เปิด</button>}
-                        {ev.status !== "closed"   && <button onClick={() => changeStatus(ev.id, "closed")}   className="text-xs px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:opacity-80 transition">ปิด</button>}
-                        {ev.status !== "finished" && <button onClick={() => changeStatus(ev.id, "finished")} className="text-xs px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:opacity-80 transition">จบ</button>}
-                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
@@ -471,9 +786,24 @@ export default function EventAdminClient() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">ชื่อ</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">อาชีพ</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">วันที่สมัคร</th>
+                  <th
+                    onClick={() => toggleRegSort("name")}
+                    className={`px-4 py-3 text-left text-xs font-semibold cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition select-none ${
+                      regSortField === "name" ? "text-red-600 dark:text-red-400" : "text-zinc-500"
+                    }`}
+                  >ชื่อ <span className="ml-0.5 opacity-60">{sortIcon("name")}</span></th>
+                  <th
+                    onClick={() => toggleRegSort("class")}
+                    className={`px-4 py-3 text-left text-xs font-semibold cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition select-none ${
+                      regSortField === "class" ? "text-red-600 dark:text-red-400" : "text-zinc-500"
+                    }`}
+                  >อาชีพ <span className="ml-0.5 opacity-60">{sortIcon("class")}</span></th>
+                  <th
+                    onClick={() => toggleRegSort("date")}
+                    className={`px-4 py-3 text-left text-xs font-semibold cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition select-none ${
+                      regSortField === "date" ? "text-red-600 dark:text-red-400" : "text-zinc-500"
+                    }`}
+                  >วันที่สมัคร <span className="ml-0.5 opacity-60">{sortIcon("date")}</span></th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -482,7 +812,28 @@ export default function EventAdminClient() {
                   <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-400">กำลังโหลด...</td></tr>
                 ) : regs.length === 0 ? (
                   <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-400">ยังไม่มีผู้สมัคร</td></tr>
-                ) : regs.map((r) => (
+                ) : [...regs]
+                  .sort((a, b) => {
+                    const dir = regSortDir === "asc" ? 1 : -1;
+                    if (regSortField === "name") {
+                      return (a.member_name || a.discord_user_id || "").localeCompare(
+                        b.member_name || b.discord_user_id || "", "th"
+                      ) * dir;
+                    }
+                    if (regSortField === "class") {
+                      const clsCmp = (a.class_name || "").localeCompare(b.class_name || "", "th");
+                      if (clsCmp !== 0) return clsCmp * dir;
+                      // secondary by name (a-z เสมอ)
+                      return (a.member_name || a.discord_user_id || "").localeCompare(
+                        b.member_name || b.discord_user_id || "", "th"
+                      );
+                    }
+                    // date
+                    const ta = new Date(a.registered_at).getTime();
+                    const tb = new Date(b.registered_at).getTime();
+                    return (ta - tb) * dir;
+                  })
+                  .map((r) => (
                   <tr key={r.id} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition">
                     <td className="px-4 py-3 font-medium text-zinc-800 dark:text-zinc-200">{r.member_name || r.discord_user_id}</td>
                     <td className="px-4 py-3">
@@ -494,15 +845,10 @@ export default function EventAdminClient() {
                     <td className="px-4 py-3 text-xs text-zinc-400">{new Date(r.registered_at).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-3 text-right">
                       <button
-                        onClick={async () => {
-                          await fetch(`/api/admin/events/${selectedEvent.id}/registrations`, {
-                            method: "DELETE",
-                            headers: { "content-type": "application/json" },
-                            body: JSON.stringify({ discord_user_id: r.discord_user_id }),
-                          });
-                          await loadRegs(selectedEvent.id);
-                          showToast("ลบผู้สมัครแล้ว");
-                        }}
+                        onClick={() => setConfirmDeleteReg({
+                          discord_user_id: r.discord_user_id,
+                          member_name: r.member_name || r.discord_user_id,
+                        })}
                         className="text-xs text-red-500 hover:underline"
                       >ลบ</button>
                     </td>
@@ -517,6 +863,27 @@ export default function EventAdminClient() {
       {/* ════════════════════════════ TAB: PARTIES ══════════════════════════ */}
       {tab === "parties" && selectedEvent && (
         <div className="space-y-6">
+          {/* ── Save bar: sticky ที่บน เลื่อนก็เห็น ── */}
+          {dirtyPartyIds.size > 0 && (
+            <div className="sticky top-2 z-30 flex items-center gap-3 bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-300 dark:border-amber-700 rounded-2xl px-4 py-3 shadow-lg backdrop-blur">
+              <span className="text-lg">⚠️</span>
+              <div className="flex-1 text-sm text-amber-900 dark:text-amber-200">
+                <span className="font-semibold">มีลำดับที่ยังไม่ได้บันทึก</span>
+                <span className="ml-2 text-xs opacity-75">({dirtyPartyIds.size} ปาร์ตี้)</span>
+              </div>
+              <button
+                onClick={discardAllOrders}
+                disabled={savingOrder}
+                className="h-8 px-3 rounded-xl border border-zinc-300 dark:border-zinc-600 text-xs text-zinc-700 dark:text-zinc-200 bg-white/70 dark:bg-zinc-900/70 hover:bg-white dark:hover:bg-zinc-800 disabled:opacity-50 transition"
+              >↺ ยกเลิก</button>
+              <button
+                onClick={saveAllOrders}
+                disabled={savingOrder}
+                className="h-8 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50 transition shadow"
+              >{savingOrder ? "กำลังบันทึก..." : "💾 บันทึก"}</button>
+            </div>
+          )}
+
           {/* Create party */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
@@ -556,7 +923,10 @@ export default function EventAdminClient() {
               <div className="flex flex-wrap gap-2">
                 {regs
                   .filter((r) => !parties.some((p) => p.members.some((m) => m.discord_user_id === r.discord_user_id)))
-                  .map((r) => (
+                  .map((r) => {
+                    const selectedParty = parties.find((p) => p.id === assignToParty);
+                    const usedPositions = new Set((selectedParty?.members ?? []).map((m) => m.position));
+                    return (
                     <div key={r.discord_user_id} className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2.5 py-1.5">
                       {r.class_icon && <img src={r.class_icon} alt="" className="w-4 h-4 rounded" />}
                       <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{r.member_name || r.discord_user_id}</span>
@@ -564,27 +934,86 @@ export default function EventAdminClient() {
                         <div className="flex items-center gap-1 ml-1">
                           <select
                             value={assignToParty}
-                            onChange={(e) => setAssignToParty(e.target.value)}
+                            onChange={(e) => {
+                              const pid = e.target.value;
+                              setAssignToParty(pid);
+                              // auto-pick first empty slot
+                              const p = parties.find((x) => x.id === pid);
+                              if (p) {
+                                const used = new Set(p.members.map((m) => m.position));
+                                let firstFree: number | null = null;
+                                for (let i = 0; i < PARTY_MAX_SIZE; i++) {
+                                  if (!used.has(i)) { firstFree = i; break; }
+                                }
+                                setAssignToPosition(firstFree);
+                              } else {
+                                setAssignToPosition(null);
+                              }
+                            }}
                             className="h-6 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1"
                           >
                             <option value="">เลือกปาร์ตี้</option>
-                            {parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            {parties.map((p) => {
+                              const full = p.members.length >= PARTY_MAX_SIZE;
+                              return (
+                                <option key={p.id} value={p.id} disabled={full}>
+                                  {p.name} ({p.members.length}/{PARTY_MAX_SIZE}){full ? " — เต็ม" : ""}
+                                </option>
+                              );
+                            })}
                           </select>
+                          {assignToParty && selectedParty && (
+                            <select
+                              value={assignToPosition ?? ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setAssignToPosition(v === "" ? null : Number(v));
+                              }}
+                              className="h-6 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1"
+                            >
+                              <option value="">ตำแหน่ง</option>
+                              {Array.from({ length: PARTY_MAX_SIZE }).map((_, i) => {
+                                const taken = selectedParty.members.find((m) => m.position === i);
+                                return (
+                                  <option key={i} value={i} disabled={!!taken}>
+                                    #{i + 1}{taken ? ` — ${taken.member_name || taken.discord_user_id}` : " (ว่าง)"}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          )}
                           <button
-                            onClick={() => assignMember(r.discord_user_id, r.member_name ?? "", assignToParty)}
-                            disabled={!assignToParty}
+                            onClick={() => {
+                              if (assignToPosition == null) return;
+                              assignMember(
+                                r.discord_user_id,
+                                r.member_name ?? "",
+                                assignToParty,
+                                assignToPosition,
+                                { class_name: r.class_name, class_icon: r.class_icon }
+                              );
+                            }}
+                            disabled={!assignToParty || assignToPosition == null || usedPositions.has(assignToPosition) || (selectedParty?.members.length ?? 0) >= PARTY_MAX_SIZE}
                             className="h-6 px-2 rounded-lg bg-red-600 text-white text-[10px] disabled:opacity-50"
                           >ใส่</button>
-                          <button onClick={() => setAssigningUid(null)} className="text-zinc-400 text-xs">✕</button>
+                          <button
+                            onClick={() => { setAssigningUid(null); setAssignToParty(""); setAssignToPosition(null); }}
+                            className="text-zinc-400 text-xs"
+                          >✕</button>
                         </div>
                       ) : (
                         <button
-                          onClick={() => { setAssigningUid(r.discord_user_id); setAssignToParty(""); }}
+                          onClick={() => {
+                            setAssigningUid(r.discord_user_id);
+                            setAssignToParty("");
+                            setAssignToPosition(null);
+                          }}
                           className="ml-1 text-[10px] text-red-600 hover:underline font-semibold"
                         >+ ใส่</button>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
               </div>
             </div>
           )}
@@ -597,26 +1026,100 @@ export default function EventAdminClient() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {parties.map((p) => (
-                <div key={p.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <div
+                  key={p.id}
+                  className={`rounded-2xl border overflow-hidden transition ${
+                    dirtyPartyIds.has(p.id)
+                      ? "border-amber-400 dark:border-amber-600 ring-2 ring-amber-200 dark:ring-amber-900/60"
+                      : "border-zinc-200 dark:border-zinc-800"
+                  }`}
+                >
                   {/* Party header */}
-                  <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800" style={{ borderTopWidth: 4, borderTopColor: p.color }}>
-                    {colorSwatch(p.color)}
-                    <span className="font-bold text-zinc-900 dark:text-zinc-100 flex-1">{p.name}</span>
-                    <span className="text-xs text-zinc-400">{p.members.length} คน</span>
+                  <div className="relative flex items-center gap-2 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800" style={{ borderTopWidth: 4, borderTopColor: p.color }}>
+                    <button
+                      onClick={() => setColorPickerPid((cur) => (cur === p.id ? null : p.id))}
+                      title="เปลี่ยนสี"
+                      className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-white/20 shadow-sm hover:ring-2 hover:ring-offset-1 hover:ring-red-300 transition"
+                      style={{ background: p.color }}
+                    />
+                    {colorPickerPid === p.id && (
+                      <>
+                        {/* backdrop — click outside to close */}
+                        <div className="fixed inset-0 z-20" onClick={() => setColorPickerPid(null)} />
+                        <div className="absolute z-30 top-full left-3 mt-1 flex gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl p-1.5 shadow-xl">
+                          {PARTY_COLORS.map((c) => (
+                            <button
+                              key={c}
+                              onClick={() => recolorParty(p.id, c)}
+                              className={`w-6 h-6 rounded-full border-2 transition ${p.color === c ? "border-zinc-900 dark:border-zinc-100 scale-110" : "border-transparent hover:scale-110"}`}
+                              style={{ background: c }}
+                              title={c}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {renamingPartyId === p.id ? (
+                      <input
+                        type="text"
+                        value={renamingPartyName}
+                        onChange={(e) => setRenamingPartyName(e.target.value)}
+                        onBlur={() => renameParty(p.id, renamingPartyName)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") renameParty(p.id, renamingPartyName);
+                          if (e.key === "Escape") setRenamingPartyId(null);
+                        }}
+                        autoFocus
+                        className="flex-1 min-w-0 h-7 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2 text-sm font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-red-400"
+                      />
+                    ) : (
+                      <>
+                        <span className="font-bold text-zinc-900 dark:text-zinc-100 flex-1 truncate">{p.name}</span>
+                        <button
+                          onClick={() => { setRenamingPartyId(p.id); setRenamingPartyName(p.name); }}
+                          title="เปลี่ยนชื่อ"
+                          className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                        >✎</button>
+                      </>
+                    )}
+                    <span className={`text-xs ${p.members.length >= PARTY_MAX_SIZE ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-zinc-400"}`}>
+                      {p.members.length}/{PARTY_MAX_SIZE}
+                    </span>
+                    {/* badge เล็กบอกว่าปาร์ตี้นี้ยังไม่ save */}
+                    {dirtyPartyIds.has(p.id) && (
+                      <span title="ยังไม่ได้บันทึก" className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    )}
                     <button onClick={() => deleteParty(p.id)} className="text-xs text-red-400 hover:text-red-600">🗑</button>
                   </div>
                   {/* Members */}
                   <div className="p-3 space-y-1 min-h-[60px]">
                     {p.members.length === 0 ? (
                       <div className="text-xs text-zinc-400 text-center py-2">ยังไม่มีสมาชิก</div>
-                    ) : p.members.map((m) => (
-                      <div key={m.discord_user_id} className="flex items-center gap-1.5 group">
+                    ) : p.members.map((m, mi) => (
+                      <div key={m.discord_user_id} className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 shrink-0" title={`ตำแหน่งที่ ${mi + 1}`}>{mi + 1}</span>
                         {m.class_icon && <img src={m.class_icon} alt="" className="w-4 h-4 rounded" />}
-                        <span className="text-xs text-zinc-700 dark:text-zinc-300 flex-1">{m.member_name || m.discord_user_id}</span>
-                        <button
-                          onClick={() => removeMember(p.id, m.discord_user_id)}
-                          className="text-zinc-300 dark:text-zinc-600 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition"
-                        >✕</button>
+                        <span className="text-xs text-zinc-700 dark:text-zinc-300 flex-1 truncate">{m.member_name || m.discord_user_id}</span>
+                        {/* move up / down — โผล่ตลอด */}
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => moveMember(p.id, m.discord_user_id, "up")}
+                            disabled={mi === 0}
+                            title="เลื่อนขึ้น"
+                            className="w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-[10px] leading-none disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                          >▲</button>
+                          <button
+                            onClick={() => moveMember(p.id, m.discord_user_id, "down")}
+                            disabled={mi === p.members.length - 1}
+                            title="เลื่อนลง"
+                            className="w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-[10px] leading-none disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                          >▼</button>
+                          <button
+                            onClick={() => removeMember(p.id, m.discord_user_id)}
+                            title="ลบออกจากปาร์ตี้"
+                            className="w-5 h-5 flex items-center justify-center rounded text-zinc-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-xs ml-0.5"
+                          >✕</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -624,6 +1127,94 @@ export default function EventAdminClient() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ════════════════════════════ CONFIRM: STATUS CHANGE ════════════════ */}
+      {confirmStatus && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => !statusChanging && setConfirmStatus(null)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">
+              เปลี่ยนสถานะ Event?
+            </div>
+            <div className="text-sm text-zinc-600 dark:text-zinc-400 space-y-2">
+              <div>
+                <span className="text-zinc-500">Event:</span>{" "}
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100">{confirmStatus.eventName}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLOR[confirmStatus.currentStatus]}`}>
+                  {STATUS_LABEL[confirmStatus.currentStatus]}
+                </span>
+                <span className="text-zinc-400">→</span>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLOR[confirmStatus.newStatus]}`}>
+                  {STATUS_LABEL[confirmStatus.newStatus]}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={doStatusChange}
+                disabled={statusChanging}
+                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+              >
+                {statusChanging ? "กำลังเปลี่ยน..." : "✓ ยืนยัน"}
+              </button>
+              <button
+                onClick={() => setConfirmStatus(null)}
+                disabled={statusChanging}
+                className="h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition"
+              >
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════ CONFIRM: DELETE REGISTRATION ══════════ */}
+      {confirmDeleteReg && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => !deletingReg && setConfirmDeleteReg(null)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">
+              ลบผู้สมัคร?
+            </div>
+            <div className="text-sm text-zinc-600 dark:text-zinc-400">
+              คุณต้องการลบ{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                {confirmDeleteReg.member_name}
+              </span>{" "}
+              ออกจาก Event นี้ใช่ไหม?
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={doDeleteRegistration}
+                disabled={deletingReg}
+                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+              >
+                {deletingReg ? "กำลังลบ..." : "🗑 ลบ"}
+              </button>
+              <button
+                onClick={() => setConfirmDeleteReg(null)}
+                disabled={deletingReg}
+                className="h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition"
+              >
+                ยกเลิก
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
