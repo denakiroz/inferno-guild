@@ -526,7 +526,7 @@ export default function MemberPotentialClient() {
 
   // Weights — React Query (lazy: only when weights tab is active)
   const weightsQuery = useWeights({ enabled: tab === "weights" });
-  const weights: WeightRow[] = ((weightsQuery.data as WeightRow[] | undefined) ?? []);
+  const weights: WeightRow[] = ((weightsQuery.data as unknown as WeightRow[] | undefined) ?? []);
   const loadingW = weightsQuery.isLoading && tab === "weights";
   const [savingW, setSavingW] = useState(false);
   const [editWeights, setEditWeights] = useState<Record<string, number>>({});
@@ -553,7 +553,7 @@ export default function MemberPotentialClient() {
   useEffect(() => {
     if (!weightsQuery.data) return;
     const init: Record<string, number> = {};
-    for (const w of weightsQuery.data as WeightRow[]) {
+    for (const w of weightsQuery.data as unknown as WeightRow[]) {
       init[`${w.class_id ?? "null"}:${w.category}`] = w.weight;
     }
     setEditWeights(init);
