@@ -8,6 +8,7 @@ import { qk } from "@/lib/queryClient";
 import {
   useLeaderboard,
   useBatches,
+  useBatchDetail,
   useWeights,
   useImportBatch,
   useUpdateBatch,
