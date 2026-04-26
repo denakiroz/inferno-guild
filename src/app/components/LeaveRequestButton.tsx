@@ -44,30 +44,50 @@ function toBkkIso(dateStr: string, hhmm: string) {
   return `${dateStr}T${hhmm}:00${BKK_OFFSET}`;
 }
 
-function isSaturday(dateStr: string) {
-  const d = new Date(`${dateStr}T00:00:00${BKK_OFFSET}`);
-  return d.getDay() === 6;
+/**
+ * แปลง Date จาก DayPicker → "YYYY-MM-DD" ตามปฏิทินที่ user เห็น (ไม่ shift TZ)
+ * เพราะ DayPicker ส่ง Date ที่เป็น "local midnight ของวันที่ user คลิก"
+ * ถ้าเอาไปแปลงผ่าน TZ (เช่น bkkDateOf) จะเลื่อนวันสำหรับ user คนละ TZ กับ BKK
+ */
+function dateOnlyYmd(d: Date) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
+/** day-of-week จาก "YYYY-MM-DD" แบบ TZ-stable (คำนวณผ่าน UTC) */
+function isSaturday(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return false;
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 6;
+}
+
+/** ไล่วันแบบ string-only (UTC arithmetic) — ไม่พึ่ง local TZ ของ browser */
 function rangeDatesInclusive(start: string, end: string) {
   const out: string[] = [];
   if (!start || !end) return out;
 
-  const s = new Date(`${start}T00:00:00${BKK_OFFSET}`);
-  const e = new Date(`${end}T00:00:00${BKK_OFFSET}`);
-  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return out;
+  const parse = (s: string) => {
+    const [y, m, d] = s.split("-").map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(Date.UTC(y, m - 1, d));
+  };
+  const s = parse(start);
+  const e = parse(end);
+  if (!s || !e) return out;
 
-  const dir = s <= e ? 1 : -1;
+  const dir = s.getTime() <= e.getTime() ? 1 : -1;
   const cur = new Date(s);
 
   for (;;) {
-    const yyyy = cur.getFullYear();
-    const mm = String(cur.getMonth() + 1).padStart(2, "0");
-    const dd = String(cur.getDate()).padStart(2, "0");
+    const yyyy = cur.getUTCFullYear();
+    const mm = String(cur.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(cur.getUTCDate()).padStart(2, "0");
     out.push(`${yyyy}-${mm}-${dd}`);
 
-    if (cur.toDateString() === e.toDateString()) break;
-    cur.setDate(cur.getDate() + dir);
+    if (cur.getTime() === e.getTime()) break;
+    cur.setUTCDate(cur.getUTCDate() + dir);
   }
   return out;
 }
@@ -78,6 +98,7 @@ const bkkDateFmt = new Intl.DateTimeFormat("en-CA", {
   month: "2-digit",
   day: "2-digit",
 });
+/** "วันนี้ตามเวลาไทย" (BKK) — ใช้สำหรับ disable past เท่านั้น เพราะระบบใช้ deadline BKK */
 function bkkDateOf(date: Date) {
   return bkkDateFmt.format(date);
 }
@@ -166,8 +187,9 @@ export default function LeaveRequestButton({
     [existingLeaves]
   );
 
-  const leaveStart = useMemo(() => (range?.from ? bkkDateOf(range.from) : ""), [range?.from]);
-  const leaveEnd = useMemo(() => (range?.to ? bkkDateOf(range.to) : ""), [range?.to]);
+  // ใช้ dateOnlyYmd: เลขที่ user คลิกบนปฏิทิน = เลขที่บันทึก (ไม่ shift TZ)
+  const leaveStart = useMemo(() => (range?.from ? dateOnlyYmd(range.from) : ""), [range?.from]);
+  const leaveEnd = useMemo(() => (range?.to ? dateOnlyYmd(range.to) : ""), [range?.to]);
 
   const saturdayDates = useMemo(() => {
     const dates = rangeDatesInclusive(leaveStart, leaveEnd);
@@ -202,8 +224,10 @@ export default function LeaveRequestButton({
     const byDate = existingLeaveIndex.byDate;
 
     return (date: Date) => {
-      const d = bkkDateOf(date);
+      // ใช้เลขที่ user เห็นบนปฏิทินตรง ๆ (ไม่ shift TZ)
+      const d = dateOnlyYmd(date);
 
+      // "วันนี้" ใช้ BKK เพราะ deadline ของระบบอิง BKK 20:00
       const today = bkkDateOf(new Date());
       if (d < today) return true;
 
