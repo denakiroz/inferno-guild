@@ -61,8 +61,16 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const PARTY_COLORS = [
-  "#ef4444","#f97316","#eab308","#22c55e",
-  "#06b6d4","#6366f1","#a855f7","#ec4899",
+  "#ef4444", // red
+  "#f97316", // orange
+  "#eab308", // yellow
+  "#84cc16", // lime
+  "#22c55e", // green
+  "#06b6d4", // cyan
+  "#3b82f6", // blue
+  "#6366f1", // indigo
+  "#a855f7", // purple
+  "#ec4899", // pink
 ];
 
 function colorSwatch(hex: string) {
