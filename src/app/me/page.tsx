@@ -45,7 +45,7 @@ const tabActive = "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 sh
 export default function MePage() {
   const { theme, toggleTheme } = useTheme();
 
-  const [tab, setTab] = useState<TabKey>("event");
+  const [tab, setTab] = useState<TabKey>("overview");
 
   const [me, setMe] = useState<MeRes | null>(null);
   const [member, setMember] = useState<MemberRow | null>(null);
@@ -455,14 +455,6 @@ export default function MePage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 {/* Tabs group */}
                 <div className="inline-flex max-w-full overflow-x-auto rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setTab("event")}
-                    className={`${tabBase} ${tab === "event" ? tabActive : tabIdle}`}
-                  >
-                    🏆 Event
-                  </button>
-
                   <button
                     type="button"
                     onClick={() => setTab("overview")}

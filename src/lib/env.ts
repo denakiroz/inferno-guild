@@ -21,6 +21,9 @@ const EnvSchema = z.object({
   DISCORD_MEMBER_2_ROLE_ID: z.string().optional().default(""),
   DISCORD_MEMBER_3_ROLE_ID: z.string().optional().default(""),
 
+  DISCORD_CLUB_ROLE_ID:   z.string().optional().default(""),
+  DISCORD_CLUB_2_ROLE_ID: z.string().optional().default(""),
+
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
 

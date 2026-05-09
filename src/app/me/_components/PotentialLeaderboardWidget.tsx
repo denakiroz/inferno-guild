@@ -426,6 +426,73 @@ function ComboChart({
 // สถิติที่ยิ่งน้อย = ยิ่งดี (จะแสดงสัญลักษณ์ ↓ กำกับ)
 const INVERTED_CATS: Set<Category> = new Set(["death", "damage_taken"]);
 
+// ── Stats grid: ตัวเลขทุกหมวด + เทียบทีม (รับมือ inverted) ──
+function StatsGrid({
+  myAvgs,
+  teamAvgs,
+}: {
+  myAvgs: Record<Category, number>;
+  teamAvgs: Record<Category, number> | null;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-1.5 mt-2">
+      {CATEGORIES.map((c) => {
+        const isInv = INVERTED_CATS.has(c);
+        const my  = myAvgs[c] ?? 0;
+        const tm  = teamAvgs?.[c] ?? null;
+        const hasTeam = tm !== null;
+        const delta = hasTeam ? my - (tm as number) : 0;
+        // "ดีกว่าทีม" = สูงกว่าทีม (ปกติ) / ต่ำกว่าทีม (inverted)
+        const isBetter = hasTeam && (isInv ? delta < 0 : delta > 0);
+        const isWorse  = hasTeam && (isInv ? delta > 0 : delta < 0);
+        const deltaAbs = Math.abs(delta);
+        const deltaSign = delta > 0 ? "+" : delta < 0 ? "−" : "";
+
+        return (
+          <div
+            key={c}
+            className="rounded-lg bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700/50 px-2 py-1.5"
+          >
+            <div className="flex items-center justify-between gap-1 mb-0.5">
+              <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300 truncate">
+                {CAT_LABELS[c]}
+              </span>
+              {isInv && (
+                <span className="text-[8px] font-bold text-emerald-500 shrink-0">↓ดี</span>
+              )}
+            </div>
+            <div className="flex items-baseline justify-between gap-1">
+              <span className="text-sm font-black tabular-nums text-zinc-900 dark:text-zinc-100">
+                {fmtNum(my)}
+              </span>
+              {hasTeam && (
+                <span
+                  className={[
+                    "text-[10px] font-bold tabular-nums shrink-0",
+                    isBetter
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : isWorse
+                        ? "text-red-500 dark:text-red-400"
+                        : "text-zinc-400",
+                  ].join(" ")}
+                  title={`ทีม ${fmtNum(tm as number)}`}
+                >
+                  {deltaSign}{fmtNum(deltaAbs)}
+                </span>
+              )}
+            </div>
+            {hasTeam && (
+              <div className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums mt-0.5">
+                ทีม {fmtNum(tm as number)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function RadarChart({
   myAvgs,
   teamAvgs,
@@ -1084,6 +1151,9 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
           teamAvgs={teamAvgs}
           teamSize={teamMates.length}
         />
+
+        {/* ── Stats grid: ตัวเลขทุกหมวด + เทียบทีม ── */}
+        <StatsGrid myAvgs={myAvgs} teamAvgs={teamAvgs} />
       </div>
     </div>
   );

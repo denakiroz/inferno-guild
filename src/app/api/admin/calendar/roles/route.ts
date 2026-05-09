@@ -31,6 +31,8 @@ export async function GET() {
     ["DISCORD_MEMBER_1_ROLE_ID", "Member 1"],
     ["DISCORD_MEMBER_2_ROLE_ID", "Member 2"],
     ["DISCORD_MEMBER_3_ROLE_ID", "Member 3"],
+    ["DISCORD_CLUB_ROLE_ID",     "Club"],
+    ["DISCORD_CLUB_2_ROLE_ID",   "Club 2"],
   ];
 
   for (const [key, label] of mapping) {
