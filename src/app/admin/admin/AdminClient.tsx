@@ -4,6 +4,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card } from "@/app/components/UI";
 
 type Props = {
@@ -19,6 +20,7 @@ function tryParseJson(text: string) {
 }
 
 export default function AdminClient({ displayName }: Props) {
+  const qc = useQueryClient();
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastResult, setLastResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -46,12 +48,21 @@ export default function AdminClient({ displayName }: Props) {
         (text?.slice(0, 500) || (res.ok ? "OK" : "Request failed"));
 
       setLastResult({ ok: res.ok, message });
+
+      // ถ้า sync สำเร็จ → ล้าง React Query cache ให้ fetch ใหม่
+      // (Redis cache ฝั่ง server ถูกล้างใน cron route แล้ว / นี่คือฝั่ง client)
+      if (res.ok) {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["members"] }),
+          qc.invalidateQueries({ queryKey: ["member-potential"] }),
+        ]);
+      }
     } catch (e: any) {
       setLastResult({ ok: false, message: e?.message ?? "Network error" });
     } finally {
       setIsSyncing(false);
     }
-  }, [cronUrl]);
+  }, [cronUrl, qc]);
 
   return (
     <div className="p-6">

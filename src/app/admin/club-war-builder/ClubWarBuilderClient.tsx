@@ -361,6 +361,31 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
     })();
   }, [matchDateISO, members, loadLeavesForDate]);
 
+  // ── refs สำหรับใช้ใน realtime callback (ไม่ต้อง re-subscribe ทุกครั้งที่ state เปลี่ยน) ──
+  const membersRef       = useRef<MemberRow[]>([]);
+  const matchDateISORef  = useRef<string>("");
+  useEffect(() => { membersRef.current      = members;      }, [members]);
+  useEffect(() => { matchDateISORef.current = matchDateISO; }, [matchDateISO]);
+
+  // ── Supabase realtime — ใครแก้ member/leave ที่ไหนหน้านี้ก็อัปเดตเอง ──
+  // (unify pattern กับหน้า Members + War Builder)
+  useEffect(() => {
+    const ch = supabase
+      .channel("club-war-builder-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "member" }, () => {
+        // member เปลี่ยน → reload roster (จะ trigger leaves reload ผ่าน useEffect ข้างบน)
+        void loadClubRoster();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "leave" }, () => {
+        // leave เปลี่ยน → reload leaves เฉพาะวันที่เลือก
+        void loadLeavesForDate(membersRef.current, matchDateISORef.current);
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(ch);
+    };
+  }, [loadClubRoster, loadLeavesForDate]);
+
   // ---------- Plans API ----------
   const loadPlans = useCallback(async (page: number) => {
     setPlansLoading(true);

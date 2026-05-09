@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { syncDiscordMembers } from "@/lib/discordMemberSync";
+import { invalidateMembers, invalidateMemberPotential } from "@/lib/redisCache";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,12 @@ export async function GET(req: Request) {
       adminSecretHeaderValue: provided,
       requiredSecret: expected,
     });
+
+    // sync upsert/update/inactivate member → ล้าง Redis cache ทุกตัวที่เกี่ยวข้อง
+    // (เดิม `/api/admin/syncmember` ทำขั้นตอนนี้ แต่ตัวนี้ลืม → user เห็น guild เก่าค้างจน TTL หมด)
+    if (result.status >= 200 && result.status < 300) {
+      await Promise.all([invalidateMembers(), invalidateMemberPotential()]);
+    }
 
     return NextResponse.json(result.body, { status: result.status });
   } catch (e: any) {

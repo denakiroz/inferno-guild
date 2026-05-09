@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/app/components/UI";
 import { supabase } from "@/lib/supabase";
+import { useMembers } from "@/hooks/api/members";
+import { qk } from "@/lib/queryClient";
 
 type WarTime = "20:00" | "20:30";
 
@@ -366,8 +369,11 @@ function serializePartyList(ids: number[]): string {
 }
 
 export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
+  const qc = useQueryClient();
   const [loading, setLoading] = useState(true);
 
+  // members ใช้ local state แต่ sync มาจาก React Query (cache + realtime)
+  // — ใช้ setMembers เพื่อ optimistic local UI; cache invalidation จะ refetch แล้ว sync กลับมา
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [classes, setClasses] = useState<DbClass[]>([]);
 
@@ -582,16 +588,72 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
 
   const guild = resolvedGuild;
 
+  // ── React Query: roster (shared cache + realtime กับหน้า Members) ──
+  const membersQuery = useMembers(guild, { enabled: !!guild });
+
+  // ── refs: ใช้ใน realtime callback เพื่อไม่ stale-closure (ไม่ต้อง re-subscribe) ──
+  const isQuickWarModeRef = useRef(false);
+  const quickWarDateRef   = useRef("");
+  const membersRef        = useRef<MemberRow[]>([]);
+  useEffect(() => { membersRef.current = members; }, [members]);
+
+  // Sync local members state + rebuild baseline parties ทุกครั้งที่ query data เปลี่ยน
+  // (รวมถึง realtime invalidate / Members page mutate / cross-tab refetch)
+  useEffect(() => {
+    if (!guild) return;
+    if (!membersQuery.data) return;
+    const memList = (membersQuery.data.members ?? []) as MemberRow[];
+    setMembers(memList);
+
+    // baseline ของทั้ง 2 ช่วงเวลา "เฉพาะอันที่ยังไม่ dirty"
+    // (ถ้า member เปลี่ยน is_special / class / party → ต้อง refresh baseline)
+    (["20:00", "20:30"] as WarTime[]).forEach((t) => {
+      const isDirty = !!draftDirtyByTimeRef.current.get(t);
+      if (isDirty) return;
+      const baseline = buildPartiesFromMembers(memList, t);
+      setDraft(t, baseline, false);
+    });
+  }, [membersQuery.data, guild]);
+
+  // Supabase realtime — มี admin คนอื่นแก้ member/leave ที่ไหน → sync ทันที
+  // (ตาม pattern เดียวกับ Members page เพื่อ unify behavior)
+  useEffect(() => {
+    if (!guild) return;
+    const ch = supabase
+      .channel(`war-builder-realtime-${guild}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "member" }, () => {
+        void qc.invalidateQueries({ queryKey: qk.members(guild) });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "leave" }, () => {
+        // member list อาจไม่เปลี่ยน — แต่ leave ของวันที่กำลังดูอาจเปลี่ยน
+        // → invalidate (เผื่อ leaves ที่ฝังใน members response เปลี่ยน) + เรียก leave loader ตรง ๆ
+        void qc.invalidateQueries({ queryKey: qk.members(guild) });
+        const memList = membersRef.current;
+        if (isQuickWarModeRef.current) {
+          void loadLeavesForToday(memList, quickWarDateRef.current);
+        } else {
+          void loadLeavesForUpcomingSaturday(memList);
+        }
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(ch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guild, qc]);
+
   // ---------- leave helpers ----------
   const [leaveDateISO, setLeaveDateISO] = useState<string>(""); // yyyy-mm-dd local
 
   // ---------- Quick War mode ----------
   const [isQuickWarMode, setIsQuickWarMode] = useState(false);
+  useEffect(() => { isQuickWarModeRef.current = isQuickWarMode; }, [isQuickWarMode]);
   const [quickWarPickOpen, setQuickWarPickOpen] = useState(false);
   const [quickWarDate, setQuickWarDate] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   });
+  useEffect(() => { quickWarDateRef.current = quickWarDate; }, [quickWarDate]);
   const [leaveByTime, setLeaveByTime] = useState<Record<WarTime, Set<number>>>({
     "20:00": new Set<number>(),
     "20:30": new Set<number>(),
@@ -959,17 +1021,27 @@ useEffect(() => {
 
     setLoading(true);
     try {
-      const memRes = await fetch(`/api/admin/members?guild=${guild}`, { cache: "no-store" });
-      if (!memRes.ok) {
-        const txt = await memRes.text().catch(() => "");
-        console.error("load members failed", { status: memRes.status, txt });
-        alert(`โหลดสมาชิกไม่สำเร็จ (status ${memRes.status})`);
+      // ── members: ใช้ React Query cache (shared กับหน้า Members + realtime invalidate) ──
+      // ดึงผ่าน fetchQuery: ถ้ามี cache สด (≤2 นาที) ไม่ refetch / ถ้าหมดอายุก็ดึงใหม่อัตโนมัติ
+      let memList: MemberRow[] = [];
+      try {
+        const cached = await qc.fetchQuery<{ members?: MemberRow[] }>({
+          queryKey: qk.members(guild),
+          queryFn: async () => {
+            const r = await fetch(`/api/admin/members?guild=${guild}`, { cache: "no-store" });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return (await r.json()) as { members?: MemberRow[] };
+          },
+          staleTime: 2 * 60 * 1000,
+        });
+        memList = Array.isArray(cached?.members) ? (cached.members as MemberRow[]) : [];
+      } catch (e: any) {
+        console.error("load members failed", e);
+        alert(`โหลดสมาชิกไม่สำเร็จ (${String(e?.message ?? e)})`);
         return;
       }
-      const memJson = (await memRes.json()) as { members?: MemberRow[] };
-      const memList = Array.isArray(memJson.members) ? memJson.members : [];
       setMembers(memList);
-// load leave for upcoming saturday
+      // load leave for upcoming saturday
       await loadLeavesForUpcomingSaturday(memList);
 
       // baseline ของทั้ง 2 ช่วงเวลา "เฉพาะอันที่ยังไม่ dirty"
