@@ -9,6 +9,14 @@ import { qk } from "@/lib/queryClient";
 import { jsonFetch } from "./fetcher";
 
 // ---------- Types (loose — match server shape) ----------
+export type SeasonRow = {
+  id: number;
+  name: string;
+  start_date: string; // YYYY-MM-DD
+  end_date: string;   // YYYY-MM-DD
+  created_at: string;
+};
+
 export type LeaderboardItem = {
   userdiscordid: string;
   discordname: string;
@@ -26,6 +34,7 @@ export type LeaderboardItem = {
 export type BatchRow = {
   id: string;
   label: string;
+  battle_date: string | null; // วันที่รบจริง (YYYY-MM-DD)
   imported_at: string;
   opponent_guild: string | null;
   guild: number | null;
@@ -56,13 +65,26 @@ export type WeightRow = {
 
 // ---------- Queries ----------
 
-export function useLeaderboard() {
+export function useSeasons() {
   return useQuery({
-    queryKey: qk.leaderboard(),
+    queryKey: qk.seasons(),
     queryFn: () =>
-      jsonFetch<{ ok: boolean; items?: LeaderboardItem[]; error?: string }>(
-        "/api/admin/member-potential"
+      jsonFetch<{ ok: boolean; items?: SeasonRow[]; error?: string }>(
+        "/api/admin/member-potential/seasons"
       ).then((j) => (j.ok ? j.items ?? [] : Promise.reject(new Error(j.error ?? "failed")))),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useLeaderboard(seasonId?: number | null) {
+  const url = seasonId != null
+    ? `/api/admin/member-potential?season_id=${seasonId}`
+    : "/api/admin/member-potential";
+  return useQuery({
+    queryKey: qk.leaderboard(seasonId),
+    queryFn: () =>
+      jsonFetch<{ ok: boolean; items?: LeaderboardItem[]; error?: string }>(url)
+        .then((j) => (j.ok ? j.items ?? [] : Promise.reject(new Error(j.error ?? "failed")))),
     // leaderboard cache 5 min ที่ server แล้ว → ที่ client 60s (stale) ก็พอ
     staleTime: 60 * 1000,
   });
@@ -123,6 +145,7 @@ export function useImportBatch() {
   return useMutation({
     mutationFn: (body: {
       label?: string;
+      battle_date?: string;
       opponent_guild?: string;
       guild?: number | null;
       rows: any[];
@@ -141,7 +164,7 @@ export function useImportBatch() {
 export function useUpdateBatch() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; label?: string; opponent_guild?: string; guild?: number | null }) =>
+    mutationFn: ({ id, ...body }: { id: string; label?: string; opponent_guild?: string; guild?: number | null; battle_date?: string | null }) =>
       jsonFetch<{ ok: boolean; error?: string }>(`/api/admin/member-potential/batches/${id}`, {
         method: "PATCH",
         body: JSON.stringify(body),
@@ -200,7 +223,53 @@ export function useUpsertWeight() {
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.weights() });
-      qc.invalidateQueries({ queryKey: qk.leaderboard() });
+      qc.invalidateQueries({ queryKey: ["leaderboard"] });
+    },
+  });
+}
+
+// ---------- Season mutations ----------
+
+export function useCreateSeason() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; start_date: string; end_date: string }) =>
+      jsonFetch<{ ok: boolean; item?: SeasonRow; error?: string }>(
+        "/api/admin/member-potential/seasons",
+        { method: "POST", body: JSON.stringify(body) }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.seasons() });
+    },
+  });
+}
+
+export function useUpdateSeason() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; name?: string; start_date?: string; end_date?: string }) =>
+      jsonFetch<{ ok: boolean; error?: string }>(
+        `/api/admin/member-potential/seasons/${id}`,
+        { method: "PATCH", body: JSON.stringify(body) }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.seasons() });
+      qc.invalidateQueries({ queryKey: ["leaderboard"] });
+    },
+  });
+}
+
+export function useDeleteSeason() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      jsonFetch<{ ok: boolean; error?: string }>(
+        `/api/admin/member-potential/seasons/${id}`,
+        { method: "DELETE" }
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.seasons() });
+      qc.invalidateQueries({ queryKey: ["leaderboard"] });
     },
   });
 }

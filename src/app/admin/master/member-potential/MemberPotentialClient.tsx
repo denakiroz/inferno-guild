@@ -16,6 +16,11 @@ import {
   useUpdateBatchRecords,
   useUpsertWeight,
   usePlayerHistory,
+  useSeasons,
+  useCreateSeason,
+  useUpdateSeason,
+  useDeleteSeason,
+  type SeasonRow,
 } from "@/hooks/api/memberPotential";
 import { useClasses } from "@/hooks/api/masters";
 
@@ -33,7 +38,7 @@ type BatchStat = {
 function fmtDate(iso: string) {
   if (!iso) return "";
   const d = new Date(iso);
-  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear().toString().slice(2)}`;
+  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 }
 
 function PlayerModal({
@@ -291,6 +296,7 @@ type LeaderboardRow = {
 type BatchRow = {
   id: string;
   label: string;
+  battle_date: string | null; // วันที่รบจริง (YYYY-MM-DD)
   imported_at: string;
   record_count: number;
   opponent_guild?: string | null;
@@ -325,7 +331,7 @@ type WeightRow = {
   sort_order: number;
 };
 
-type Tab = "leaderboard" | "batches" | "weights";
+type Tab = "leaderboard" | "batches" | "weights" | "seasons";
 type SortKey = "score" | Category | "discordname";
 
 const CAT_SCALE: Record<Category, string> = {
@@ -466,8 +472,26 @@ export default function MemberPotentialClient() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("leaderboard");
 
+  // Season selector in leaderboard: undefined = auto (current season), null = all-time, number = specific id
+  const [selectedSeasonId, setSelectedSeasonId] = useState<number | null | undefined>(undefined);
+  // Seasons data + CRUD mutations
+  const seasonsQuery = useSeasons();
+  const seasons: SeasonRow[] = (seasonsQuery.data as SeasonRow[] | undefined) ?? [];
+  const createSeasonMutation = useCreateSeason();
+  const updateSeasonMutation = useUpdateSeason();
+  const deleteSeasonMutation = useDeleteSeason();
+
+  // Resolve effective season id for leaderboard query
+  // undefined → find current season from list; null → all-time; number → specific
+  const effectiveSeasonId = (() => {
+    if (selectedSeasonId !== undefined) return selectedSeasonId;
+    const today = new Date().toISOString().slice(0, 10);
+    const current = seasons.find((s) => s.start_date <= today && s.end_date >= today);
+    return current?.id ?? null; // null = all-time when no current season
+  })();
+
   // Leaderboard — React Query
-  const leaderboardQuery = useLeaderboard();
+  const leaderboardQuery = useLeaderboard(effectiveSeasonId ?? undefined);
   const rows: LeaderboardRow[] = (leaderboardQuery.data as LeaderboardRow[] | undefined) ?? [];
   const loadingLB = leaderboardQuery.isLoading;
 
@@ -493,6 +517,7 @@ export default function MemberPotentialClient() {
   const [pendingImport, setPendingImport] = useState<{ records: any[]; defaultLabel: string } | null>(null);
   const [importLabel, setImportLabel] = useState("");
   const [importOpponentGuild, setImportOpponentGuild] = useState("");
+  const [importBattleDate, setImportBattleDate] = useState(""); // YYYY-MM-DD
   const [importClassFilter, setImportClassFilter] = useState<string | null>(null);
   // Sort preview table
   type ImportSortField = "name" | "class" | Category;
@@ -511,6 +536,7 @@ export default function MemberPotentialClient() {
   // Batch edit modal
   const [editingBatch, setEditingBatch] = useState<BatchRow | null>(null);
   const [editBatchLabel, setEditBatchLabel] = useState("");
+  const [editBattleDate, setEditBattleDate] = useState(""); // YYYY-MM-DD
   const [editBatchOpponent, setEditBatchOpponent] = useState("");
   const [editBatchGuild, setEditBatchGuild] = useState<number | null>(null);
   const [savingBatch, setSavingBatch] = useState(false);
@@ -536,6 +562,17 @@ export default function MemberPotentialClient() {
 
   // Batch guild filter
   const [batchGuildFilter, setBatchGuildFilter] = useState<number | null>(null);
+
+  // Seasons CRUD state
+  const [newSeasonName, setNewSeasonName]       = useState("");
+  const [newSeasonStart, setNewSeasonStart]     = useState("");
+  const [newSeasonEnd, setNewSeasonEnd]         = useState("");
+  const [editingSeason, setEditingSeason]       = useState<SeasonRow | null>(null);
+  const [editSeasonName, setEditSeasonName]     = useState("");
+  const [editSeasonStart, setEditSeasonStart]   = useState("");
+  const [editSeasonEnd, setEditSeasonEnd]       = useState("");
+  const [deletingSeason, setDeletingSeason]     = useState<number | null>(null);
+  const [savingSeason, setSavingSeason]         = useState(false);
 
   // Weights — React Query (lazy: only when weights tab is active)
   const weightsQuery = useWeights({ enabled: tab === "weights" });
@@ -636,6 +673,7 @@ export default function MemberPotentialClient() {
       // Open confirm modal instead of immediately POSTing
       const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
       setImportLabel(today);
+      setImportBattleDate(today);
       setImportOpponentGuild("");
       setImportClassFilter(null);
       setPendingImport({ records, defaultLabel: today });
@@ -655,8 +693,9 @@ export default function MemberPotentialClient() {
       const json = await importMutation.mutateAsync({
         // format YYYY-MM-DD → d/m/yy (Thai-friendly short date)
         label: importLabel
-          ? (() => { const [y, m, d] = importLabel.split("-"); return `${+d}/${+m}/${String(+y).slice(2)}`; })()
+          ? (() => { const [y, m, d] = importLabel.split("-"); return `${+d}/${+m}/${+y}`; })()
           : undefined,
+        battle_date: importLabel || new Date().toISOString().slice(0, 10),
         opponent_guild: importOpponentGuild.trim() || undefined,
         guild: guildFilter,
         rows: records,
@@ -666,6 +705,7 @@ export default function MemberPotentialClient() {
       showToast(`Import สำเร็จ ${json.count} คน ✓`);
       setBatchLabel("");
       setImportLabel("");
+      setImportBattleDate("");
       setImportOpponentGuild("");
       // useImportBatch.onSuccess invalidates leaderboard + batches
     } catch (err: any) {
@@ -823,6 +863,7 @@ export default function MemberPotentialClient() {
     };
     setEditingBatch(b);
     setEditBatchLabel(toDateInput(b.label) || "");
+    setEditBattleDate(b.battle_date ?? toDateInput(b.label) ?? "");
     setEditBatchOpponent(b.opponent_guild ?? "");
     setEditBatchGuild(b.guild ?? null);
   };
@@ -833,11 +874,12 @@ export default function MemberPotentialClient() {
     setSavingBatch(true);
     try {
       const label = editBatchLabel
-        ? (() => { const [y, m, d] = editBatchLabel.split("-"); return `${+d}/${+m}/${String(+y).slice(2)}`; })()
+        ? (() => { const [y, m, d] = editBatchLabel.split("-"); return `${+d}/${+m}/${+y}`; })()
         : editingBatch.label;
       const json = await updateBatchMutation.mutateAsync({
         id: editingBatch.id,
         label,
+        battle_date: editBattleDate || undefined,
         opponent_guild: editBatchOpponent.trim() || undefined,
         guild: editBatchGuild,
       });
@@ -868,29 +910,25 @@ export default function MemberPotentialClient() {
   const saveAllWeights = async () => {
     setSavingW(true);
     try {
-      await Promise.all(
-        weights.map((w) => {
-          const key = `${w.class_id ?? "null"}:${w.category}`;
-          return upsertWeightMutation.mutateAsync({
-            class_id: w.class_id,
-            category: w.category,
-            label: w.label,
-            weight: Number(editWeights[key] ?? w.weight),
-            enabled: w.enabled,
-            sort_order: w.sort_order,
-          });
+      // Save all category x class combinations (creates missing rows, updates existing ones)
+      const allRows = classGroups.flatMap(({ class_id, rows: wrows }, _gi) =>
+        CATEGORIES.map((cat, i) => {
+          const w = wrows.find((x) => x.category === cat);
+          const key = `${class_id ?? "null"}:${cat}`;
+          return {
+            class_id,
+            category: cat,
+            label: w?.label ?? CAT_LABELS[cat],
+            weight: Number(editWeights[key] ?? w?.weight ?? 0),
+            enabled: w?.enabled ?? true,
+            sort_order: w?.sort_order ?? i,
+          };
         })
       );
-      showToast(`บันทึกสำเร็จ ${weights.length} รายการ ✓`);
-      // Optimistically update the cached weights so the override-highlight logic sees the saved values immediately
-      qc.setQueryData(qk.weights(), (prev: unknown) => {
-        const list = Array.isArray(prev) ? prev : weights;
-        return list.map((w: any) => {
-          const key = `${w.class_id ?? "null"}:${w.category}`;
-          const newW = editWeights[key];
-          return newW !== undefined ? { ...w, weight: Number(newW) } : w;
-        });
-      });
+      await Promise.all(allRows.map((r) => upsertWeightMutation.mutateAsync(r)));
+      showToast(`บันทึกสำเร็จ ${allRows.length} รายการ ✓`);
+      // Invalidate weights so fresh data (including newly created rows) is fetched
+      qc.invalidateQueries({ queryKey: qk.weights() });
       setWeightsResetKey((k) => k + 1);
       // Leaderboard is already invalidated by the mutation's onSuccess
     } catch {
@@ -1022,6 +1060,60 @@ export default function MemberPotentialClient() {
       .values()
   ).sort((a, b) => (a.class_id ?? -1) - (b.class_id ?? -1));
 
+  // ---------- Season CRUD handlers ----------
+  const handleCreateSeason = async () => {
+    if (!newSeasonName.trim() || !newSeasonStart || !newSeasonEnd) {
+      showToast("กรุณากรอกข้อมูล season ให้ครบ", false); return;
+    }
+    if (newSeasonEnd < newSeasonStart) {
+      showToast("วันสิ้นสุดต้องไม่น้อยกว่าวันเริ่มต้น", false); return;
+    }
+    setSavingSeason(true);
+    try {
+      const json = await createSeasonMutation.mutateAsync({
+        name: newSeasonName.trim(), start_date: newSeasonStart, end_date: newSeasonEnd,
+      });
+      if (!json.ok) { showToast(`สร้างไม่สำเร็จ: ${json.error ?? "unknown"}`, false); return; }
+      showToast("สร้าง Season สำเร็จ ✓");
+      setNewSeasonName(""); setNewSeasonStart(""); setNewSeasonEnd("");
+    } finally { setSavingSeason(false); }
+  };
+
+  const openEditSeason = (s: SeasonRow) => {
+    setEditingSeason(s);
+    setEditSeasonName(s.name);
+    setEditSeasonStart(s.start_date);
+    setEditSeasonEnd(s.end_date);
+  };
+
+  const handleSaveEditSeason = async () => {
+    if (!editingSeason) return;
+    if (editSeasonEnd < editSeasonStart) {
+      showToast("วันสิ้นสุดต้องไม่น้อยกว่าวันเริ่มต้น", false); return;
+    }
+    setSavingSeason(true);
+    try {
+      const json = await updateSeasonMutation.mutateAsync({
+        id: editingSeason.id, name: editSeasonName.trim() || editingSeason.name,
+        start_date: editSeasonStart, end_date: editSeasonEnd,
+      });
+      if (!json.ok) { showToast("บันทึกไม่สำเร็จ", false); return; }
+      showToast("บันทึกสำเร็จ ✓");
+      setEditingSeason(null);
+    } finally { setSavingSeason(false); }
+  };
+
+  const handleDeleteSeason = async (id: number) => {
+    setDeletingSeason(null);
+    try {
+      const json = await deleteSeasonMutation.mutateAsync(id);
+      if (!json.ok) { showToast("ลบไม่สำเร็จ", false); return; }
+      showToast("ลบ Season สำเร็จ ✓");
+      // reset selector if deleted season was selected
+      if (selectedSeasonId === id) setSelectedSeasonId(undefined);
+    } catch { showToast("ลบไม่สำเร็จ", false); }
+  };
+
   // ---------- Render ----------
   const tabCls = (t: Tab) =>
     `px-4 py-2 text-sm rounded-xl border transition ${tab === t
@@ -1039,15 +1131,57 @@ export default function MemberPotentialClient() {
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button className={tabCls("leaderboard")} onClick={() => setTab("leaderboard")}>🏆 Leaderboard</button>
         <button className={tabCls("batches")} onClick={() => setTab("batches")}>📦 Batches</button>
         <button className={tabCls("weights")} onClick={() => setTab("weights")}>⚖️ Weights</button>
+        <button className={tabCls("seasons")} onClick={() => setTab("seasons")}>🗓️ Seasons</button>
       </div>
 
       {/* ===== LEADERBOARD ===== */}
       {tab === "leaderboard" && (
         <div className="space-y-3">
+          {/* Season selector */}
+          {(() => {
+            const today = new Date().toISOString().slice(0, 10);
+            const currentSeason = seasons.find((s) => s.start_date <= today && s.end_date >= today);
+
+            const pillCls = (active: boolean) =>
+              `h-8 px-3 rounded-xl text-xs font-semibold border transition whitespace-nowrap ${
+                active
+                  ? "bg-red-600 text-white border-red-600"
+                  : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              }`;
+
+            // "auto" pill = current season (หรือ all-time ถ้าไม่มี current)
+            const autoLabel = currentSeason ? `⭐ ${currentSeason.name}` : "ทั้งหมด";
+            const autoActive = selectedSeasonId === undefined;
+
+            return seasons.length > 0 ? (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-zinc-400 mr-0.5">Season:</span>
+                <button onClick={() => setSelectedSeasonId(undefined)} className={pillCls(autoActive)}>
+                  {autoLabel}
+                  {currentSeason && autoActive && (
+                    <span className="ml-1.5 text-[10px] opacity-70">{currentSeason.start_date.slice(5)} – {currentSeason.end_date.slice(5)}</span>
+                  )}
+                </button>
+                {seasons.filter((s) => s !== currentSeason).map((s) => {
+                  const active = selectedSeasonId === s.id;
+                  return (
+                    <button key={s.id} onClick={() => setSelectedSeasonId(s.id)} className={pillCls(active)}>
+                      {s.name}
+                      <span className="ml-1.5 text-[10px] opacity-70">{s.start_date.slice(5)} – {s.end_date.slice(5)}</span>
+                    </button>
+                  );
+                })}
+                <button onClick={() => setSelectedSeasonId(null)} className={pillCls(selectedSeasonId === null)}>
+                  ทั้งหมด (All-time)
+                </button>
+              </div>
+            ) : null;
+          })()}
+
           {/* Guild tabs */}
           <div className="flex gap-1.5 flex-wrap">
             {([null, 1, 2, 3] as (number | null)[]).map((g) => {
@@ -1345,13 +1479,18 @@ export default function MemberPotentialClient() {
               >✕</button>
             </div>
             <div className="px-5 py-4 space-y-4">
-              {/* Label (date picker) */}
+              {/* Battle date (used for season filter) */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">วันที่ war</label>
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                  วันที่รบจริง <span className="text-zinc-400 font-normal">(ใช้คำนวณ Season)</span>
+                </label>
                 <input
                   type="date"
-                  value={editBatchLabel}
-                  onChange={(e) => setEditBatchLabel(e.target.value)}
+                  value={editBattleDate}
+                  onChange={(e) => {
+                    setEditBattleDate(e.target.value);
+                    setEditBatchLabel(e.target.value); // sync label too
+                  }}
                   className="w-full h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-red-400"
                 />
               </div>
@@ -1859,9 +1998,8 @@ export default function MemberPotentialClient() {
                           {/* Weight inputs per class */}
                           {classGroups.map(({ class_id, rows: wrows }) => {
                             const w = wrows.find((x) => x.category === cat);
-                            if (!w) return <td key={class_id ?? "default"} className="px-4 py-3 text-center text-zinc-300">—</td>;
-                            const wKey = `${w.class_id ?? "null"}:${w.category}`;
-                            const val = editWeights[wKey] ?? w.weight;
+                            const wKey = `${class_id ?? "null"}:${cat}`;
+                            const val = editWeights[wKey] ?? w?.weight ?? 0;
                             const defaultW = editWeights[`null:${cat}`] ?? weights.find((x) => x.class_id == null && x.category === cat)?.weight ?? 0;
                             return (
                               <EditableWeightCell
@@ -1908,6 +2046,206 @@ export default function MemberPotentialClient() {
           )}
         </div>
       )}
+
+      {/* ===== SEASONS ===== */}
+      {tab === "seasons" && (
+        <div className="space-y-5">
+          {/* Create new season form */}
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 space-y-4">
+            <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm">➕ สร้าง Season ใหม่</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-1">
+                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">ชื่อ Season</label>
+                <input
+                  type="text"
+                  placeholder="เช่น Season 1"
+                  value={newSeasonName}
+                  onChange={(e) => setNewSeasonName(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">วันเริ่มต้น</label>
+                <input
+                  type="date"
+                  value={newSeasonStart}
+                  max={newSeasonEnd || undefined}
+                  onChange={(e) => setNewSeasonStart(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">วันสิ้นสุด</label>
+                <input
+                  type="date"
+                  value={newSeasonEnd}
+                  min={newSeasonStart || undefined}
+                  onChange={(e) => setNewSeasonEnd(e.target.value)}
+                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={handleCreateSeason}
+                disabled={savingSeason}
+                className="h-9 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+              >
+                {savingSeason ? "กำลังสร้าง..." : "💾 สร้าง Season"}
+              </button>
+            </div>
+          </div>
+
+          {/* Seasons list */}
+          {seasonsQuery.isLoading ? (
+            <div className="py-8 text-center text-sm text-zinc-400">กำลังโหลด...</div>
+          ) : seasons.length === 0 ? (
+            <div className="py-8 text-center text-sm text-zinc-400">ยังไม่มี Season — กรอกฟอร์มด้านบนเพื่อสร้าง</div>
+          ) : (
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">ชื่อ</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">วันเริ่มต้น</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">วันสิ้นสุด</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-500">สถานะ</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {seasons.map((s) => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    const isCurrent = s.start_date <= today && s.end_date >= today;
+                    const isPast    = s.end_date < today;
+                    const isFuture  = s.start_date > today;
+                    return (
+                      <tr key={s.id} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition">
+                        <td className="px-4 py-3 font-medium text-zinc-800 dark:text-zinc-200">
+                          {s.name}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-zinc-500 tabular-nums">
+                          {new Date(s.start_date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-zinc-500 tabular-nums">
+                          {new Date(s.end_date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {isCurrent ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 px-2.5 py-0.5 text-[11px] font-semibold">
+                              ⚡ กำลังดำเนินการ
+                            </span>
+                          ) : isPast ? (
+                            <span className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200 dark:border-zinc-700 px-2.5 py-0.5 text-[11px]">
+                              สิ้นสุดแล้ว
+                            </span>
+                          ) : isFuture ? (
+                            <span className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 px-2.5 py-0.5 text-[11px]">
+                              ยังไม่เริ่ม
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => openEditSeason(s)}
+                              className="text-xs text-blue-500 hover:underline"
+                            >✏️ แก้ไข</button>
+                            <button
+                              onClick={() => setDeletingSeason(s.id)}
+                              className="text-xs text-red-500 hover:underline"
+                            >ลบ</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== Edit Season Modal ===== */}
+      {editingSeason && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => setEditingSeason(null)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-zinc-100 dark:border-zinc-800 px-5 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-zinc-900 dark:text-zinc-100">✏️ แก้ไข Season</h3>
+              <button
+                onClick={() => setEditingSeason(null)}
+                className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+              >✕</button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">ชื่อ Season</label>
+                <input
+                  type="text"
+                  value={editSeasonName}
+                  onChange={(e) => setEditSeasonName(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">วันเริ่มต้น</label>
+                  <input
+                    type="date"
+                    value={editSeasonStart}
+                    max={editSeasonEnd || undefined}
+                    onChange={(e) => setEditSeasonStart(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">วันสิ้นสุด</label>
+                  <input
+                    type="date"
+                    value={editSeasonEnd}
+                    min={editSeasonStart || undefined}
+                    onChange={(e) => setEditSeasonEnd(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-zinc-100 dark:border-zinc-800 px-5 py-4 flex justify-end gap-2">
+              <button
+                onClick={() => setEditingSeason(null)}
+                className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+              >ยกเลิก</button>
+              <button
+                onClick={handleSaveEditSeason}
+                disabled={savingSeason}
+                className="h-9 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+              >{savingSeason ? "กำลังบันทึก..." : "💾 บันทึก"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Delete Season confirm modal ===== */}
+      {deletingSeason != null ? (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDeletingSeason(null)} />
+          <div className="relative w-full max-w-xs rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 text-center shadow-xl">
+            <p className="text-sm font-semibold mb-1">ลบ Season นี้?</p>
+            <p className="text-xs text-zinc-500 mb-5">ข้อมูล batch และ record จะยังคงอยู่ แค่ลบช่วงวันที่ season นี้</p>
+            <div className="flex gap-2 justify-center">
+              <button onClick={() => setDeletingSeason(null)} className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm">ยกเลิก</button>
+              <button onClick={() => handleDeleteSeason(deletingSeason)} className="h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm">ลบ</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* ===== Delete confirm modal ===== */}
       {deletingBatch ? (

@@ -1,7 +1,4 @@
 // Generic Redis cache layer (Upstash REST).
-// - Graceful fallback: ถ้า UPSTASH env ไม่ตั้ง → skip cache (แค่เรียก loader ปกติ)
-// - Error-tolerant: ถ้า Redis ล่ม → log + fall-through ให้ loader ทำงาน ไม่ block request
-// - Namespaced keys: prefix "cache:" ทั้งหมด เพื่อแยกกับ session:* และ future namespace อื่น
 
 import { Redis } from "@upstash/redis";
 import { env } from "./env";
@@ -55,12 +52,6 @@ export async function cacheDel(keys: string | string[]): Promise<void> {
   }
 }
 
-/**
- * Get-or-set pattern — ถ้ามี cache hit คืน cached value ทันที
- * ถ้าไม่มี เรียก loader() แล้ว set cache ก่อนคืน
- *
- * loader จะถูกเรียกแน่ ๆ เมื่อ Redis ไม่มีคีย์ หรือ Redis ล่ม (graceful fallback)
- */
 export async function cacheGetOrSet<T>(
   key: string,
   ttlSec: number,
@@ -69,33 +60,39 @@ export async function cacheGetOrSet<T>(
   const hit = await cacheGet<T>(key);
   if (hit !== null && hit !== undefined) return hit;
   const value = await loader();
-  // fire-and-forget set (don't await — ให้ response ไปก่อน)
   void cacheSet(key, value, ttlSec);
   return value;
 }
 
-// --- Cache keys (รวมศูนย์ไว้ที่เดียว ป้องกัน typo กับลืม invalidate) ---
+// Cache keys
 export const CK = {
   leaderboard: () => "cache:leaderboard:v1",
-  /** members list with skills + equipment, partitioned by guild ("all" = ทุก guild) */
   members: (guild?: number | null) =>
     `cache:members:v1:${guild == null ? "all" : String(guild)}`,
-  /** สำหรับลบทุก guild partition ด้วย delByPattern (Upstash ไม่รองรับ → ใช้ registry) */
-  membersAllVariants: () => ["cache:members:v1:all", "cache:members:v1:1", "cache:members:v1:2", "cache:members:v1:3"],
+  membersAllVariants: () => [
+    "cache:members:v1:all",
+    "cache:members:v1:1",
+    "cache:members:v1:2",
+    "cache:members:v1:3",
+  ],
 } as const;
 
-/**
- * Convenience: invalidate member-potential related caches
- * เรียกจาก POST/PATCH/DELETE ของ batches, records, weights
- */
 export async function invalidateMemberPotential(): Promise<void> {
-  await cacheDel([CK.leaderboard()]);
+  const client = getClient();
+  if (!client) return;
+  try {
+    await cacheDel([CK.leaderboard()]);
+    // Also delete season-specific keys (pattern cache:leaderboard:v1:s<id>)
+    const pattern = `${CK.leaderboard()}:s*`;
+    const keys = await (client as any).keys(pattern).catch(() => [] as string[]);
+    if (Array.isArray(keys) && keys.length > 0) {
+      await cacheDel(keys as string[]);
+    }
+  } catch (err) {
+    console.warn("[redisCache] invalidateMemberPotential failed", err);
+  }
 }
 
-/**
- * Convenience: invalidate member list cache (ทุก guild partition)
- * เรียกจาก CRUD ของ members, ultimate/special skills, equipment
- */
 export async function invalidateMembers(): Promise<void> {
   await cacheDel(CK.membersAllVariants());
 }

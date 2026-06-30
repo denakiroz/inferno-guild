@@ -25,11 +25,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
     const { id } = await params;
 
-    // ⚡ 3 query อิสระ — ยิงพร้อมกัน (batch / records / weights)
     const [batchRes, recordsRes, weightsRes] = await Promise.all([
       supabaseAdmin
         .from("member_potential_batches")
-        .select("id,label,imported_at,opponent_guild,guild,imported_by")
+        .select("id,label,battle_date,imported_at,opponent_guild,guild,imported_by")
         .eq("id", id)
         .single(),
       supabaseAdmin
@@ -43,16 +42,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         .select("class_id,category,weight,enabled"),
     ]);
 
-    // 1) batch meta
     const { data: batch, error: bErr } = batchRes;
     if (bErr || !batch)
       return NextResponse.json({ ok: false, error: bErr?.message ?? "batch not found" }, { status: 404 });
 
-    // 2) records in this batch
     const { data: records, error: rErr } = recordsRes;
     if (rErr) return NextResponse.json({ ok: false, error: rErr.message }, { status: 500 });
 
-    // 3) class info (name, icon) — bulk fetch (depends on records)
     const classIds = Array.from(
       new Set((records ?? []).map((r) => r.class_id).filter((v): v is number => v != null))
     );
@@ -67,7 +63,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       }
     }
 
-    // 4) Weights — มาจาก Promise.all ด้านบนแล้ว
     const { data: weightRows } = weightsRes;
 
     const defaultWeights = new Map<Category, number>();
@@ -139,6 +134,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if ("label" in body)          updates.label          = String(body.label ?? "").trim() || null;
     if ("opponent_guild" in body) updates.opponent_guild = String(body.opponent_guild ?? "").trim() || null;
     if ("guild" in body)          updates.guild          = body.guild != null ? Number(body.guild) : null;
+    if ("battle_date" in body)    updates.battle_date    = body.battle_date ? String(body.battle_date) : null;
 
     if (Object.keys(updates).length === 0)
       return NextResponse.json({ ok: false, error: "nothing to update" }, { status: 400 });
@@ -150,7 +146,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-    // batch meta เปลี่ยน — โดย label/guild อาจไม่กระทบ score แต่ invalidate ไว้ก่อนเพื่อความปลอดภัย
     await invalidateMemberPotential();
 
     return NextResponse.json({ ok: true });

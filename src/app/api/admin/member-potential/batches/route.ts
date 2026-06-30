@@ -21,27 +21,25 @@ export async function GET() {
     const session = await requireEditor();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
+    // Use embedded count so Supabase does COUNT(*) at DB level
     const { data, error } = await supabaseAdmin
       .from("member_potential_batches")
-      .select("id,label,imported_at,imported_by,opponent_guild,guild")
-      .order("imported_at", { ascending: false });
+      .select("id,label,battle_date,imported_at,imported_by,opponent_guild,guild,member_potential_records(count)")
+      .order("battle_date", { ascending: false, nullsFirst: false });
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-    // count records per batch
-    const batchIds = (data ?? []).map((b) => b.id);
-    let countMap: Record<string, number> = {};
-    if (batchIds.length > 0) {
-      const { data: counts } = await supabaseAdmin
-        .from("member_potential_records")
-        .select("batch_id")
-        .in("batch_id", batchIds);
-      for (const r of counts ?? []) {
-        countMap[r.batch_id] = (countMap[r.batch_id] ?? 0) + 1;
-      }
-    }
+    const items = (data ?? []).map((b: any) => ({
+      id: b.id,
+      label: b.label,
+      battle_date: b.battle_date ?? null,
+      imported_at: b.imported_at,
+      imported_by: b.imported_by,
+      opponent_guild: b.opponent_guild,
+      guild: b.guild,
+      record_count: (b.member_potential_records as { count: number }[])?.[0]?.count ?? 0,
+    }));
 
-    const items = (data ?? []).map((b) => ({ ...b, record_count: countMap[b.id] ?? 0 }));
     return NextResponse.json({ ok: true, items });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });

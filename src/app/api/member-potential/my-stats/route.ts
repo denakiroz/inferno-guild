@@ -1,5 +1,6 @@
 // GET /api/member-potential/my-stats
-// Returns current user's last 3 batches with per-batch stats + score
+// Returns current user's last batches with per-batch stats + score
+// Filtered to active season if one exists (battle_date within season range)
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
@@ -8,6 +9,19 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { CATEGORIES, type Category } from "@/lib/memberPotential";
 
 export const runtime = "nodejs";
+
+async function getActiveSeason() {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabaseAdmin
+    .from("member_potential_seasons")
+    .select("id,name,start_date,end_date")
+    .lte("start_date", today)
+    .gte("end_date", today)
+    .order("start_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
+}
 
 export async function GET() {
   try {
@@ -22,17 +36,41 @@ export async function GET() {
     const discordUserId = session.discordUserId ?? null;
     if (!discordUserId) return NextResponse.json({ ok: false, error: "no discord id" }, { status: 400 });
 
-    // Get member info (class_id)
-    const { data: memberRow } = await supabaseAdmin
-      .from("member")
-      .select("class_id")
-      .eq("discord_user_id", discordUserId)
-      .single();
+    // Get member info (class_id) + active season in parallel
+    const [memberRes, activeSeason] = await Promise.all([
+      supabaseAdmin
+        .from("member")
+        .select("class_id")
+        .eq("discord_user_id", discordUserId)
+        .single(),
+      getActiveSeason(),
+    ]);
 
-    const classId = memberRow?.class_id ? Number(memberRow.class_id) : null;
+    const classId = memberRes.data?.class_id ? Number(memberRes.data.class_id) : null;
 
-    // Get last 3 batches that contain this user's records
-    const { data: records, error: recErr } = await supabaseAdmin
+    // If active season exists, get batch IDs within the season's battle_date range
+    let batchIdFilter: string[] | null = null;
+    if (activeSeason) {
+      const { data: seasonBatches } = await supabaseAdmin
+        .from("member_potential_batches")
+        .select("id")
+        .gte("battle_date", activeSeason.start_date)
+        .lte("battle_date", activeSeason.end_date);
+      batchIdFilter = (seasonBatches ?? []).map((b) => String(b.id));
+    }
+
+    // Season exists but no batches in range -> return empty
+    if (activeSeason && batchIdFilter !== null && batchIdFilter.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        class_id: classId,
+        batches: [],
+        season: { name: activeSeason.name, start_date: activeSeason.start_date, end_date: activeSeason.end_date },
+      });
+    }
+
+    // Get batches that contain this user's records
+    let query = supabaseAdmin
       .from("member_potential_records")
       .select(`
         batch_id,
@@ -45,6 +83,11 @@ export async function GET() {
       .eq("userdiscordid", discordUserId)
       .order("batch_id", { ascending: false });
 
+    if (batchIdFilter !== null && batchIdFilter.length > 0) {
+      query = query.in("batch_id", batchIdFilter);
+    }
+
+    const { data: records, error: recErr } = await query;
     if (recErr) return NextResponse.json({ ok: false, error: recErr.message }, { status: 500 });
 
     // Group by batch (aggregate in case of multiple records per batch)
@@ -104,8 +147,7 @@ export async function GET() {
       return defaultWeights.get(cat) ?? 0;
     };
 
-    // เรียง batches ตาม imported_at (DESC → เอา 3 อันล่าสุด → ASC สำหรับ chart)
-    // same-day → ใช้ batch_id เป็น tiebreak เพื่อให้ order deterministic
+    // Sort batches by imported_at DESC -> take 6 latest -> ASC for chart
     const cmpDesc = (
       [bidA, a]: [string, { imported_at: string }],
       [bidB, b]: [string, { imported_at: string }]
@@ -121,9 +163,9 @@ export async function GET() {
     ) => -cmpDesc(a, b);
 
     const batches = Array.from(batchMap.entries())
-      .sort(cmpDesc)    // เอา 6 อันล่าสุดตามวันที่
+      .sort(cmpDesc)
       .slice(0, 6)
-      .sort(cmpAsc)     // แสดงผล ASC (เก่า → ใหม่)
+      .sort(cmpAsc)
       .map(([, entry]) => {
         const avgs = Object.fromEntries(
           CATEGORIES.map((c) => [c, entry.stats[c].count > 0 ? entry.stats[c].sum / entry.stats[c].count : 0])
@@ -137,14 +179,21 @@ export async function GET() {
           imported_at: entry.imported_at,
           opponent_guild: entry.opponent_guild,
           avgs,
-          rawScore: calc(classId),      // คะแนนตาม class จริง
-          scoreDps:    calc(null),       // DPS = default weights
-          scoreTank:   calc(1),          // Tank = id 1
-          scoreHealer: calc(5),          // พระ = id 5
+          rawScore: calc(classId),
+          scoreDps:    calc(null),
+          scoreTank:   calc(1),
+          scoreHealer: calc(5),
         };
       });
 
-    return NextResponse.json({ ok: true, class_id: classId, batches });
+    return NextResponse.json({
+      ok: true,
+      class_id: classId,
+      batches,
+      season: activeSeason
+        ? { name: activeSeason.name, start_date: activeSeason.start_date, end_date: activeSeason.end_date }
+        : null,
+    });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
   }

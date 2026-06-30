@@ -454,7 +454,7 @@ function StatsGrid({
             className="rounded-lg bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700/50 px-2 py-1.5"
           >
             <div className="flex items-center justify-between gap-1 mb-0.5">
-              <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300 truncate">
+              <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 truncate">
                 {CAT_LABELS[c]}
               </span>
               {isInv && (
@@ -462,7 +462,7 @@ function StatsGrid({
               )}
             </div>
             <div className="flex items-baseline justify-between gap-1">
-              <span className="text-sm font-black tabular-nums text-zinc-900 dark:text-zinc-100">
+              <span className="text-base font-black tabular-nums text-zinc-900 dark:text-zinc-100">
                 {fmtNum(my)}
               </span>
               {hasTeam && (
@@ -625,17 +625,12 @@ function RadarChart({
             <text
               x={lx} y={ly + 3}
               textAnchor={anchor}
-              fontSize={10}
+              fontSize={12}
               fontWeight={600}
               fill="#6b7280"
               className="dark:fill-zinc-400"
             >
               {CAT_LABELS[c]}
-              {isInv && (
-                <tspan fontSize={8} fill="#10b981" dx={2} fontWeight={700}>
-                  ↓ดี
-                </tspan>
-              )}
             </text>
           </g>
         );
@@ -662,11 +657,14 @@ function RadarChart({
   );
 }
 
+type SeasonInfo = { name: string; start_date: string; end_date: string };
+
 // ── Main widget ────────────────────────────────────────────────────
 export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
   const [batches, setBatches] = useState<BatchData[]>([]);
   const [classId, setClassId] = useState<number | null>(null);
   const [lbItems, setLbItems] = useState<RankedRow[]>([]);
+  const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [roleTab, setRoleTab] = useState<string>("dps");
   const [animated, setAnimated] = useState(false);
@@ -681,6 +679,9 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
       .then(([stats, lb]) => {
         if (stats.ok && Array.isArray(stats.batches) && stats.batches.length > 0) {
           setBatches(stats.batches);
+        }
+        if (stats.ok) {
+          setSeason(stats.season ?? null);
         }
         if (stats.ok && stats.class_id != null) {
           const cid = Number(stats.class_id);
@@ -723,7 +724,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
   ];
 
   const isMock = !loading && batches.length === 0;
-  const displayBatches = isMock ? MOCK : batches;
+  const displayBatches = batches;
 
   useEffect(() => {
     if (displayBatches.length > 0) {
@@ -800,7 +801,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
     return tab;
   };
 
-  const latest = scoredBatches[scoredBatches.length - 1]!;
+  const latest = scoredBatches[scoredBatches.length - 1];
   const prev   = scoredBatches[scoredBatches.length - 2];
 
   // คะแนนรวมที่แสดงใน header: เฉลี่ยทั้งหมด (default) หรือ batch ที่เลือก
@@ -808,7 +809,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
   const displayScore = selectedIdx !== null ? (scoredBatches[selectedIdx]?.rawScore ?? 0) : avgScore;
 
   // trend: เลือก batch → เทียบกับ batch ก่อนหน้า / default → batch ล่าสุด vs ก่อนหน้า
-  const trendCur  = selectedIdx !== null ? scoredBatches[selectedIdx]?.rawScore ?? 0 : latest.rawScore;
+  const trendCur  = selectedIdx !== null ? scoredBatches[selectedIdx]?.rawScore ?? 0 : (latest?.rawScore ?? 0);
   const trendBase = selectedIdx !== null
     ? (scoredBatches[selectedIdx - 1]?.rawScore ?? null)
     : (prev?.rawScore ?? null);
@@ -874,6 +875,11 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
             <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Top 3 · {tabLabel(roleTab)} · {myGuild ? `Inferno-${myGuild}` : "ทั้งหมด"}
             </span>
+            {season && (
+              <span className="ml-auto rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-2 py-px text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+                {season.name}
+              </span>
+            )}
           </div>
 
           {/* ── Role tab selector (ใต้ label Top 3) ── */}
@@ -1051,7 +1057,8 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
         );
       })()}
 
-      {/* ── Header (สถิติของฉัน + คะแนน + trend) — วางใต้ Top 3 ── */}
+      {/* ── Personal stats (hidden when no data) ── */}
+      {!isMock && (<>
       <div className="px-4 pt-3 pb-2">
         <div className="flex items-center gap-2 mb-0.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40">
@@ -1063,6 +1070,8 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
               ? "ตัวอย่าง"
               : selectedIdx !== null
               ? fullLabels[selectedIdx] ?? ""
+              : season
+              ? `${season.name} · ${displayBatches.length} batch`
               : `เฉลี่ย ${displayBatches.length} batch`}
           </span>
 
@@ -1096,12 +1105,6 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
         </div>
       </div>
 
-      {/* Mock banner */}
-      {isMock && (
-        <div className="mx-4 mb-1 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/40">
-          ยังไม่มีข้อมูล — Import batch แล้วจะแสดงข้อมูลจริง
-        </div>
-      )}
 
       {/* ── Chart ── */}
       <div className="px-3 pb-1 overflow-hidden">
@@ -1137,7 +1140,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
             )}
             {selectedIdx !== null && (
               <button
-                type="button"
+                           type="button"
                 onClick={() => setSelectedIdx(null)}
                 className="text-[10px] text-zinc-400 hover:text-red-500 transition-colors"
               >
@@ -1155,6 +1158,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
         {/* ── Stats grid: ตัวเลขทุกหมวด + เทียบทีม ── */}
         <StatsGrid myAvgs={myAvgs} teamAvgs={teamAvgs} />
       </div>
+      </>)}
     </div>
   );
 }

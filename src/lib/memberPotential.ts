@@ -36,6 +36,11 @@ type BuildResult =
   | { ok: true; items: LeaderboardItem[] }
   | { ok: false; error: string };
 
+export type SeasonFilter = {
+  fromDate: string; // YYYY-MM-DD
+  toDate: string;   // YYYY-MM-DD
+};
+
 // Shape ที่ RPC get_leaderboard_aggregates() คืนกลับ (ตรงกับ migration)
 type AggregateRow = {
   userdiscordid: string;
@@ -52,14 +57,17 @@ type AggregateRow = {
   avg_revive: number;
 };
 
-export async function buildLeaderboard(): Promise<BuildResult> {
+export async function buildLeaderboard(season?: SeasonFilter): Promise<BuildResult> {
   // ⚡ 3 query อิสระ — ยิงพร้อมกันด้วย Promise.all
   //    (aggregates via RPC + members + weights)
   //
   //    RPC ทำ avg-of-batch-avgs + mode(class_id) ให้หมด → ส่งกลับมาแค่
   //    1 row ต่อ user (~200 rows) แทน raw records ทั้งก้อน (~100k rows)
   const [aggRes, memRes, wRes] = await Promise.all([
-    supabaseAdmin.rpc("get_leaderboard_aggregates"),
+    supabaseAdmin.rpc("get_leaderboard_aggregates", {
+      p_from_date: season?.fromDate ?? null,
+      p_to_date:   season?.toDate   ?? null,
+    }),
     supabaseAdmin
       .from("member")
       .select("discord_user_id,name,class_id,guild,class:class!member_class_id_fkey(id,name,icon_url)")

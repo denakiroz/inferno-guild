@@ -1,5 +1,5 @@
-// GET  → leaderboard (averages + scores per player)
-// POST → import batch (create batch + insert records)
+// GET  -> leaderboard (averages + scores per player)
+// POST -> import batch (create batch + insert records)
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
@@ -10,7 +10,18 @@ import { cacheGetOrSet, CK, invalidateMemberPotential } from "@/lib/redisCache";
 
 export const runtime = "nodejs";
 
-const LEADERBOARD_TTL = 300; // 5 นาที
+const LEADERBOARD_TTL = 300; // 5 min
+
+async function resolveSeasonFilter(seasonId: string | null) {
+  if (!seasonId) return undefined;
+  const { data } = await supabaseAdmin
+    .from("member_potential_seasons")
+    .select("start_date,end_date")
+    .eq("id", Number(seasonId))
+    .single();
+  if (!data) return undefined;
+  return { fromDate: data.start_date as string, toDate: data.end_date as string };
+}
 
 async function requireEditor() {
   const cookieStore = await cookies();
@@ -22,17 +33,24 @@ async function requireEditor() {
   return session;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const session = await requireEditor();
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
-    // Redis cache (TTL 5 นาที) — invalidate เมื่อ POST/PATCH/DELETE batches/records/weights
+    const { searchParams } = new URL(req.url);
+    const seasonId = searchParams.get("season_id");
+    const season = await resolveSeasonFilter(seasonId);
+
+    const cacheKey = season
+      ? `${CK.leaderboard()}:s${seasonId}`
+      : CK.leaderboard();
+
     const items = await cacheGetOrSet<LeaderboardItem[] | null>(
-      CK.leaderboard(),
+      cacheKey,
       LEADERBOARD_TTL,
       async () => {
-        const result = await buildLeaderboard();
+        const result = await buildLeaderboard(season);
         if (!result.ok) throw new Error(result.error);
         return result.items;
       }
@@ -54,6 +72,7 @@ export async function POST(req: Request) {
     const label = String(body?.label ?? "").trim() || new Date().toLocaleDateString("th-TH");
     const opponent_guild = body?.opponent_guild ? String(body.opponent_guild).trim() || null : null;
     const guild = body?.guild != null ? Number(body.guild) : null;
+    const battle_date = body?.battle_date ? String(body.battle_date) : new Date().toISOString().slice(0, 10);
     const rows: any[] = Array.isArray(body?.rows) ? body.rows : [];
 
     if (rows.length === 0)
@@ -64,12 +83,12 @@ export async function POST(req: Request) {
     // Create batch
     const { data: batch, error: bErr } = await supabaseAdmin
       .from("member_potential_batches")
-      .insert({ label, imported_by, opponent_guild, guild })
+      .insert({ label, imported_by, opponent_guild, guild, battle_date })
       .select("id")
       .single();
     if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 });
 
-    // Snapshot class_id ณ เวลา import — กัน class เปลี่ยนทีหลัง
+    // Snapshot class_id at import time
     const discordIds = rows
       .map((r) => String(r.userdiscordid ?? "").trim())
       .filter(Boolean);
@@ -94,7 +113,7 @@ export async function POST(req: Request) {
           batch_id: batch.id,
           userdiscordid: uid,
           discordname: String(r.discordname ?? "").trim(),
-          class_id: classMap.get(uid) ?? null,   // snapshot อาชีพ ณ เวลานี้
+          class_id: classMap.get(uid) ?? null,
           kill: Number(r.kill) || 0,
           assist: Number(r.assist) || 0,
           supply: Number(r.supply) || 0,
@@ -111,12 +130,10 @@ export async function POST(req: Request) {
       .from("member_potential_records")
       .insert(records);
     if (rErr) {
-      // rollback batch
       await supabaseAdmin.from("member_potential_batches").delete().eq("id", batch.id);
       return NextResponse.json({ ok: false, error: rErr.message }, { status: 500 });
     }
 
-    // ลบ leaderboard cache — batch ใหม่ทำให้ค่าเปลี่ยน
     await invalidateMemberPotential();
 
     return NextResponse.json({ ok: true, batch_id: batch.id, count: records.length });
