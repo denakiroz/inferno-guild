@@ -28,6 +28,10 @@ export function LoginCardClient({
       {!inApp ? (
         <>
           <DiscordLoginButton />
+          <div className="mt-3 text-center text-xs text-white/50">
+            ใช้มือถือ? พิมพ์ <span className="font-mono text-white/70">/login</span> ในเซิร์ฟเวอร์ Discord
+            ของกิลด์ แล้วกดปุ่มที่บอทส่งให้ เพื่อเข้าสู่เว็บโดยไม่ต้องล็อกอินซ้ำ
+          </div>
         </>
       ) : (
         <div className="text-sm text-white/70">
