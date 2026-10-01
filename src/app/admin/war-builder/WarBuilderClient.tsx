@@ -1048,9 +1048,25 @@ useEffect(() => {
         });
         memList = Array.isArray(cached?.members) ? (cached.members as MemberRow[]) : [];
       } catch (e: any) {
-        console.error("load members failed", e);
-        alert(`โหลดสมาชิกไม่สำเร็จ (${String(e?.message ?? e)})`);
-        return;
+        // CancelledError = request ถูกยกเลิกเพราะมี invalidate/refetch ซ้อน (เช่น realtime) -> ไม่ใช่ error จริง
+        // ดึงตรงอีกครั้งแทนการ alert
+        const cancelled = e?.name === "CancelledError" || /cancel/i.test(String(e?.message ?? ""));
+        if (!cancelled) {
+          console.error("load members failed", e);
+          alert(`โหลดสมาชิกไม่สำเร็จ (${String(e?.message ?? e)})`);
+          return;
+        }
+        try {
+          const r = await fetch(`/api/admin/members?guild=${guild}`, { cache: "no-store" });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const j = (await r.json()) as { members?: MemberRow[] };
+          memList = Array.isArray(j?.members) ? j.members : [];
+          qc.setQueryData(qk.members(guild), j);
+        } catch (e2: any) {
+          console.error("load members failed (retry)", e2);
+          alert(`โหลดสมาชิกไม่สำเร็จ (${String(e2?.message ?? e2)})`);
+          return;
+        }
       }
       setMembers(memList);
       // load leave for upcoming saturday
@@ -2030,7 +2046,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
     // ปาร์ตี้อยู่ในตาราง war_party_member (ไม่ใช่ member) -> ต้อง invalidate cache สมาชิกเอง
     // ไม่งั้น load() จะได้ข้อมูลเก่าจาก React Query แล้วค่าที่ล้าง/แก้จะ "กลับมา"
-    await qc.invalidateQueries({ queryKey: qk.members(guild) });
+    // refetchType:"none" = แค่ mark ว่า stale (ไม่ยิง refetch/ไม่ cancel request ที่ load() กำลังจะดึง)
+    await qc.invalidateQueries({ queryKey: qk.members(guild), refetchType: "none" });
 
     lastLoadKeyRef.current = "";
     await load();
