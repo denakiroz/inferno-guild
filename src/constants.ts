@@ -9,7 +9,7 @@ import type {
   WarPlan,
 } from "@/app/types";
 
-export const BRANCHES = ["Inferno-1", "Inferno-2", "Inferno-3"] as const satisfies readonly Branch[];
+export const BRANCHES = ["Celestier-1", "Celestier-2", "Celestier-3"] as const satisfies readonly Branch[];
 
 export const CLASSES: CharacterClass[] = [
   "Ironclan",

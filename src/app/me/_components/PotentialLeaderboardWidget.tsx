@@ -910,7 +910,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             <Trophy className="h-3.5 w-3.5 text-amber-500" />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Top 3 · {tabLabel(roleTab)} · {myGuild ? `Inferno-${myGuild}` : t("all")}
+              Top 3 · {tabLabel(roleTab)} · {myGuild ? `Celestier-${myGuild}` : t("all")}
             </span>
             {season && (
               <span className="ml-auto rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-2 py-px text-[10px] font-semibold text-amber-700 dark:text-amber-400">

@@ -1,5 +1,5 @@
 
-export type Branch = 'Inferno-1' | 'Inferno-2' | 'Inferno-3';
+export type Branch = 'Celestier-1' | 'Celestier-2' | 'Celestier-3';
 
 export type CharacterClass = 'Ironclan' | 'Bloodstorm' | 'Celestune' | 'Sylph' | 'Numina' | 'Nightwalker';
 

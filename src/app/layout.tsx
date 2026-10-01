@@ -4,8 +4,8 @@ import type { Metadata } from "next";
 import { Providers } from "@/app/providers";
 
 export const metadata: Metadata = {
-  title: "Inferno Guild Manager",
-  description: "Inferno Guild Manager",
+  title: "Celestier Guild Manager",
+  description: "Celestier Guild Manager",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

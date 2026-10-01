@@ -65,9 +65,9 @@ function isCancelLeaveStatus(status?: string | null) {
 }
 
 function guildLabel(g: number) {
-  if (g === 1) return "Inferno-1";
-  if (g === 2) return "Inferno-2";
-  if (g === 3) return "Inferno-3";
+  if (g === 1) return "Celestier-1";
+  if (g === 2) return "Celestier-2";
+  if (g === 3) return "Celestier-3";
   return `Guild ${g}`;
 }
 
@@ -505,9 +505,9 @@ export default function Leaves({
               ) : (
                 <>
                   {canViewAllGuilds ? <TabButton value="all" label="ทั้งหมด" /> : null}
-                  <TabButton value={1} label="Inferno-1" />
-                  <TabButton value={2} label="Inferno-2" />
-                  <TabButton value={3} label="Inferno-3" />
+                  <TabButton value={1} label="Celestier-1" />
+                  <TabButton value={2} label="Celestier-2" />
+                  <TabButton value={3} label="Celestier-3" />
                 </>
               )}
             </div>

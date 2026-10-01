@@ -620,14 +620,14 @@ export default function Members({
               ) : lockedGuild ? (
                 <TabButton
                   value={lockedGuild}
-                  label={lockedGuild === 1 ? "Inferno-1" : lockedGuild === 2 ? "Inferno-2" : "Inferno-3"}
+                  label={lockedGuild === 1 ? "Celestier-1" : lockedGuild === 2 ? "Celestier-2" : "Celestier-3"}
                 />
               ) : (
                 <>
                   {canViewAllGuilds ? <TabButton value="all" label="ทั้งหมด" /> : null}
-                  <TabButton value={1} label="Inferno-1" />
-                  <TabButton value={2} label="Inferno-2" />
-                  <TabButton value={3} label="Inferno-3" />
+                  <TabButton value={1} label="Celestier-1" />
+                  <TabButton value={2} label="Celestier-2" />
+                  <TabButton value={3} label="Celestier-3" />
                   {canViewAllGuilds ? <TabButton value="other" label="Other" /> : null}
                 </>
               )}</div>

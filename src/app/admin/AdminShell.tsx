@@ -189,7 +189,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       >
         <div className="h-full p-4 overflow-y-auto overscroll-contain pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <div className="pt-14 md:pt-12">
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Inferno Admin</div>
+            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Celestier Admin</div>
             <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Manage guild data</div>
 
             <nav className="mt-4 space-y-4">

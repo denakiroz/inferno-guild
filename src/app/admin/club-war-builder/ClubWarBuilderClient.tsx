@@ -116,7 +116,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
   // Flow: select date -> opponent -> arrange party
   const [matchDateISO, setMatchDateISO] = useState<string>(todayISO());
   const [matchTime, setMatchTime] = useState<string>("");
-  const [ourName, setOurName] = useState("Inferno");
+  const [ourName, setOurName] = useState("Celestier");
   const [opponentName, setOpponentName] = useState("");
 
   const [members, setMembers] = useState<MemberRow[]>([]);
@@ -512,7 +512,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
     setSaving(true);
     try {
       const payload = {
-        our_name: ourName.trim() || "Inferno",
+        our_name: ourName.trim() || "Celestier",
         opponent_name: opp,
         match_date: dt,
         match_time: matchTime.trim() || null,
@@ -545,7 +545,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
   }, []);
 
   const applyPlanToEditor = useCallback((p: PlanRow) => {
-    setOurName(p.our_name || "Inferno");
+    setOurName(p.our_name || "Celestier");
     setOpponentName(p.opponent_name || "");
     // ไม่ดึงวันที่/เวลามาจาก plan — ให้ใช้ค่าที่ set อยู่แล้ว
     const raw = (p.parties ?? createDefaultParties()) as any[];
@@ -685,7 +685,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
   const warMapFilename = useMemo(() => {
     const d = matchDateISO?.trim() || todayISO();
     const opp = opponentName?.trim() || "Opponent";
-    const ours = ourName?.trim() || "Inferno";
+    const ours = ourName?.trim() || "Celestier";
     const safe = (s: string) =>
       s
         .replace(/[\/:*?"<>|]+/g, " ")
@@ -787,7 +787,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
     ctx.fillRect(0, 0, totalW, totalH);
 
     // header
-    const title = `${ourName?.trim() || "Inferno"} vs ${opponentName?.trim() || "-"}`;
+    const title = `${ourName?.trim() || "Celestier"} vs ${opponentName?.trim() || "-"}`;
     const subtitle = `Match date: ${matchDateISO?.trim() || "-"}`;
     const timeStr = matchTime?.trim() || "";
 
@@ -1727,7 +1727,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
               <div className="min-w-0">
                 <div className="text-lg font-semibold truncate">ผังทัพวอ (สำหรับแคป)</div>
                 <div className="text-sm text-zinc-500 truncate">
-                  {ourName || "Inferno"} vs {opponentName || "-"} • {matchDateISO}
+                  {ourName || "Celestier"} vs {opponentName || "-"} • {matchDateISO}
                 </div>
               </div>
 

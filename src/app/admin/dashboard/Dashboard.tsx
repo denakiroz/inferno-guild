@@ -75,9 +75,9 @@ function isCancelLeaveStatus(status?: string | null) {
 }
 
 function guildLabel(g: number) {
-  if (g === 1) return "Inferno-1";
-  if (g === 2) return "Inferno-2";
-  if (g === 3) return "Inferno-3";
+  if (g === 1) return "Celestier-1";
+  if (g === 2) return "Celestier-2";
+  if (g === 3) return "Celestier-3";
   return `Guild ${g}`;
 }
 
@@ -350,9 +350,9 @@ export default function Dashboard({
 
   const guildTabs: Array<{ value: GuildTab; label: string }> = useMemo(() => {
     const base: Array<{ value: GuildTab; label: string }> = [{ value: "all", label: "ทั้งหมด" }];
-    base.push({ value: 1 as GuildNo, label: "Inferno-1" });
-    base.push({ value: 2 as GuildNo, label: "Inferno-2" });
-    base.push({ value: 3 as GuildNo, label: "Inferno-3" });
+    base.push({ value: 1 as GuildNo, label: "Celestier-1" });
+    base.push({ value: 2 as GuildNo, label: "Celestier-2" });
+    base.push({ value: 3 as GuildNo, label: "Celestier-3" });
     if (!canViewAllGuilds) {
       if (lockedGuild) return base.filter((x) => x.value === lockedGuild || x.value === "all");
       return base.filter((x) => x.value === "all");
@@ -389,7 +389,7 @@ export default function Dashboard({
               <Flame className="h-6 w-6 text-white" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Inferno Dashboard</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Celestier Dashboard</h1>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-red-100/80">
                 <span className="flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" /> วันนี้: {fmtDisplayDate(todayBkk)}

@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     if (!session) return NextResponse.json({ ok: false }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
-    const our_name = String(body?.our_name ?? "Inferno").trim() || "Inferno";
+    const our_name = String(body?.our_name ?? "Celestier").trim() || "Celestier";
     const opponent_name = String(body?.opponent_name ?? "").trim();
     const match_date_raw = String(body?.match_date ?? "").trim();
     const match_time_raw = String(body?.match_time ?? "").trim();

@@ -3085,7 +3085,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               </div>
 
               <div className="text-center text-xl sm:text-3xl font-black tracking-[0.15em] sm:tracking-[0.25em] text-zinc-800 dark:text-zinc-100">
-                {guild ? `INFERNO-${guild}` : "INFERNO"}
+                {guild ? `CELESTIER-${guild}` : "CELESTIER"}
               </div>
             </div>
 
@@ -3200,11 +3200,12 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     <div className="space-y-4 pb-24 md:pb-0">
       {header}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr] lg:items-start">
-        {/* Roster */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+        {/* Roster — lg: สูงเท่าฝั่งปาร์ตี้ (absolute เต็ม wrapper ที่ถูก grid ยืดตามปาร์ตี้) */}
+        <div className="lg:relative">
         <div
           className={[
-            "rounded-xl border bg-white dark:bg-zinc-900/40 flex flex-col h-[60vh] max-h-[480px] min-h-[280px] lg:max-h-none lg:min-h-0 lg:h-[var(--pane-h)]",
+            "rounded-xl border bg-white dark:bg-zinc-900/40 flex flex-col h-[60vh] max-h-[480px] min-h-[280px] lg:max-h-none lg:min-h-0 lg:absolute lg:inset-0 lg:h-auto",
             dragOverTarget?.type === "ROSTER_BIN"
               ? "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
               : "border-zinc-200 dark:border-zinc-800",
@@ -3291,10 +3292,12 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
           </div>
         </div>
 
+        </div>
+
         {/* Party Pane (grouped) — 5-column proportional grid */}
         <div
           ref={partyScrollRef}
-          className="min-h-0 min-w-0 lg:h-[var(--pane-h)] lg:overflow-y-auto lg:pr-1"
+          className="min-w-0"
           style={{ "--pane-h": `${paneHeight}px` } as React.CSSProperties}
         >
           {/* Layout: 5-column grid, each group spans its party count */}
@@ -3691,7 +3694,7 @@ function PartyCard(props: {
             <div
               key={idx}
               className={[
-                "flex flex-col rounded-lg border px-2 py-1.5 sm:py-1 select-none",
+                "flex flex-col justify-center rounded-lg border px-2 py-1.5 sm:py-1 select-none min-h-[46px] sm:h-[46px] sm:overflow-hidden",
                 tapMode && canEdit ? "cursor-pointer active:bg-zinc-50 dark:active:bg-zinc-800/40" : "",
                 isTarget
                   ? "border-red-300 bg-red-50 dark:bg-red-950/20"

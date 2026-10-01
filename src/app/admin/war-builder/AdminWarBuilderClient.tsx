@@ -53,9 +53,9 @@ export default function AdminWarBuilderClient() {
             value={guild ?? 1}
             onChange={(e) => setSelectedGuild(Number(e.target.value))}
           >
-            <option value={1}>Inferno-1</option>
-            <option value={2}>Inferno-2</option>
-            <option value={3}>Inferno-3</option>
+            <option value={1}>Celestier-1</option>
+            <option value={2}>Celestier-2</option>
+            <option value={3}>Celestier-3</option>
           </select>
         ) : null}
       </div>
