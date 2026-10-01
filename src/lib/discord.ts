@@ -15,8 +15,9 @@ type DiscordUser = {
   avatar?: string | null;
 };
 
-export function discordAuthorizeUrl(state: string, prompt?: "none" | "consent") {
-  const url = new URL("https://discord.com/oauth2/authorize");
+export function discordAuthorizeUrl(state: string, prompt?: "none" | "consent", legacyApiPath = false) {
+  // legacyApiPath: endpoint เดิมของเวอร์ชันแรก (v1.0.2) ที่เคยเด้งเข้าแอป Discord บนมือถือได้
+  const url = new URL(legacyApiPath ? "https://discord.com/api/oauth2/authorize" : "https://discord.com/oauth2/authorize");
   url.searchParams.set("client_id", env.DISCORD_CLIENT_ID);
   url.searchParams.set("redirect_uri", env.DISCORD_REDIRECT_URI);
   url.searchParams.set("response_type", "code");

@@ -10,7 +10,8 @@ export async function GET(req: Request) {
   const prompt = (url.searchParams.get("prompt") as "none" | "consent" | null) ?? null;
 
   const state = crypto.randomBytes(16).toString("hex");
-  const authorizeUrl = discordAuthorizeUrl(state, prompt ?? undefined);
+  const legacy = url.searchParams.get("legacy") === "1";
+  const authorizeUrl = discordAuthorizeUrl(state, prompt ?? undefined, legacy);
 
   const isProd = process.env.NODE_ENV === "production";
 
