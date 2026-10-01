@@ -4,9 +4,25 @@ import React, { useEffect, useState } from "react";
 export function DiscordLoginButton() {
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
+  const [mobileUrl, setMobileUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    setIsMobile(/android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || ""));
+    const ua = navigator.userAgent || "";
+    const mobile = /android|iphone|ipad|ipod|mobile/i.test(ua);
+    setIsMobile(mobile);
+    setIsAndroid(/android/i.test(ua));
+    if (!mobile) return;
+
+    // มือถือ: เตรียม authorize URL ล่วงหน้า (เซิร์ฟเวอร์ตั้ง cookie state ให้ตอนเรียก)
+    // แล้วให้ผู้ใช้ "แตะลิงก์จริง" ไปที่ discord.com โดยตรง -> ระบบมือถือถึงจะเปิดแอป Discord ได้
+    // (redirect จากเซิร์ฟเวอร์/JS ไม่ถูกนับเป็นการแตะลิงก์ แอปจึงไม่เด้ง)
+    fetch("/api/auth/discord/start?mode=url", { credentials: "include", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.authorizeUrl) setMobileUrl(String(j.authorizeUrl));
+      })
+      .catch(() => {});
   }, []);
 
   const onLogin = async () => {
@@ -34,11 +50,23 @@ export function DiscordLoginButton() {
                  shadow-[0_0_30px_rgba(88,101,242,0.35)] transition-all flex items-center justify-center gap-3
                  disabled:opacity-70 disabled:cursor-not-allowed`;
 
-  // มือถือ: ใช้ลิงก์จริง (แตะแล้วเปลี่ยนหน้าทันที ไม่ผ่าน fetch/JS และไม่ใช้ prompt=none)
-  // เพื่อให้ Android/iOS เปิดแอป Discord ไปหน้า "อนุญาต" ได้ (deep link ทำงานเฉพาะการแตะลิงก์จริง)
   if (isMobile) {
+    let href = "/api/auth/discord/start"; // fallback ระหว่างรอ/ถ้าเตรียม URL ไม่สำเร็จ
+    if (mobileUrl) {
+      if (isAndroid) {
+        // Android: บังคับเปิดด้วยแอป Discord (package com.discord) ถ้าไม่มีแอป -> fallback เปิดเว็บ
+        const u = new URL(mobileUrl);
+        href =
+          `intent://${u.host}${u.pathname}${u.search}` +
+          `#Intent;scheme=https;package=com.discord;` +
+          `S.browser_fallback_url=${encodeURIComponent(mobileUrl)};end`;
+      } else {
+        href = mobileUrl;
+      }
+    }
+
     return (
-      <a href="/api/auth/discord/start" className={cls}>
+      <a href={href} className={cls}>
         <span>Sign in with Discord</span>
       </a>
     );
