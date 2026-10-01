@@ -9,6 +9,7 @@ import { memberService } from "@/services/memberService";
 import { leaveService } from "@/services/leaveService";
 import { Badge, Button, Card, Input, Modal, Select } from "@/app/components/UI";
 import LeaveRequestButton, { type LeaveCreateRow } from "@/app/components/LeaveRequestButton";
+import { guildName } from "@/lib/guildLabel";
 
 type GuildTab = "all" | GuildNo | "other";
 type SpecialFilter = "all" | "special" | "normal";
@@ -551,7 +552,7 @@ export default function Members({
         type="button"
         onClick={() => setTab(value)}
         className={[
-          "px-4 py-2 rounded-xl text-sm font-semibold border transition",
+          "px-4 py-2.5 sm:py-2 rounded-xl text-sm font-semibold border transition",
           active
             ? "bg-red-600 text-white border-red-600"
             : "bg-white/60 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-800",
@@ -607,9 +608,9 @@ export default function Members({
   }, [detail]);
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 md:px-6 space-y-6">
-      <Card noPadding className="sticky top-4 z-10">
-        <div className="p-4 bg-white/70 dark:bg-zinc-950/50 backdrop-blur rounded-2xl border border-zinc-200 dark:border-zinc-800">
+    <div className="mx-auto w-full max-w-[1400px] px-0 sm:px-4 md:px-6 space-y-6">
+      <Card noPadding className="md:sticky md:top-4 z-10">
+        <div className="p-3 sm:p-4 bg-white/70 dark:bg-zinc-950/50 backdrop-blur rounded-2xl border border-zinc-200 dark:border-zinc-800">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex gap-2 flex-wrap">
               {tabMode === "club" || tabMode === "club2" ? (
@@ -686,7 +687,7 @@ export default function Members({
           </div>
 
           {/* ✅ Skill filters row */}
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="mt-3 grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3">
             <Select
               value={ultimateFilterId}
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setUltimateFilterId(e.target.value)}
@@ -754,8 +755,8 @@ export default function Members({
               <div className="h-2 w-full" style={{ backgroundColor: topbarColor(m.class_id) }} />
               <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center overflow-hidden">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="w-10 h-10 shrink-0 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center overflow-hidden">
                       {iconUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={iconUrl} alt={className} className="w-full h-full object-contain" loading="lazy" decoding="async" />
@@ -764,16 +765,16 @@ export default function Members({
                       )}
                     </div>
 
-                    <div>
-                      <div className="font-semibold text-zinc-900 dark:text-zinc-100">{m.name}</div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-zinc-900 dark:text-zinc-100 break-words">{m.name}</div>
                       <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {className} • Guild {m.guild}
+                        {className} • {guildName(m.guild)}
                       </div>
                       <div className="text-xs text-zinc-500 dark:text-zinc-400">Update: {formatBkkDateTime((m as any).update_date)}</div>
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex shrink-0 flex-col items-end gap-2">
                     {todayBadges.map((b) => (
                       <Badge key={b.key} variant={b.variant}>
                         {b.label}
@@ -877,9 +878,9 @@ export default function Members({
         title={`ข้อมูลสมาชิก${detailMember ? `: ${detailMember.name}` : ""}`}
         className="w-[95vw] max-w-[1100px]"
       >
-        <div className="flex flex-col max-h-[80vh]">
+        <div className="flex flex-col max-h-[75vh] sm:max-h-[80vh]">
           {/* scrollable body */}
-          <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+          <div className="flex-1 overflow-y-auto sm:pr-2 space-y-4">
             {detailErr ? <div className="text-sm text-rose-600">Error: {detailErr}</div> : null}
             {detailLoading ? (
               <div className="text-sm text-zinc-500">Loading...</div>
@@ -1053,7 +1054,7 @@ export default function Members({
                                   )}
 
                                   <div className="min-w-0">
-                                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[420px]">
+                                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[200px] sm:max-w-[420px]">
                                       {ec?.name ?? "หินสกิล"}
                                     </div>
                                     <div className="text-xs text-zinc-500">
@@ -1087,13 +1088,13 @@ export default function Members({
         onClose={() => setImgPreview(null)}
         title={imgPreview?.title ?? "ดูรูปใหญ่"}
         // ✅ ให้รูปใหญ่ขึ้นแบบเต็มจอ (โดยเฉพาะกรณีเปิดจาก 'กำลังภายใน เซ็ต X รูป Y')
-        className="w-[100vw] max-w-none"
+        className="w-full max-w-none sm:w-[100vw]"
       >
-        <div className="h-[92vh] overflow-auto">
+        <div className="h-[75vh] sm:h-[92vh] overflow-auto">
 {imgPreview?.url ? (
             <div className="rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imgPreview.url} alt={imgPreview.title ?? "preview"} className="w-full max-h-[86vh] h-auto object-contain" loading="lazy" decoding="async" />
+              <img src={imgPreview.url} alt={imgPreview.title ?? "preview"} className="w-full max-h-[70vh] sm:max-h-[86vh] h-auto object-contain" loading="lazy" decoding="async" />
             </div>
           ) : (
             <div className="text-sm text-zinc-500">ไม่มีรูป</div>

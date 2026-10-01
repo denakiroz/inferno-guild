@@ -134,8 +134,8 @@ export default function AdminMasterSpecialSkillPage() {
     <div className="mx-auto w-full max-w-4xl px-3 sm:px-4 md:px-0 py-2">
       <div className="space-y-6">
         {/* Create form */}
-        <Card>
-          <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <Card className="!p-4 sm:!p-6">
+          <div className="min-w-0 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Master Data &bull; ศิษย์พี่
           </div>
           <div className="mt-1 text-sm text-zinc-500">
@@ -179,19 +179,19 @@ export default function AdminMasterSpecialSkillPage() {
           </div>
 
           <div className="mt-4 flex justify-end">
-            <Button onClick={createRow} disabled={!canSubmitCreate}>
+            <Button className="w-full sm:w-auto" onClick={createRow} disabled={!canSubmitCreate}>
               {creating ? "กำลังเพิ่ม..." : "เพิ่ม ศิษย์พี่"}
             </Button>
           </div>
         </Card>
 
         {/* List */}
-        <Card>
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+        <Card className="!p-4 sm:!p-6">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
               รายการทั้งหมด
             </div>
-            <Button variant="outline" onClick={load} disabled={loading}>
+            <Button variant="outline" className="shrink-0" onClick={load} disabled={loading}>
               {loading ? "กำลังโหลด..." : "รีเฟรช"}
             </Button>
           </div>
@@ -207,7 +207,7 @@ export default function AdminMasterSpecialSkillPage() {
           </div>
 
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[600px] sm:min-w-0 text-sm">
               <thead>
                 <tr className="text-left text-zinc-500">
                   <th className="py-2 pr-3">ID</th>
@@ -255,7 +255,7 @@ export default function AdminMasterSpecialSkillPage() {
                         {r.special_skill_url ?? "-"}
                       </td>
                       <td className="py-3 text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 whitespace-nowrap">
                           <Button
                             variant="outline"
                             onClick={() => {
@@ -286,6 +286,7 @@ export default function AdminMasterSpecialSkillPage() {
 
         {/* Edit modal */}
         <Modal
+          className="max-h-[90vh] overflow-y-auto"
           open={open}
           onClose={() => {
             setOpen(false);

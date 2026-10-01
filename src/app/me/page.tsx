@@ -5,6 +5,7 @@ import { Moon, Sun, LogOut } from "lucide-react";
 
 import { Button, Card, Modal } from "@/app/components/UI";
 import { useTheme } from "@/app/theme/ThemeProvider";
+import { guildName } from "@/lib/guildLabel";
 
 import LeaveRequestButton, { type LeaveCreateRow } from "@/app/components/LeaveRequestButton";
 import type { DbLeave } from "@/type/db";
@@ -37,7 +38,7 @@ import { EventWidget } from "./_components/EventWidget";
 
 type TabKey = "overview" | "event" | "profile" | "internalPower" | "leaves";
 
-const tabBase = "px-4 py-2 text-sm rounded-lg transition whitespace-nowrap";
+const tabBase = "px-3 py-2.5 sm:px-4 sm:py-2 text-sm rounded-lg transition whitespace-nowrap";
 const tabIdle =
   "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100";
 const tabActive = "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow";
@@ -357,11 +358,11 @@ export default function MePage() {
     return map;
   }, [activeLeaves, todayBkk]);
 
-  if (!me) return <main className="p-6">Loading...</main>;
+  if (!me) return <main className="p-4 sm:p-6">Loading...</main>;
 
   if (!me.ok) {
     return (
-      <main className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-6">
+      <main className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-4 sm:p-6">
         <Card className="max-w-md w-full">
           <div className="text-lg font-semibold">Unauthorized</div>
           <div className="mt-2 text-sm text-zinc-400">กรุณาเข้าสู่ระบบใหม่</div>
@@ -376,13 +377,13 @@ export default function MePage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-6">
-      <div className="mx-auto max-w-3xl space-y-6">
+    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-3 sm:p-6">
+      <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
         {saveOk && (
           <div
             role="status"
             aria-live="polite"
-            className="fixed top-4 right-4 z-[60] rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-lg
+            className="fixed top-4 right-4 left-4 sm:left-auto z-[60] text-center sm:text-left rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-lg
                       dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200"
           >
             บันทึกสำเร็จ
@@ -390,19 +391,19 @@ export default function MePage() {
         )}
 
         {/* ✅ STICKY HEADER */}
-        <div className="sticky top-3 z-50">
+        <div className="sm:sticky sm:top-3 z-50">
           <div className="space-y-3">
             {/* Header card */}
             <Card>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={me.user?.avatarUrl}
                   alt="avatar"
-                  className="h-14 w-14 rounded-2xl border border-zinc-200 dark:border-zinc-800"
+                  className="h-12 w-12 sm:h-14 sm:w-14 shrink-0 rounded-2xl border border-zinc-200 dark:border-zinc-800"
                 />
 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-[10rem] sm:min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     {(() => {
                       const currentClassId = Number(member?.class_id ?? 0);
@@ -421,31 +422,33 @@ export default function MePage() {
                       );
                     })()}
 
-                    <div className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                    <div className="text-lg sm:text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                       {me.user?.displayName}
                     </div>
                   </div>
 
-                  <div className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Guild: {me.user?.guild} • {canAdmin ? "Admin" : "Member"}
+                  <div className="text-sm text-zinc-500 dark:text-zinc-400 break-words">
+                    {guildName(me.user?.guild)} • {canAdmin ? "Admin" : "Member"}
                   </div>
                 </div>
 
+                <div className="flex w-full flex-wrap items-center gap-2 sm:contents">
                 {canAccessAdmin && (
-                  <a href="/admin" className="text-sm underline text-red-600 whitespace-nowrap">
+                  <a href="/admin" className="text-sm underline text-red-600 whitespace-nowrap py-2 sm:py-0">
                     ไป Admin
                   </a>
                 )}
 
-                <Button variant="outline" onClick={toggleTheme}>
+                <Button variant="outline" onClick={toggleTheme} className="flex-1 sm:flex-none">
                   {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                   สลับธีม
                 </Button>
 
-                <Button variant="outline" onClick={onLogout} disabled={loggingOut}>
+                <Button variant="outline" onClick={onLogout} disabled={loggingOut} className="flex-1 sm:flex-none">
                   <LogOut className="w-4 h-4 text-rose-600" />
                   {loggingOut ? "กำลังออก..." : "Logout"}
                 </Button>
+                </div>
               </div>
             </Card>
 
@@ -454,7 +457,7 @@ export default function MePage() {
               {/* ✅ Mobile: stack, Desktop: row */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 {/* Tabs group */}
-                <div className="inline-flex max-w-full overflow-x-auto rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1">
+                <div className="inline-flex max-w-full overflow-x-auto hide-scrollbar rounded-xl bg-zinc-100 dark:bg-zinc-900 p-1">
                   <button
                     type="button"
                     onClick={() => setTab("overview")}
@@ -481,7 +484,7 @@ export default function MePage() {
                 </div>
 
                 {/* ✅ Actions right */}
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-end [&>*]:w-full sm:[&>*]:w-auto">
                   {member !== null && !member.is_special ? (
                     <LeaveRequestButton
                       memberName={member.name ?? "ฉัน"}
@@ -565,7 +568,7 @@ export default function MePage() {
               <div className="text-sm text-rose-600">ตอนนี้เกินเวลา 20:00 แล้ว ไม่สามารถยกเลิกของวันนี้ได้</div>
             ) : null}
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row">
               <Button
                 variant="secondary"
                 className="flex-1"

@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Gem, X } from "lucide-react";
+import { Gem } from "lucide-react";
 import { Button } from "@/app/components/UI";
+import { ProfileSection, SelectedTile } from "./ProfileSection";
 
 /* ── exported types (used by page.tsx too) ── */
 export type StoneColor = "red" | "purple" | "gold";
@@ -28,6 +29,12 @@ const COLOR_OPTIONS: Array<{ value: StoneColor; label: string }> = [
   { value: "purple", label: "ม่วง" },
   { value: "gold",   label: "ทอง" },
 ];
+
+const STONE_DOT: Record<StoneColor, string> = {
+  red: "bg-red-500",
+  purple: "bg-purple-500",
+  gold: "bg-amber-400",
+};
 
 function colorLabel(c: StoneColor) {
   return COLOR_OPTIONS.find((o) => o.value === c)?.label ?? "-";
@@ -90,103 +97,63 @@ export function WeaponStoneSection({
     return m;
   }, [equipment]);
 
-  return (
-    <div className="mt-1">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2">
-          <Gem className="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
-          <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-            หินสกิลอาวุธ{" "}
-            <span className="text-xs font-normal text-zinc-400">({weaponSelected.length})</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {weaponSelected.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setAllStonesByType((prev) => ({ ...prev, 1: [] }))}
-              disabled={disabled}
-            >
-              <X className="w-3.5 h-3.5" />
-              ล้าง
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            onClick={() => { setQ(""); setColorPick({}); setModalOpen(true); }}
-            disabled={disabled}
-          >
-            เพิ่ม
-          </Button>
-        </div>
-      </div>
+  const openPicker = () => { setQ(""); setColorPick({}); setModalOpen(true); };
 
-      {loading ? (
-        <div className="text-sm text-zinc-400">กำลังโหลด...</div>
-      ) : weaponSelected.length === 0 ? (
-        <div className="text-sm text-zinc-400">ยังไม่ได้เลือกหินสกิลอาวุธ</div>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {weaponSelected.map((s) => {
-            const e = equipMap.get(s.equipment_create_id) ?? null;
-            return (
-              <div
-                key={s.equipment_create_id}
-                className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-2 py-2"
-              >
-                {e?.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={e.image_url}
-                    alt={e.name}
-                    className="w-9 h-9 rounded-lg object-cover border border-zinc-200 dark:border-zinc-800"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700" />
-                )}
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[140px]">
-                    {e ? e.name : `ID: ${s.equipment_create_id}`}
-                  </div>
-                  <div className="text-xs text-zinc-400">สี: {colorLabel(s.color)}</div>
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    setAllStonesByType((prev) => ({
-                      ...prev,
-                      1: prev[1].filter((x) => x.equipment_create_id !== s.equipment_create_id),
-                    }))
-                  }
-                  disabled={disabled}
-                >
-                  ลบ
-                </Button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+  return (
+    <div>
+      <ProfileSection
+        icon={<Gem className="h-4 w-4" />}
+        title="หินสกิลอาวุธ"
+        count={weaponSelected.length}
+        editLabel={weaponSelected.length ? "เพิ่ม/แก้ไข" : "เพิ่มหินสกิลอาวุธ"}
+        onEdit={openPicker}
+        onClear={() => setAllStonesByType((prev) => ({ ...prev, 1: [] }))}
+        disabled={disabled}
+        loading={loading}
+        emptyText="ยังไม่ได้เลือกหินสกิลอาวุธ"
+      >
+        {weaponSelected.map((s) => {
+          const e = equipMap.get(s.equipment_create_id) ?? null;
+          return (
+            <SelectedTile
+              key={s.equipment_create_id}
+              imageUrl={e?.image_url}
+              name={e ? e.name : `ID: ${s.equipment_create_id}`}
+              meta={
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={"h-2 w-2 rounded-full " + STONE_DOT[s.color]} />
+                  สี{colorLabel(s.color)}
+                </span>
+              }
+              onRemove={() =>
+                setAllStonesByType((prev) => ({
+                  ...prev,
+                  1: prev[1].filter((x) => x.equipment_create_id !== s.equipment_create_id),
+                }))
+              }
+              disabled={disabled}
+            />
+          );
+        })}
+      </ProfileSection>
 
       {/* Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xl">
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xl">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
               <div className="font-semibold text-zinc-900 dark:text-zinc-100">เพิ่มหินสกิลอาวุธ</div>
               <Button variant="outline" onClick={() => { setModalOpen(false); setQ(""); setColorPick({}); }}>
                 ปิด
               </Button>
             </div>
 
-            <div className="p-4">
+            <div className="min-h-0 overflow-y-auto p-3 sm:p-4">
               <input
                 value={q}
                 onChange={(ev) => setQ(ev.target.value)}
                 placeholder="ค้นหา..."
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-base sm:text-sm"
               />
 
               <div className="mt-3 max-h-[50vh] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -198,7 +165,7 @@ export function WeaponStoneSection({
                       const already = weaponSelected.some((s) => s.equipment_create_id === e.id);
                       const picked  = colorPick[e.id] ?? "";
                       return (
-                        <div key={e.id} className="flex items-center justify-between gap-3 p-3">
+                        <div key={e.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                           <div className="flex items-center gap-3 min-w-0">
                             {e.image_url ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -216,14 +183,14 @@ export function WeaponStoneSection({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex w-full items-center gap-2 sm:w-auto">
                             <select
                               value={picked}
                               onChange={(ev) =>
                                 setColorPick((prev) => ({ ...prev, [e.id]: ev.target.value as StoneColor | "" }))
                               }
                               disabled={already}
-                              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+                              className="min-w-0 flex-1 sm:flex-none rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2.5 sm:py-2 text-base sm:text-sm"
                             >
                               <option value="">เลือกสี</option>
                               {COLOR_OPTIONS.map((c) => (

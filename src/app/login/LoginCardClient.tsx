@@ -14,7 +14,7 @@ export function LoginCardClient({
   const [inApp, setInApp] = useState(false);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-6 shadow-xl">
+    <div className="p-0">
       <LoginInAppNotice onInAppChange={setInApp} />
 
       {!!errTitle && (

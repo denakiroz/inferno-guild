@@ -5,10 +5,9 @@ import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { invalidateMembers } from "@/lib/redisCache";
+import { saveWarPartyRound, warTimeToRound, type WarPartyAssignment, type WarTime } from "@/lib/warParty";
 
 export const runtime = "nodejs";
-
-type WarTime = "20:00" | "20:30";
 
 type AssignRow = {
   id?: number;
@@ -33,13 +32,6 @@ function normalizeWarTime(raw: unknown): WarTime {
   return "20:00";
 }
 
-function colsForWarTime(warTime: WarTime) {
-  if (warTime === "20:00") {
-    return { partyCol: "party" as const, posCol: "pos_party" as const };
-  }
-  return { partyCol: "party_2" as const, posCol: "pos_party_2" as const };
-}
-
 export async function POST(req: Request) {
   const cookieStore = await cookies();
   const sid = cookieStore.get(env.AUTH_COOKIE_NAME)?.value;
@@ -53,7 +45,7 @@ export async function POST(req: Request) {
   if (!body?.guild) return NextResponse.json({ error: "Bad Request" }, { status: 400 });
 
   const warTime = normalizeWarTime(body.warTime);
-  const { partyCol, posCol } = colsForWarTime(warTime);
+  const round = warTimeToRound(warTime);
 
   const rawRows = Array.isArray(body.rows)
     ? body.rows
@@ -61,44 +53,41 @@ export async function POST(req: Request) {
       ? body.assignments
       : [];
 
-  const updates = rawRows
-    .map((r) => {
-      const memberId = r.memberId ?? r.id;
-      if (!memberId) return null;
+  // Only rows that explicitly carry `party` change the party of this round.
+  const partyRows: WarPartyAssignment[] = [];
+  const nameUpdates: Array<{ id: number; name: string }> = [];
 
-      const u: Record<string, unknown> = {
-        id: memberId,
-        guild: body.guild,
-      };
+  for (const r of rawRows) {
+    const memberId = Number(r.memberId ?? r.id);
+    if (!Number.isFinite(memberId) || memberId <= 0) continue;
 
-      // Force-update ONLY the round-specific columns derived from warTime.
-      if (Object.prototype.hasOwnProperty.call(r, "party")) u[partyCol] = r.party ?? null;
-      if (Object.prototype.hasOwnProperty.call(r, "pos")) u[posCol] = r.pos ?? null;
+    if (Object.prototype.hasOwnProperty.call(r, "party")) {
+      partyRows.push({ memberId, party: r.party ?? null, pos: r.pos ?? null });
+    }
 
-      if (typeof r.name === "string") {
-        const trimmed = r.name.trim();
-        if (trimmed) u["name"] = trimmed;
-      }
+    if (typeof r.name === "string") {
+      const trimmed = r.name.trim();
+      if (trimmed) nameUpdates.push({ id: memberId, name: trimmed });
+    }
+  }
 
-      return u;
-    })
-    .filter(Boolean) as Record<string, unknown>[];
-
-  if (updates.length === 0) {
+  if (partyRows.length === 0 && nameUpdates.length === 0) {
     return NextResponse.json({ ok: true, updated: 0, warTime });
   }
 
-  const { error } = await supabaseAdmin
-    .from("member")
-    .upsert(updates, { onConflict: "id" });
+  try {
+    // ปาร์ตี้ของรอบนี้ -> war_party_member
+    if (partyRows.length > 0) await saveWarPartyRound(round, partyRows);
 
-  if (error) {
-    return NextResponse.json(
-      { error: error.message ?? "Failed to update members" },
-      { status: 500 }
-    );
+    // ชื่อสมาชิก (ถ้ามี) -> member
+    if (nameUpdates.length > 0) {
+      const { error } = await supabaseAdmin.from("member").upsert(nameUpdates, { onConflict: "id" });
+      if (error) throw new Error(error.message);
+    }
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "Failed to update members" }, { status: 500 });
   }
 
   await invalidateMembers();
-  return NextResponse.json({ ok: true, updated: updates.length, warTime });
+  return NextResponse.json({ ok: true, updated: Math.max(partyRows.length, nameUpdates.length), warTime });
 }

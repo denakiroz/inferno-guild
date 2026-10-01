@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { Button, Input, Modal } from "@/app/components/UI";
 import type { UltimateSkillRow } from "../_lib/types";
+import { Zap } from "lucide-react";
+import { ProfileSection, SelectedTile } from "./ProfileSection";
 
 export function UltimateMultiSelect(props: {
   skills: UltimateSkillRow[];
@@ -69,71 +71,27 @@ export function UltimateMultiSelect(props: {
 
   return (
     <div className="mt-4">
-      <div className="text-xs text-zinc-500 mb-1">Ultimate Skill (เลือกเฉพาะอันที่เลเวลเต็ม)</div>
-
-      {/* Selected preview (chips with image) */}
-      {selectedRows.length === 0 ? (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-3 text-sm text-zinc-500">
-          ยังไม่ได้เลือก Ultimate
-        </div>
-      ) : (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-3">
-          <div className="flex flex-wrap gap-2">
-            {selectedRows.map((s) => (
-              <span
-                key={s.id}
-                className="inline-flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/50 px-3 py-1 text-sm"
-              >
-                {s.ultimate_skill_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={s.ultimate_skill_url}
-                    alt=""
-                    className="h-6 w-6 rounded-md border border-zinc-200 dark:border-zinc-800 object-cover bg-white/70 dark:bg-zinc-950/50"
-                  />
-                ) : (
-                  <span className="h-6 w-6 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900" />
-                )}
-
-                <span className="truncate max-w-[220px]">{s.name}</span>
-
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => removeSelected(s.id)}
-                  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-                  aria-label={`remove ${s.name}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <Button variant="outline" onClick={openPicker} disabled={disabled}>
-              เลือก/แก้ไข Ultimate
-            </Button>
-
-            <button
-              type="button"
-              className="text-xs underline text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-              onClick={clearSelected}
-              disabled={disabled}
-            >
-              ล้างทั้งหมด
-            </button>
-          </div>
-        </div>
-      )}
-
-      {selectedRows.length === 0 ? (
-        <div className="mt-3">
-          <Button variant="outline" onClick={openPicker} disabled={disabled}>
-            เลือก Ultimate
-          </Button>
-        </div>
-      ) : null}
+      <ProfileSection
+        icon={<Zap className="h-4 w-4" />}
+        title="Ultimate Skill"
+        subtitle="เลือกเฉพาะอันที่เลเวลเต็ม"
+        count={selectedRows.length}
+        editLabel={selectedRows.length ? "เลือก/แก้ไข" : "เลือก Ultimate"}
+        onEdit={openPicker}
+        onClear={clearSelected}
+        disabled={disabled}
+        emptyText="ยังไม่ได้เลือก Ultimate"
+      >
+        {selectedRows.map((s) => (
+          <SelectedTile
+            key={s.id}
+            imageUrl={s.ultimate_skill_url}
+            name={s.name}
+            onRemove={() => removeSelected(s.id)}
+            disabled={disabled}
+          />
+        ))}
+      </ProfileSection>
 
       {/* Modal Picker */}
       <Modal
@@ -193,7 +151,7 @@ export function UltimateMultiSelect(props: {
                       ) : (
                         <span className="h-5 w-5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900" />
                       )}
-                      <span className="truncate max-w-[160px]">{s.name}</span>
+                      <span className="truncate max-w-[40vw] sm:max-w-[160px]">{s.name}</span>
                       <span className="text-zinc-500">×</span>
                     </button>
                   ))}
@@ -202,11 +160,11 @@ export function UltimateMultiSelect(props: {
           </div>
 
           {/* Grid list */}
-          <div className="max-h-[420px] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
+          <div className="max-h-[50vh] sm:max-h-[420px] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 p-2 sm:p-3">
             {filtered.length === 0 ? (
               <div className="text-sm text-zinc-500">ไม่พบรายการ</div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                 {filtered.map((s) => {
                   const checked = draftSet.has(s.id);
 

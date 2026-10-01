@@ -200,44 +200,45 @@ export default function CalendarClient() {
       // ยกเลิก padding ของ <main p-4 md:p-6> ที่ AdminShell ครอบอยู่
       "-m-4 md:-m-6",
       // height = 100vh ลบ pt-14 ที่ AdminShell ใส่บน mobile (desktop ไม่มี pt)
-      "h-[calc(100vh-3.5rem)] md:h-screen",
+      "h-[calc(100vh-3.5rem)] h-[calc(100dvh-3.5rem)] md:h-screen",
       "flex flex-col bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden",
     ].join(" ")}>
 
       {/* ── Top bar ── */}
-      <div className="flex items-center justify-between pl-14 pr-5 py-3 border-b border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 pl-14 pr-3 sm:pr-5 py-2 sm:py-3 border-b border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/60 flex-shrink-0">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+          <button onClick={prevMonth} aria-label="เดือนก่อนหน้า" className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
             <ChevronLeft size={16} />
           </button>
-          <h2 className="text-xl font-bold min-w-[180px] text-center tracking-wide text-zinc-800 dark:text-zinc-100">
+          <h2 className="text-base sm:text-xl font-bold min-w-[112px] sm:min-w-[180px] text-center tracking-wide text-zinc-800 dark:text-zinc-100">
             {MONTHS_TH[month]} {year + 543}
           </h2>
-          <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+          <button onClick={nextMonth} aria-label="เดือนถัดไป" className="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
             <ChevronRight size={16} />
           </button>
-          <button onClick={goToday} className="ml-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
+          <button onClick={goToday} className="ml-1 px-3 py-2 sm:py-1.5 text-xs font-medium rounded-lg border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
             วันนี้
           </button>
         </div>
         <button
           onClick={() => openCreate()}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all text-sm shadow-md shadow-indigo-200 dark:shadow-indigo-900/40 active:scale-95"
+          aria-label="เพิ่มกิจกรรม"
+          className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 sm:py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all text-sm shadow-md shadow-indigo-200 dark:shadow-indigo-900/40 active:scale-95"
         >
-          <Plus size={15} /> เพิ่มกิจกรรม
+          <Plus size={15} /> <span className="hidden sm:inline">เพิ่มกิจกรรม</span>
         </button>
       </div>
 
       {/* ── Body ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 flex-col md:flex-row overflow-hidden">
 
         {/* ── Calendar grid ── */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-[3] md:flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
 
           {/* Day headers */}
           <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/40 flex-shrink-0">
             {DAYS_TH.map((d, i) => (
-              <div key={d} className={`py-3 text-center text-sm font-semibold tracking-widest ${
+              <div key={d} className={`py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold sm:tracking-widest ${
                 i === 0 ? "text-rose-500" : i === 6 ? "text-sky-500" : "text-zinc-400 dark:text-zinc-500"
               }`}>{d}</div>
             ))}
@@ -269,7 +270,7 @@ export default function CalendarClient() {
                   <div
                     key={iso}
                     onClick={() => setSelectedDate(iso)}
-                    className={`border-b border-r border-zinc-200 dark:border-zinc-800/40 p-1.5 cursor-pointer transition-all group
+                    className={`border-b border-r border-zinc-200 dark:border-zinc-800/40 p-0.5 sm:p-1.5 overflow-hidden sm:overflow-visible cursor-pointer transition-all group
                       ${isSel
                         ? "bg-indigo-50 dark:bg-zinc-800/80 ring-1 ring-inset ring-indigo-200 dark:ring-zinc-600"
                         : isToday
@@ -278,8 +279,8 @@ export default function CalendarClient() {
                       }`}
                   >
                     {/* Date number */}
-                    <div className="flex items-start justify-between mb-1.5">
-                      <span className={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold transition-all
+                    <div className="flex items-start justify-between mb-0.5 sm:mb-1.5">
+                      <span className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-full text-xs sm:text-sm font-bold transition-all
                         ${isToday
                           ? "bg-indigo-500 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/50"
                           : isSun ? "text-rose-500"
@@ -289,12 +290,22 @@ export default function CalendarClient() {
                         }`}
                       >{day}</span>
                       {dayEvs.length > 0 && !isToday && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 dark:bg-zinc-500 mt-1 mr-0.5 flex-shrink-0" />
+                        <span className="hidden sm:block w-1.5 h-1.5 rounded-full bg-indigo-300 dark:bg-zinc-500 mt-1 mr-0.5 flex-shrink-0" />
                       )}
                     </div>
 
+                    {/* Mobile: colored dots only */}
+                    {dayEvs.length > 0 && (
+                      <div className="sm:hidden flex flex-wrap justify-center gap-0.5 px-0.5">
+                        {dayEvs.slice(0, 3).map((ev) => (
+                          <span key={ev.id} className={`w-1.5 h-1.5 rounded-full ${getColor(ev.color).pill}`} />
+                        ))}
+                        {dayEvs.length > 3 && <span className="text-[9px] leading-none text-zinc-400">+</span>}
+                      </div>
+                    )}
+
                     {/* Pill events */}
-                    <div className="space-y-0.5">
+                    <div className="hidden sm:block space-y-0.5">
                       {dayEvs.slice(0, 2).map((ev) => {
                         const col = getColor(ev.color);
                         return (
@@ -321,22 +332,22 @@ export default function CalendarClient() {
         </div>
 
         {/* ── Sidebar ── */}
-        <div className="w-72 flex-shrink-0 border-l border-zinc-200 dark:border-zinc-800/80 flex flex-col bg-zinc-50 dark:bg-zinc-900/30">
+        <div className="flex-[2] md:flex-none min-h-0 w-full md:w-72 flex-shrink-0 border-t md:border-t-0 md:border-l border-zinc-200 dark:border-zinc-800/80 flex flex-col bg-zinc-50 dark:bg-zinc-900/30">
           {/* Header */}
-          <div className="px-4 py-3.5 border-b border-zinc-200 dark:border-zinc-800/60 flex-shrink-0">
+          <div className="px-4 py-2 sm:py-3.5 border-b border-zinc-200 dark:border-zinc-800/60 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                   {DAYS_TH_FULL[selectedDow]}
                 </div>
-                <div className="text-2xl font-bold mt-0.5 text-zinc-800 dark:text-zinc-100">
+                <div className="text-xl sm:text-2xl font-bold mt-0.5 text-zinc-800 dark:text-zinc-100">
                   {fmtDateShort(selectedDate)}
                 </div>
               </div>
               <button
                 onClick={() => openCreate(selectedDate)}
                 title="เพิ่มกิจกรรมวันนี้"
-                className="w-8 h-8 flex items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all active:scale-95 shadow-md shadow-indigo-200 dark:shadow-indigo-900/30"
+                className="w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all active:scale-95 shadow-md shadow-indigo-200 dark:shadow-indigo-900/30"
               >
                 <Plus size={15} />
               </button>
@@ -346,7 +357,7 @@ export default function CalendarClient() {
           {/* Event list */}
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
             {selectedEvents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 gap-2 text-zinc-300 dark:text-zinc-600">
+              <div className="flex flex-col items-center justify-center h-28 sm:h-40 gap-2 text-zinc-300 dark:text-zinc-600">
                 <CalendarDays size={32} strokeWidth={1.2} />
                 <span className="text-sm text-zinc-400 dark:text-zinc-500">ไม่มีกิจกรรมในวันนี้</span>
                 <button
@@ -391,13 +402,13 @@ export default function CalendarClient() {
 
       {/* ─── Modal ─────────────────────────────────────────────────────────────── */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-sm p-4" onClick={closeModal}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/70 backdrop-blur-sm p-3 sm:p-4" onClick={closeModal}>
           <div
-            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl w-full max-w-xl shadow-2xl"
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl w-full max-w-xl max-h-[90vh] max-h-[90dvh] overflow-y-auto shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3 sm:py-4 border-b border-zinc-100 dark:border-zinc-800">
               <h3 className="font-bold text-sm text-zinc-800 dark:text-zinc-100">
                 {modal.mode === "create" && "สร้างกิจกรรม"}
                 {modal.mode === "edit"   && "แก้ไขกิจกรรม"}
@@ -405,21 +416,21 @@ export default function CalendarClient() {
               </h3>
               <div className="flex items-center gap-1.5">
                 {modal.mode === "view" && modal.event && (<>
-                  <button onClick={() => openEdit(modal.event!)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+                  <button onClick={() => openEdit(modal.event!)} aria-label="แก้ไข" className="w-9 h-9 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
                     <Edit2 size={13} />
                   </button>
-                  <button onClick={() => handleDelete(modal.event!.id)} disabled={deleting} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/50 text-zinc-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors disabled:opacity-40">
+                  <button onClick={() => handleDelete(modal.event!.id)} disabled={deleting} aria-label="ลบ" className="w-9 h-9 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/50 text-zinc-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors disabled:opacity-40">
                     {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
                   </button>
                 </>)}
-                <button onClick={closeModal} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
+                <button onClick={closeModal} aria-label="ปิด" className="w-9 h-9 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors">
                   <X size={13} />
                 </button>
               </div>
             </div>
 
             {/* Body */}
-            <div className="px-5 py-4">
+            <div className="px-4 sm:px-5 py-4">
               {/* View */}
               {modal.mode === "view" && modal.event && (() => {
                 const ev  = modal.event;
@@ -428,7 +439,7 @@ export default function CalendarClient() {
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
                       <div className={`w-3 h-3 rounded-full flex-shrink-0 mt-2 ${col.dot}`} />
-                      <div className={`text-2xl font-bold leading-tight ${col.textL} ${col.textD}`}>{ev.title}</div>
+                      <div className={`text-xl sm:text-2xl font-bold leading-tight break-words min-w-0 ${col.textL} ${col.textD}`}>{ev.title}</div>
                     </div>
                     <div className="pl-6 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
                       🗓 <span>{fmtDateTH(ev.event_date)}</span>
@@ -470,21 +481,21 @@ export default function CalendarClient() {
                     <input
                       type="text" value={fTitle} onChange={(e) => setFTitle(e.target.value)} autoFocus
                       placeholder="เช่น Guild War, อัพเดทเกม..."
-                      className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-800 dark:text-zinc-100 placeholder-zinc-300 dark:placeholder-zinc-600 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/80 focus:bg-white dark:focus:bg-zinc-800 transition-all"
+                      className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-zinc-800 dark:text-zinc-100 placeholder-zinc-300 dark:placeholder-zinc-600 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/80 focus:bg-white dark:focus:bg-zinc-800 transition-all"
                     />
                   </div>
                   <div className="flex gap-2.5">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">วันที่ *</label>
                       <input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)}
-                        className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-800 dark:text-zinc-100 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/80 transition-all"
+                        className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-zinc-800 dark:text-zinc-100 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/80 transition-all"
                         style={{ colorScheme: inputColorScheme }}
                       />
                     </div>
-                    <div className="w-28">
+                    <div className="w-28 shrink-0">
                       <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">เวลา</label>
                       <input type="time" value={fTime} onChange={(e) => setFTime(e.target.value)}
-                        className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-800 dark:text-zinc-100 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/80 transition-all"
+                        className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-zinc-800 dark:text-zinc-100 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/80 transition-all"
                         style={{ colorScheme: inputColorScheme }}
                       />
                     </div>
@@ -493,7 +504,7 @@ export default function CalendarClient() {
                     <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">รายละเอียด</label>
                     <textarea value={fDesc} onChange={(e) => setFDesc(e.target.value)} rows={6}
                       placeholder="รายละเอียดกิจกรรม..."
-                      className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-800 dark:text-zinc-100 placeholder-zinc-300 dark:placeholder-zinc-600 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/80 transition-all resize-none"
+                      className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-base sm:text-sm text-zinc-800 dark:text-zinc-100 placeholder-zinc-300 dark:placeholder-zinc-600 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/80 transition-all resize-none"
                     />
                   </div>
                   <div>
@@ -501,7 +512,7 @@ export default function CalendarClient() {
                     <div className="flex flex-wrap gap-2">
                       {EVENT_COLORS.map((c) => (
                         <button key={c.id} onClick={() => setFColor(c.id)} title={c.label}
-                          className={`w-6 h-6 rounded-full transition-all ${c.dot}
+                          className={`w-8 h-8 sm:w-6 sm:h-6 rounded-full transition-all ${c.dot}
                             ${fColor === c.id ? "ring-2 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 ring-indigo-500 scale-110" : "opacity-50 hover:opacity-90"}`}
                         />
                       ))}
@@ -521,7 +532,7 @@ export default function CalendarClient() {
                               onClick={() => setFMentions((prev) =>
                                 active ? prev.filter((m) => m !== role.mention) : [...prev, role.mention]
                               )}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                              className={`px-2.5 py-2 sm:py-1 rounded-lg text-xs font-semibold border transition-all ${
                                 active
                                   ? "bg-indigo-600 border-indigo-500 text-white shadow-sm"
                                   : "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-indigo-400 hover:text-indigo-500"
@@ -547,19 +558,19 @@ export default function CalendarClient() {
 
             {/* Footer */}
             {(modal.mode === "create" || modal.mode === "edit") && (
-              <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-zinc-100 dark:border-zinc-800">
-                <button onClick={closeModal} className="px-4 py-2 text-sm rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
+              <div className="flex flex-wrap items-center justify-end gap-2 px-4 sm:px-5 py-4 border-t border-zinc-100 dark:border-zinc-800">
+                <button onClick={closeModal} className="px-4 py-2.5 sm:py-2 text-sm rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
                   ยกเลิก
                 </button>
                 {modal.mode === "edit" && modal.event && (
                   <button onClick={() => handleDelete(modal.event!.id)} disabled={deleting || saving}
-                    className="px-4 py-2 text-sm rounded-xl bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-500 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50 transition-colors disabled:opacity-40 flex items-center gap-1.5"
+                    className="px-4 py-2.5 sm:py-2 text-sm rounded-xl bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-500 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50 transition-colors disabled:opacity-40 flex items-center gap-1.5"
                   >
                     {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} ลบ
                   </button>
                 )}
                 <button onClick={handleSave} disabled={saving}
-                  className="px-4 py-2 text-sm rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all disabled:opacity-40 flex items-center gap-1.5 shadow-md shadow-indigo-200 dark:shadow-indigo-900/30 active:scale-95"
+                  className="px-4 py-2.5 sm:py-2 text-sm rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all disabled:opacity-40 flex items-center gap-1.5 shadow-md shadow-indigo-200 dark:shadow-indigo-900/30 active:scale-95"
                 >
                   {saving && <Loader2 size={13} className="animate-spin" />}
                   {modal.mode === "create" ? "สร้างกิจกรรม" : "บันทึก"}

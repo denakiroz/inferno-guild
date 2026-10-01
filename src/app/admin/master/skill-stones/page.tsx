@@ -161,7 +161,7 @@ export default function AdminMasterSkillStonesPage() {
   return (
     <div className="mx-auto w-full max-w-4xl px-3 sm:px-4 md:px-0 py-2">
       <div className="space-y-6">
-        <Card>
+        <Card className="!p-4 sm:!p-6">
           <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Master Data • Skill Stones
           </div>
@@ -211,23 +211,23 @@ export default function AdminMasterSkillStonesPage() {
           </div>
 
           <div className="mt-4 flex justify-end">
-            <Button onClick={createRow} disabled={!canSubmitCreate}>
+            <Button className="w-full sm:w-auto" onClick={createRow} disabled={!canSubmitCreate}>
               {creating ? "กำลังเพิ่ม..." : "เพิ่ม Skill Stone"}
             </Button>
           </div>
         </Card>
 
-        <Card>
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">รายการทั้งหมด</div>
-            <div className="flex items-center gap-2">
+        <Card className="!p-4 sm:!p-6">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 text-lg font-semibold text-zinc-900 dark:text-zinc-100">รายการทั้งหมด</div>
+            <div className="flex shrink-0 items-center gap-2">
               <Button variant="outline" onClick={load} disabled={loading}>
                 {loading ? "กำลังโหลด..." : "รีเฟรช"}
               </Button>
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
             <div>
               <div className="text-xs text-zinc-500 mb-1">Filter Type</div>
               <select
@@ -258,7 +258,7 @@ export default function AdminMasterSkillStonesPage() {
           </div>
 
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[600px] sm:min-w-0 text-sm">
               <thead>
                 <tr className="text-left text-zinc-500">
                   <th className="py-2 pr-3">ID</th>
@@ -308,7 +308,7 @@ export default function AdminMasterSkillStonesPage() {
                       </td>
                       <td className="py-3 pr-3 text-zinc-500 break-all">{r.image_url ?? "-"}</td>
                       <td className="py-3 text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 whitespace-nowrap">
                           <Button
                             variant="outline"
                             onClick={() => {
@@ -337,6 +337,7 @@ export default function AdminMasterSkillStonesPage() {
         </Card>
 
         <Modal
+          className="max-h-[90vh] overflow-y-auto"
           open={open}
           onClose={() => {
             setOpen(false);

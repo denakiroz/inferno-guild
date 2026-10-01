@@ -37,14 +37,14 @@ export function LeavesTab(props: {
             return (
               <div
                 key={date}
-                className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-4"
+                className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-3 sm:p-4"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <div className="font-semibold text-zinc-900 dark:text-zinc-100">{prettyDate(date)}</div>
                     <div className="text-xs text-zinc-500">{saturday ? "วันวอ (เสาร์)" : "ลากิจ"}</div>
                   </div>
-                  <div className="text-xs text-zinc-500">{date}</div>
+                  <div className="shrink-0 text-xs text-zinc-500">{date}</div>
                 </div>
 
                 <div className="mt-3 space-y-2">
@@ -63,17 +63,18 @@ export function LeavesTab(props: {
                     return (
                       <div
                         key={leave.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 px-3 py-2"
+                        className="flex flex-col gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                       >
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{label}</div>
-                          <div className="text-xs text-zinc-500 truncate">
+                          <div className="text-xs text-zinc-500 break-words sm:truncate">
                             {leave.reason ? `เหตุผล: ${leave.reason}` : "เหตุผล: -"}
                           </div>
                         </div>
 
                         <Button
                           variant="outline"
+                          className="w-full sm:w-auto"
                           disabled={canceling === leave.id || !canCancel}
                           onClick={() => {
                             if (!canCancel) return;

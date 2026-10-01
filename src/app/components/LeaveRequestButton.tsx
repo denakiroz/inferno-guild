@@ -337,15 +337,17 @@ export default function LeaveRequestButton({
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
             <div className="text-xs text-zinc-500 mb-2">เลือกช่วงวันที่ (วันที่ลาแล้วจะเลือกไม่ได้)</div>
 
-            <DayPicker
-              mode="range"
-              selected={range}
-              onSelect={setRange}
-              disabled={disabledMatcher}
-              showOutsideDays
-              weekStartsOn={0}
-              className="rdp"
-            />
+            <div className="flex justify-center overflow-x-auto">
+              <DayPicker
+                mode="range"
+                selected={range}
+                onSelect={setRange}
+                disabled={disabledMatcher}
+                showOutsideDays
+                weekStartsOn={0}
+                className="rdp"
+              />
+            </div>
 
             <div className="mt-2 text-xs text-zinc-500">
               ช่วงที่เลือก:{" "}
@@ -380,8 +382,8 @@ export default function LeaveRequestButton({
                   const disableSelect = has20 && has2030;
 
                   return (
-                    <div key={d} className="flex items-center gap-2">
-                      <div className="text-sm w-28">{d}</div>
+                    <div key={d} className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                      <div className="text-sm w-full sm:w-28">{d}</div>
 
                       <Select
                         value={satRoundByDate[d] ?? "select"}
@@ -424,7 +426,7 @@ export default function LeaveRequestButton({
             </div>
           ) : null}
 
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row">
             <Button variant="secondary" className="flex-1" onClick={() => setOpen(false)} disabled={saving}>
               <X className="w-4 h-4" />
               ยกเลิก

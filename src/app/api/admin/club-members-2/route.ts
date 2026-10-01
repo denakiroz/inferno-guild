@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { attachWarParty } from "@/lib/warParty";
 
 export const runtime = "nodejs";
 
@@ -12,10 +13,6 @@ const SELECT_MEMBER_WITH_CLASS = `
   name,
   class_id,
   power,
-  party,
-  party_2,
-  pos_party,
-  pos_party_2,
   color,
   is_special,
   guild,
@@ -74,7 +71,7 @@ export async function GET() {
 
     const safeLeaves = leaveErr ? [] : (leaves ?? []);
 
-    return NextResponse.json({ ok: true, members: members ?? [], leaves: safeLeaves });
+    return NextResponse.json({ ok: true, members: await attachWarParty((members ?? []) as any[]), leaves: safeLeaves });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
   }

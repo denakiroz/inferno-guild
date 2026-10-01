@@ -1076,41 +1076,41 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3">
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-2">
           <div className="xl:col-span-2 flex items-center gap-2">
-            <div className="text-xs text-zinc-500 w-14">วันที่</div>
+            <div className="text-xs text-zinc-500 w-14 shrink-0">วันที่</div>
             <input
               type="date"
               value={matchDateISO}
               onChange={(e) => setMatchDateISO(e.target.value)}
-              className="h-9 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
+              className="h-10 sm:h-9 min-w-0 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
             />
           </div>
 
           <div className="xl:col-span-2 flex items-center gap-2">
-            <div className="text-xs text-zinc-500 w-14">เวลา</div>
+            <div className="text-xs text-zinc-500 w-14 shrink-0">เวลา</div>
             <input
               type="time"
               value={matchTime}
               onChange={(e) => setMatchTime(e.target.value)}
-              className="h-9 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
+              className="h-10 sm:h-9 min-w-0 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
             />
           </div>
 
           <div className="xl:col-span-3 flex items-center gap-2">
-            <div className="text-xs text-zinc-500 w-14">ฝ่ายเรา</div>
+            <div className="text-xs text-zinc-500 w-14 shrink-0">ฝ่ายเรา</div>
             <input
               value={ourName}
               onChange={(e) => setOurName(e.target.value)}
-              className="h-9 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
+              className="h-10 sm:h-9 min-w-0 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
             />
           </div>
 
           <div className="xl:col-span-4 flex items-center gap-2">
-            <div className="text-xs text-zinc-500 w-20">คู่ต่อสู้</div>
+            <div className="text-xs text-zinc-500 w-20 shrink-0">คู่ต่อสู้</div>
             <input
               value={opponentName}
               onChange={(e) => setOpponentName(e.target.value)}
               placeholder="กรอกชื่อคู่ต่อสู้"
-              className="h-9 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
+              className="h-10 sm:h-9 min-w-0 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
             />
           </div>
 
@@ -1119,7 +1119,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             <button
               type="button"
               onClick={() => setShowLeft((v) => !v)}
-              className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+              className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
             >
               {showLeft ? "ซ่อน Roster" : "แสดง Roster"}
             </button>
@@ -1127,7 +1127,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             <button
               type="button"
               onClick={() => setShowRight((v) => !v)}
-              className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+              className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
             >
               {showRight ? "ซ่อนประวัติ" : "แสดงประวัติ"}
             </button>
@@ -1141,7 +1141,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                   prev.map((x) => ({ ...x, slots: x.slots.map(() => ({ memberId: null })) }))
                 );
               }}
-              className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+              className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
               title="ล้างสมาชิกในทุกปาร์ตี้ (ไม่กระทบประวัติการ์ดจนกว่าจะกดบันทึก)"
             >
               ล้างปาร์ตี้
@@ -1150,13 +1150,13 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             <button
               type="button"
               onClick={() => setWarMapOpen(true)}
-              className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+              className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
               title="แสดงผังทัพวอและแคปเป็นรูป"
             >
               ผังทัพวอ
             </button>
 
-            <Button onClick={savePlan} disabled={!canEdit || saving || !canSave} className="h-9 rounded-xl">
+            <Button onClick={savePlan} disabled={!canEdit || saving || !canSave} className="h-10 sm:h-9 rounded-xl">
               {saving ? "กำลังบันทึก..." : "บันทึกเป็นการ์ด"}
             </Button>
           </div>
@@ -1167,7 +1167,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             คนลา (ตามวันที่ที่เลือก):{" "}
             <span className="font-semibold text-zinc-700 dark:text-zinc-200">{leaveCount}</span>
           </div>
-          <button type="button" onClick={() => initialLoad(matchDateISO)} className="underline">
+          <button type="button" onClick={() => initialLoad(matchDateISO)} className="py-2 sm:py-0 underline">
             รีเฟรชรายชื่อ/วันลา
           </button>
           <div className="ml-auto">{canSave ? null : <span className="text-amber-600">เลือกวันที่ + ใส่ชื่อคู่ต่อสู้ก่อน</span>}</div>
@@ -1186,7 +1186,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
               <button
                 type="button"
                 className={cn(
-                  "h-8 px-3 rounded-xl border text-xs",
+                  "h-10 sm:h-8 px-3 rounded-xl border text-xs",
                   rosterFilter === "unassigned" ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
                 )}
                 onClick={() => setRosterFilter("unassigned")}
@@ -1196,7 +1196,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
               <button
                 type="button"
                 className={cn(
-                  "h-8 px-3 rounded-xl border text-xs",
+                  "h-10 sm:h-8 px-3 rounded-xl border text-xs",
                   rosterFilter === "assigned" ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
                 )}
                 onClick={() => setRosterFilter("assigned")}
@@ -1206,7 +1206,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
               <button
                 type="button"
                 className={cn(
-                  "h-8 px-3 rounded-xl border text-xs",
+                  "h-10 sm:h-8 px-3 rounded-xl border text-xs",
                   rosterFilter === "all" ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
                 )}
                 onClick={() => setRosterFilter("all")}
@@ -1214,11 +1214,11 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 ทั้งหมด
               </button>
 
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex flex-wrap items-center gap-2 lg:flex-nowrap">
                 <button
                   type="button"
                   className={cn(
-                    "h-8 px-3 rounded-xl border text-xs",
+                    "h-10 sm:h-8 px-3 rounded-xl border text-xs",
                     classFilter.size > 0 ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
                   )}
                   onClick={() => {
@@ -1232,7 +1232,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 <button
                   type="button"
                   className={cn(
-                    "h-8 px-3 rounded-xl border text-xs",
+                    "h-10 sm:h-8 px-3 rounded-xl border text-xs",
                     ultimateFilter.size > 0 ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
                   )}
                   onClick={() => {
@@ -1246,7 +1246,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 <button
                   type="button"
                   className={cn(
-                    "h-8 px-3 rounded-xl border text-xs",
+                    "h-10 sm:h-8 px-3 rounded-xl border text-xs",
                     specialSkillFilter.size > 0 ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
                   )}
                   onClick={() => {
@@ -1266,7 +1266,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                   <div className="text-xs font-semibold">กรองอาชีพ</div>
                   <button
                     type="button"
-                    className="ml-auto text-xs underline text-zinc-500"
+                    className="ml-auto px-2 py-2 sm:p-0 text-xs underline text-zinc-500"
                     onClick={() => setClassFilter(new Set())}
                   >
                     ล้าง
@@ -1280,7 +1280,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                         key={c.id}
                         type="button"
                         className={cn(
-                          "flex items-center gap-2 rounded-xl border px-2 py-1 text-xs",
+                          "flex items-center gap-2 rounded-xl border px-2 py-2 sm:py-1 text-xs",
                           checked ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
                         )}
                         onClick={() => setClassFilter((prev) => toggleSet(prev, Number(c.id)))}
@@ -1305,7 +1305,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                   <div className="text-xs font-semibold">กรอง Ultimate</div>
                   <button
                     type="button"
-                    className="ml-auto text-xs underline text-zinc-500"
+                    className="ml-auto px-2 py-2 sm:p-0 text-xs underline text-zinc-500"
                     onClick={() => setUltimateFilter(new Set())}
                   >
                     ล้าง
@@ -1319,7 +1319,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                         key={u.id}
                         type="button"
                         className={cn(
-                          "w-full flex items-center gap-2 rounded-xl border px-2 py-1 text-xs text-left",
+                          "w-full flex items-center gap-2 rounded-xl border px-2 py-2 sm:py-1 text-xs text-left",
                           checked ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
                         )}
                         onClick={() => setUltimateFilter((prev) => toggleSet(prev, Number(u.id)))}
@@ -1348,7 +1348,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                   <div className="text-xs font-semibold">กรองศิษย์พี่</div>
                   <button
                     type="button"
-                    className="ml-auto text-xs underline text-zinc-500"
+                    className="ml-auto px-2 py-2 sm:p-0 text-xs underline text-zinc-500"
                     onClick={() => setSpecialSkillFilter(new Set())}
                   >
                     ล้าง
@@ -1362,7 +1362,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                         key={s.id}
                         type="button"
                         className={cn(
-                          "w-full flex items-center gap-2 rounded-xl border px-2 py-1 text-xs text-left",
+                          "w-full flex items-center gap-2 rounded-xl border px-2 py-2 sm:py-1 text-xs text-left",
                           checked ? "border-red-600 text-red-600" : "border-zinc-200 dark:border-zinc-800"
                         )}
                         onClick={() => setSpecialSkillFilter((prev) => toggleSet(prev, Number(s.id)))}
@@ -1389,12 +1389,12 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="ค้นหาชื่อ..."
-                className="h-9 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
+                className="h-10 sm:h-9 w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 px-3 text-sm"
               />
             </div>
 
             <div
-              className="mt-2 flex-1 min-h-0 space-y-2 overflow-auto pr-1"
+              className="mt-2 flex-1 min-h-0 max-h-[50vh] lg:max-h-none space-y-2 overflow-auto pr-1"
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleDrop({ type: "ROSTER_BIN" })}
             >
@@ -1433,9 +1433,9 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             "rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3"
           )}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <div className="font-semibold">จัดปาร์ตี้</div>
-            <div className="ml-auto text-xs text-zinc-500">Drag & Drop • ลากลงช่องว่างเพื่อเอาออก</div>
+            <div className="ml-auto text-xs text-zinc-500 text-right">Drag & Drop • ลากลงช่องว่างเพื่อเอาออก</div>
           </div>
 
           {/* Wider cards for readability: reduce columns on large screens */}
@@ -1452,7 +1452,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                       setParties((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: v } : x)));
                     }}
                     disabled={!canEdit}
-                    className="h-8 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-3 text-sm"
+                    className="h-10 sm:h-8 min-w-0 flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-3 text-sm"
                   />
 
                   <div className="flex items-center gap-2">
@@ -1468,7 +1468,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                         setParties((prev) => prev.map((x) => (x.id === p.id ? { ...x, color: v } : x)));
                       }}
                       disabled={!canEdit}
-                      className="h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 text-sm"
+                      className="h-10 sm:h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-2 text-sm"
                       title="เลือกสีประจำปาร์ตี้ (บันทึกไปกับการ์ด)"
                     >
                       {PARTY_COLOR_PRESETS.map((c) => (
@@ -1491,7 +1491,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                         )
                       );
                     }}
-                    className="h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs"
+                    className="h-10 sm:h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs"
                   >
                     ล้าง
                   </button>
@@ -1560,7 +1560,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                               </div>
 
                               {/* per-person color + note — hidden until hover */}
-                              <div className="mt-1 hidden group-hover:flex items-center gap-1.5">
+                              <div className="mt-1 flex md:hidden md:group-hover:flex items-center gap-1.5">
                                 <select
                                   value={nameColor ?? ""}
                                   onChange={(e) => {
@@ -1576,7 +1576,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                                     );
                                   }}
                                   disabled={!canEdit}
-                                  className="h-7 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-1.5 text-[11px]"
+                                  className="h-9 md:h-7 max-w-[40%] md:max-w-none rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-1.5 text-[11px]"
                                   title="สีชื่อ (รายคน)"
                                 >
                                   {NAME_COLOR_PRESETS.map((c) => (
@@ -1601,7 +1601,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                                   }}
                                   disabled={!canEdit}
                                   placeholder="Note"
-                                  className="h-7 flex-1 min-w-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-1.5 text-[11px]"
+                                  className="h-9 md:h-7 flex-1 min-w-0 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 px-1.5 text-[11px]"
                                   title="โน้ต (แสดงในผังทัพวอ)"
                                 />
                               </div>
@@ -1614,7 +1614,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                         {mem && canEdit ? (
                           <button
                             type="button"
-                            className="shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-[11px] text-zinc-600 opacity-0 group-hover:opacity-100 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                            className="shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 px-2 py-2 md:py-1 text-[11px] text-zinc-600 md:opacity-0 md:group-hover:opacity-100 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
                             onClick={() => {
                               setParties((prev) => {
                                 const next = prev.map((x) => ({ ...x, slots: x.slots.map((s) => ({ ...s })) }));
@@ -1655,22 +1655,22 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             <div className="ml-auto text-xs text-zinc-500">{plansLoading ? "กำลังโหลด..." : `${plansTotal}`}</div>
           </div>
 
-          <div className="mt-2 flex-1 min-h-0 space-y-2 overflow-auto pr-1">
+          <div className="mt-2 flex-1 min-h-0 max-h-[50vh] lg:max-h-none space-y-2 overflow-auto pr-1">
             {plans.map((p) => (
               <div key={p.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/60 p-3">
                 <div className="flex items-start gap-2">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold truncate">
                       {p.our_name} vs {p.opponent_name}
                     </div>
                     <div className="text-xs text-zinc-500">{p.match_date}</div>
                   </div>
                   <div className="ml-auto flex items-center gap-2">
-                    <button type="button" className="text-xs underline" onClick={() => openPlanDetail(p)}>
+                    <button type="button" className="px-2 py-2 sm:p-0 text-xs underline" onClick={() => openPlanDetail(p)}>
                       ดู
                     </button>
                     {canEdit ? (
-                      <button type="button" className="text-xs underline text-red-600" onClick={() => setDeleteConfirmId(p.id)}>
+                      <button type="button" className="px-2 py-2 sm:p-0 text-xs underline text-red-600" onClick={() => setDeleteConfirmId(p.id)}>
                         ลบ
                       </button>
                     ) : null}
@@ -1680,7 +1680,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     type="button"
-                    className="h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs"
+                    className="h-10 sm:h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs"
                     onClick={() => applyPlanToEditor(p)}
                   >
                     โหลดมาแก้ไข
@@ -1695,7 +1695,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
           <div className="mt-2 flex items-center justify-between">
             <button
               type="button"
-              className="h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs"
+              className="h-10 sm:h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs"
               disabled={plansPage <= 1}
               onClick={() => loadPlans(Math.max(1, plansPage - 1))}
             >
@@ -1706,7 +1706,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             </div>
             <button
               type="button"
-              className="h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs"
+              className="h-10 sm:h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs"
               disabled={plansPage >= totalPages}
               onClick={() => loadPlans(Math.min(totalPages, plansPage + 1))}
             >
@@ -1720,10 +1720,10 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
       
 
       {warMapOpen ? (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setWarMapOpen(false)} />
-          <div className="relative w-full max-w-[95vw] max-h-[95vh] rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
-            <div className="flex items-start gap-2">
+          <div className="relative w-full max-w-[95vw] max-h-[95vh] overflow-y-auto sm:overflow-visible rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-2">
               <div className="min-w-0">
                 <div className="text-lg font-semibold truncate">ผังทัพวอ (สำหรับแคป)</div>
                 <div className="text-sm text-zinc-500 truncate">
@@ -1731,10 +1731,10 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 </div>
               </div>
 
-              <div className="ml-auto flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                 <button
                   type="button"
-                  className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+                  className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
                   onClick={() => setWarMapFit((v) => !v)}
                   title={warMapFit ? "สลับเป็น 100% (เลื่อนได้)" : "สลับเป็นพอดีจอ"}
                 >
@@ -1742,7 +1742,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 </button>
                 <button
                   type="button"
-                  className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+                  className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
                   onClick={() => drawWarMap({ withIcons: true })}
                   disabled={captureBusy}
                 >
@@ -1750,7 +1750,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 </button>
                 <button
                   type="button"
-                  className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+                  className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
                   onClick={copyWarMapToClipboard}
                   disabled={captureBusy}
                 >
@@ -1758,7 +1758,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 </button>
                 <button
                   type="button"
-                  className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+                  className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
                   onClick={downloadWarMap}
                   disabled={captureBusy}
                 >
@@ -1766,7 +1766,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
                 </button>
                 <button
                   type="button"
-                  className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+                  className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
                   onClick={() => setWarMapOpen(false)}
                 >
                   ปิด
@@ -1777,7 +1777,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             <div
               ref={warMapViewportRef}
               className={cn(
-                "mt-3 h-[75vh] rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-2",
+                "mt-3 h-[55vh] sm:h-[75vh] rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-2",
                 warMapFit ? "overflow-hidden" : "overflow-auto"
               )}
             >
@@ -1809,10 +1809,10 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
             <p className="text-sm font-semibold mb-1">ลบประวัติการ์ดนี้?</p>
             <p className="text-xs text-zinc-500 mb-5">ไม่สามารถกู้คืนได้</p>
             <div className="flex gap-2 justify-center">
-              <button onClick={() => setDeleteConfirmId(null)} className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm">
+              <button onClick={() => setDeleteConfirmId(null)} className="h-10 sm:h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm">
                 ยกเลิก
               </button>
-              <button onClick={() => deletePlan(deleteConfirmId)} className="h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm">
+              <button onClick={() => deletePlan(deleteConfirmId)} className="h-10 sm:h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm">
                 ลบ
               </button>
             </div>
@@ -1822,33 +1822,33 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
 
       {/* Delete success toast */}
       {deleteToast ? (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1100] bg-green-500 text-white px-6 py-3 rounded-xl text-sm shadow-lg pointer-events-none">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1100] max-w-[90vw] text-center bg-green-500 text-white px-6 py-3 rounded-xl text-sm shadow-lg pointer-events-none">
           ลบสำเร็จ ✓
         </div>
       ) : null}
 
       {planModalOpen && selectedPlan ? (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-4">
           <div className="absolute inset-0 bg-black/40" onClick={() => setPlanModalOpen(false)} />
-          <div className="relative w-full max-w-4xl rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-4">
-            <div className="flex items-start gap-2">
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto sm:max-h-none sm:overflow-visible rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-2">
               <div className="min-w-0">
                 <div className="text-lg font-semibold truncate">
                   {selectedPlan.our_name} vs {selectedPlan.opponent_name}
                 </div>
                 <div className="text-sm text-zinc-500">{selectedPlan.match_date}</div>
               </div>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                 <button
                   type="button"
-                  className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+                  className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
                   onClick={() => applyPlanToEditor(selectedPlan)}
                 >
                   โหลดมาแก้ไข
                 </button>
                 <button
                   type="button"
-                  className="h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
+                  className="h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-800 text-sm"
                   onClick={() => setPlanModalOpen(false)}
                 >
                   ปิด
@@ -1856,7 +1856,7 @@ export default function ClubWarBuilderClient({ canEdit }: { canEdit: boolean }) 
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[70vh] overflow-auto pr-1">
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 max-h-none sm:max-h-[70vh] overflow-visible sm:overflow-auto pr-1">
               {(selectedPlan.parties ?? []).map((p) => (
                 <div key={p.id} className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/40 p-3">
                   <div className="font-semibold text-sm">

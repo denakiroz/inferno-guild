@@ -57,11 +57,11 @@ export function LoginInAppNotice({
         {isAndroid ? "Chrome" : "เบราว์เซอร์หลัก"} ก่อน
       </div>
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {isAndroid ? (
           <button
             type="button"
-            className="h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10"
+            className="h-11 sm:h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10"
             onClick={() => openCurrentInChrome(url)}
           >
             เปิดใน Chrome
@@ -69,7 +69,7 @@ export function LoginInAppNotice({
         ) : (
           <button
             type="button"
-            className="h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10"
+            className="h-11 sm:h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10"
             onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
           >
             เปิดในเบราว์เซอร์
@@ -78,7 +78,7 @@ export function LoginInAppNotice({
 
         <button
           type="button"
-          className="h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10"
+          className="h-11 sm:h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10"
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(url);

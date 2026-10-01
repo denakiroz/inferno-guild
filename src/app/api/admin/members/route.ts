@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { cacheGetOrSet, CK } from "@/lib/redisCache";
+import { attachWarParty } from "@/lib/warParty";
 
 export const runtime = "nodejs";
 
@@ -21,10 +22,6 @@ const SELECT_MEMBER_WITH_CLASS = `
   name,
   class_id,
   power,
-  party,
-  party_2,
-  pos_party,
-  pos_party_2,
   color,
   is_special,
   guild,
@@ -57,7 +54,8 @@ async function loadMembersWithAttachments(guild: number | null): Promise<any[]> 
   if (memErr) throw new Error(memErr.message);
 
   const baseMembers = (rawMembers ?? []).filter((m: any) => normalizeStatusForFilter(m?.status) !== "inactive");
-  let members = baseMembers as any[];
+  // ปาร์ตี้ของแต่ละรอบอยู่ในตาราง war_party_member -> ใส่กลับเป็น party/party_2/pos_*
+  const members = (await attachWarParty(baseMembers as any[])) as any[];
 
   const memberIds = members.map((m: any) => Number(m?.id)).filter((x: number) => Number.isFinite(x) && x > 0);
 

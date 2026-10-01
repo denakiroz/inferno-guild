@@ -6,6 +6,7 @@ import { Button } from "@/app/components/UI";
 import { supabase } from "@/lib/supabase";
 import { useMembers } from "@/hooks/api/members";
 import { qk } from "@/lib/queryClient";
+import { guildName } from "@/lib/guildLabel";
 
 type WarTime = "20:00" | "20:30";
 
@@ -201,17 +202,11 @@ function ColorDot({ value }: { value: string | null }) {
   );
 }
 
-function countMemberParties(m: MemberRow): number {
-  const p1 = typeof m.party === "number" && m.party > 0;
-  const p2 = typeof m.party_2 === "number" && m.party_2 > 0;
-  return (p1 ? 1 : 0) + (p2 ? 1 : 0);
-}
-
 function PartyCountBadge({ count }: { count: number }) {
   return (
     <span
       className="inline-flex items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-extrabold text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/20 dark:text-zinc-200 tabular-nums"
-      title="จำนวนปาร์ตี้ที่อยู่ (party + party_2)"
+      title="จำนวนรอบที่อยู่ปาร์ตี้ (20.00 + 20.30) — อัปเดตทันทีตามที่จัด"
     >
       ({count})
     </span>
@@ -284,7 +279,7 @@ function PalettePopover({
             key={c}
             type="button"
             className={[
-              "h-6 w-6 rounded-full border",
+              "h-8 w-8 sm:h-6 sm:w-6 rounded-full border",
               value === c ? "border-zinc-900 dark:border-zinc-100" : "border-zinc-200 dark:border-zinc-800",
             ].join(" ")}
             style={{ background: c }}
@@ -294,7 +289,7 @@ function PalettePopover({
         ))}
         <button
           type="button"
-          className="col-span-7 mt-1 rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+          className="col-span-7 mt-1 rounded-lg border border-zinc-200 px-2 py-2 sm:py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
           onClick={() => onPick(null)}
         >
           ไม่ใส่สี
@@ -419,6 +414,19 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
 
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<DragTarget>(null);
+
+  // Touch / mobile: HTML5 drag & drop ใช้ไม่ได้ -> แตะช่องแล้วเลือกสมาชิกจากหน้าต่างด้านล่างแทน
+  const [tapMode, setTapMode] = useState(false);
+  const [slotSheet, setSlotSheet] = useState<{ partyId: number; index: number } | null>(null);
+  const [sheetQuery, setSheetQuery] = useState("");
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px), (pointer: coarse)");
+    const sync = () => setTapMode(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   // scroll assist during drag (ทำให้เลื่อนง่ายขึ้นตอนลากสมาชิก)
   const rosterScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1524,6 +1532,39 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     });
   }
 
+  // ---------- Tap to place (mobile) ----------
+  function openSlotSheet(partyId: number, index: number) {
+    if (!canEdit) return;
+    setSheetQuery("");
+    setSlotSheet({ partyId, index });
+  }
+
+  function closeSlotSheet() {
+    setSlotSheet(null);
+    setSheetQuery("");
+  }
+
+  function placeMemberInSlot(partyId: number, index: number, memberId: number) {
+    if (!canEdit) return;
+    if (isOnLeave(memberId, warTime)) return; // คนลาห้ามจัด
+
+    const next = parties.map((p) => ({ ...p, slots: p.slots.map((s) => ({ ...s })) }));
+    const target = next.find((p) => p.id === partyId);
+    if (!target) return;
+
+    // เอาออกจากช่องเดิม (ถ้ามี) แล้ววางช่องใหม่ — คนเดิมในช่องนี้จะกลับไปอยู่ roster
+    for (const p of next) {
+      for (let i = 0; i < p.slots.length; i++) {
+        if (p.slots[i].memberId === memberId) p.slots[i].memberId = null;
+      }
+    }
+    target.slots[index].memberId = memberId;
+
+    setDraft(warTime, next, true);
+    setParties(next);
+    closeSlotSheet();
+  }
+
   // ---------- Bulk color ----------
   function toggleSelect(memberId: number, disabled: boolean) {
     if (!canEdit) return;
@@ -2011,12 +2052,12 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
   const header = (
     <div
       ref={headerRef}
-      className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
+      className="rounded-xl border border-zinc-200 bg-white p-3 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900/40"
     >
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="text-sm font-semibold">จัดทัพวอ</div>
-          <div className="text-xs text-zinc-500">Guild: {guild ?? "-"}</div>
+          <div className="text-xs text-zinc-500">{guildName(guild)}</div>
           {isQuickWarMode ? (
             <div className="flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-0.5 text-xs font-semibold text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
               <span>⚡ จัดวอด่วน</span>
@@ -2031,7 +2072,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         <div className="flex flex-wrap items-center gap-2">
           <div className="rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
             <button
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold ${
+              className={`px-4 py-2 sm:px-3 sm:py-1.5 rounded-md text-sm font-semibold ${
                 warTime === "20:00" ? "bg-white dark:bg-zinc-950" : "text-zinc-500"
               }`}
               onClick={() => setWarTime("20:00")}
@@ -2040,7 +2081,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               20.00
             </button>
             <button
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold ${
+              className={`px-4 py-2 sm:px-3 sm:py-1.5 rounded-md text-sm font-semibold ${
                 warTime === "20:30" ? "bg-white dark:bg-zinc-950" : "text-zinc-500"
               }`}
               onClick={() => setWarTime("20:30")}
@@ -2053,7 +2094,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
           {isQuickWarMode ? (
             <button
               type="button"
-              className="rounded-lg border border-orange-400 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
+              className="rounded-lg border border-orange-400 bg-orange-50 px-3 py-2.5 sm:py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
               onClick={exitQuickWarMode}
             >
               ออกจากโหมดวอด่วน
@@ -2061,7 +2102,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
           ) : (
             <button
               type="button"
-              className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40 dark:border-orange-700 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
+              className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-2.5 sm:py-2 text-xs font-semibold text-orange-700 hover:bg-orange-100 disabled:opacity-40 dark:border-orange-700 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/40"
               onClick={() => setQuickWarPickOpen(true)}
               disabled={!canEdit || !guild || loading}
               title="จัดทีมวอนอกรอบ/วันธรรมดา — โหลดคนลาวันนี้ ไม่บันทึก DB"
@@ -2072,7 +2113,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
           <button
             type="button"
-            className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
+            className="rounded-lg border border-zinc-200 px-3 py-2.5 sm:py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
             onClick={copyFromOtherTime}
             disabled={!canEdit || !guild || loading}
             title="คัดลอก layout ของอีกช่วงเวลา (ถ้าอีกช่วงเวลามีการจัดไว้แต่ยังไม่ save จะคัดลอกอันนั้นด้วย)"
@@ -2082,7 +2123,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
           <button
             type="button"
-            className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+            className="rounded-lg border border-zinc-200 px-3 py-2.5 sm:py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
             onClick={restoreLastSaved}
             disabled={!canEdit || !guild || loading}
             title="คืนค่าปาร์ตี้กลับเป็นค่าที่บันทึกไว้ล่าสุด (ของช่วงเวลาที่เลือกอยู่ตอนนี้)"
@@ -2092,7 +2133,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
           <button
             type="button"
-            className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-500 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+            className="rounded-lg border border-zinc-200 px-3 py-2.5 sm:py-2 text-xs font-semibold text-zinc-500 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
             onClick={clearAllSlots}
             disabled={!canEdit}
             title="ล้างปาร์ตี้ให้ว่างทั้งหมด (ยังไม่บันทึกจนกดปุ่มบันทึก)"
@@ -2103,7 +2144,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
           {/* NEW: group */}
           <button
             type="button"
-            className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
+            className="rounded-lg border border-zinc-200 px-3 py-2.5 sm:py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
             onClick={openCreateGroupModal}
             disabled={!canEdit || !guild}
             title="จัดกลุ่มปาร์ตี้ (กำหนดชื่อ/สี/ลำดับแสดงผล)"
@@ -2113,7 +2154,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
           <button
             type="button"
-            className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
+            className="hidden md:inline-block rounded-lg border border-zinc-200 px-3 py-2.5 sm:py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
             onClick={() => setWarMapOpen(true)}
             disabled={!guild || loading}
             title="แสดงผังทัพวอ (อ่านอย่างเดียว)"
@@ -2121,7 +2162,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             แสดงผังทัพวอ
           </button>
 
-          <Button onClick={save} disabled={!canEdit || !guild || isQuickWarMode}>
+          <Button className="hidden md:inline-flex" onClick={save} disabled={!canEdit || !guild || isQuickWarMode}>
             บันทึก
           </Button>
         </div>
@@ -2145,7 +2186,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 </button>
               </div>
 
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <input
                   className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
                   value={l.text}
@@ -2170,7 +2211,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
               <button
                 type="button"
-                className="mt-1 rounded-lg border border-zinc-200 px-2 py-2 text-xs font-semibold text-zinc-500 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900/40"
+                className="mt-1 rounded-lg border border-zinc-200 px-3 sm:px-2 py-2 text-xs font-semibold text-zinc-500 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900/40"
                 onClick={() => {
                   if (noteLines.length <= 1) return;
                   setNoteLines((prev) => prev.filter((x) => x.id !== l.id));
@@ -2201,10 +2242,10 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               <span className="font-semibold">{selectedCount}</span> คน
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
+                className="rounded-lg border border-zinc-200 px-3 py-2.5 sm:py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
                 disabled={selectedCount === 0}
                 onClick={() => setOpenColorPalette((v) => !v)}
               >
@@ -2213,7 +2254,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
               <button
                 type="button"
-                className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                className="rounded-lg border border-zinc-200 px-3 py-2.5 sm:py-2 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
                 disabled={selectedCount === 0}
                 onClick={() => setSelectedIds(new Set())}
               >
@@ -2244,7 +2285,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               </div>
               <button
                 type="button"
-                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 sm:px-2 sm:py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
                 onClick={clearClassFilter}
                 disabled={classFilterCount === 0}
               >
@@ -2264,7 +2305,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                         key={c.id}
                         type="button"
                         className={[
-                          "flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs font-semibold",
+                          "flex max-w-full items-center gap-2 rounded-lg border px-2 py-2 sm:py-1.5 text-xs font-semibold",
                           active
                             ? "border-red-300 bg-red-50 text-zinc-800 dark:bg-red-950/20 dark:text-zinc-100"
                             : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/10 dark:text-zinc-300 dark:hover:bg-zinc-900/40",
@@ -2303,7 +2344,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                       key={x.key}
                       type="button"
                       className={[
-                        "inline-flex items-center rounded-xl border px-2.5 py-1 text-xs font-semibold",
+                        "inline-flex items-center rounded-xl border px-3 py-2 sm:px-2.5 sm:py-1 text-xs font-semibold",
                         active
                           ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
                           : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
@@ -2319,7 +2360,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
           </div>
 
           {/* F2: ศิษย์พี่ + หินสกิล (50-50) */}
-          <div className="grid grid-cols-2 divide-x divide-zinc-200 dark:divide-zinc-800">
+          <div className="grid grid-cols-1 divide-y divide-zinc-200 dark:divide-zinc-800 sm:grid-cols-2 sm:divide-y-0 sm:divide-x">
             {/* F2-left: ศิษย์พี่ */}
             <div className="p-3">
               <div className="flex items-center justify-between gap-2">
@@ -2331,7 +2372,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 </div>
                 <button
                   type="button"
-                  className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                  className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 sm:px-2 sm:py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
                   onClick={clearSpecialSkillFilter}
                   disabled={specialSkillFilterCount === 0}
                 >
@@ -2351,7 +2392,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                           key={s.id}
                           type="button"
                           className={[
-                            "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                            "inline-flex max-w-full items-center gap-2 rounded-xl border px-2.5 py-2 sm:py-1.5 text-xs font-semibold",
                             active
                               ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
                               : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
@@ -2386,7 +2427,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 </div>
                 <button
                   type="button"
-                  className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                  className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 sm:px-2 sm:py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
                   onClick={clearSkillStoneFilter}
                   disabled={skillStoneFilterCount === 0}
                 >
@@ -2406,7 +2447,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                           key={s.id}
                           type="button"
                           className={[
-                            "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                            "inline-flex max-w-full items-center gap-2 rounded-xl border px-2.5 py-2 sm:py-1.5 text-xs font-semibold",
                             active
                               ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
                               : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
@@ -2443,7 +2484,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
               <button
                 type="button"
-                className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                className="shrink-0 rounded-lg border border-zinc-200 px-3 py-1.5 sm:px-2 sm:py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
                 onClick={clearUltimateFilter}
               >
                 ล้าง
@@ -2455,7 +2496,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 <button
                   type="button"
                   className={[
-                    "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                    "inline-flex max-w-full items-center gap-2 rounded-xl border px-2.5 py-2 sm:py-1.5 text-xs font-semibold",
                     ultimateFilterCount === 0
                       ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
                       : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
@@ -2475,7 +2516,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                         key={u.id}
                         type="button"
                         className={[
-                          "inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-xs font-semibold",
+                          "inline-flex max-w-full items-center gap-2 rounded-xl border px-2.5 py-2 sm:py-1.5 text-xs font-semibold",
                           active
                             ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
                             : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900/40",
@@ -2504,10 +2545,104 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     </div>
   );
 
+  const sheetParty = slotSheet ? parties.find((p) => p.id === slotSheet.partyId) ?? null : null;
+  const sheetCurrentId = slotSheet && sheetParty ? sheetParty.slots[slotSheet.index]?.memberId ?? null : null;
+  const sheetCurrent = sheetCurrentId ? members.find((m) => m.id === sheetCurrentId) ?? null : null;
+
+  const sheetCandidates = (() => {
+    if (!slotSheet) return [] as MemberRow[];
+    const q = sheetQuery.trim().toLowerCase();
+    return [...activeInGuild]
+      .filter((m) => !assignedIds.has(m.id) && !isOnLeave(m.id, warTime))
+      .filter((m) => !q || `${m.special_text ?? ""} ${m.name}`.toLowerCase().includes(q))
+      .sort((a, b) => (b.power ?? 0) - (a.power ?? 0));
+  })();
+
+  const slotSheetModal =
+    slotSheet && sheetParty ? (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" onClick={closeSlotSheet}>
+        <div
+          className="flex max-h-[85dvh] w-full max-w-lg flex-col rounded-t-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950 sm:rounded-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">
+                ตี้ {slotSheet.partyId} • ช่อง {slotSheet.index + 1}
+              </div>
+              <div className="mt-0.5 truncate text-xs text-zinc-500">
+                {sheetCurrent ? `ตอนนี้: ${sheetCurrent.name}` : "ช่องว่าง — เลือกสมาชิกที่จะลงช่องนี้"}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={closeSlotSheet}
+              className="shrink-0 rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+            >
+              ปิด
+            </button>
+          </div>
+
+          <div className="px-4 pt-3">
+            <input
+              value={sheetQuery}
+              onChange={(e) => setSheetQuery(e.target.value)}
+              placeholder="ค้นหาชื่อ..."
+              className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-base focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-950 sm:text-sm"
+            />
+          </div>
+
+          <div className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+            {sheetCandidates.length === 0 ? (
+              <div className="px-3 py-8 text-center text-sm text-zinc-500">
+                {sheetQuery.trim() ? "ไม่พบสมาชิก" : "ไม่มีสมาชิกที่ว่างให้จัด"}
+              </div>
+            ) : (
+              sheetCandidates.map((m) => {
+                const cls = m.class_id ? classById.get(Number(m.class_id)) : null;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => placeMemberInSlot(slotSheet.partyId, slotSheet.index, m.id)}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+                  >
+                    <ColorDot value={m.color} />
+                    <PartyCountBadge count={partyCountOf(m)} />
+                    <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={18} />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold" style={m.color ? { color: m.color } : undefined}>
+                      {m.special_text ? `${m.special_text} ` : ""}
+                      {m.name}
+                    </span>
+                    <span className="shrink-0 text-xs text-zinc-400">{Number(m.power ?? 0).toLocaleString()}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {sheetCurrent ? (
+            <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  removeFromSlot(slotSheet.partyId, slotSheet.index);
+                  closeSlotSheet();
+                }}
+                className="h-11 w-full rounded-xl border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                เอา {sheetCurrent.name} ออกจากช่องนี้
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    ) : null;
+
   const remarkModal =
     remarkOpen && editingRemarkMemberId ? (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+        <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold">แก้ไขหมายเหตุ (remark)</div>
@@ -2518,7 +2653,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
             <button
               type="button"
-              className="text-xs text-zinc-500 underline underline-offset-2"
+              className="shrink-0 ml-2 px-2 py-2 text-xs text-zinc-500 underline underline-offset-2"
               onClick={closeRemarkModal}
             >
               ปิด
@@ -2535,7 +2670,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                   type="button"
                   title={c}
                   className={[
-                    "h-7 w-7 rounded-md border",
+                    "h-9 w-9 sm:h-7 sm:w-7 rounded-md border",
                     remarkColor === c ? "border-red-300 ring-1 ring-red-300" : "border-zinc-200 dark:border-zinc-800",
                   ].join(" ")}
                   style={{ backgroundColor: c }}
@@ -2572,8 +2707,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
   const groupModal =
     groupModalOpen ? (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+        <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold">
@@ -2588,7 +2723,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
             <button
               type="button"
-              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+              className="shrink-0 ml-2 rounded-lg border border-zinc-200 px-3 py-2 sm:py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
               onClick={closeGroupModal}
               disabled={groupSaving}
             >
@@ -2629,7 +2764,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                     type="button"
                     title={c}
                     className={[
-                      "h-7 w-7 rounded-md border",
+                      "h-9 w-9 sm:h-7 sm:w-7 rounded-md border",
                       (groupColorDraft ?? null) === c
                         ? "border-red-300 ring-1 ring-red-300"
                         : "border-zinc-200 dark:border-zinc-800",
@@ -2640,7 +2775,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 ))}
                 <button
                   type="button"
-                  className="ml-1 rounded-md border border-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
+                  className="ml-1 rounded-md border border-zinc-200 px-3 py-2 sm:px-2 sm:py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900/40"
                   onClick={() => setGroupColorDraft(null)}
                 >
                   ไม่ใส่สี
@@ -2748,27 +2883,27 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                       <div className="flex items-center gap-0.5 ml-1 shrink-0">
                         <button
                           type="button"
-                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                          className="rounded border border-zinc-200 px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 dark:border-zinc-700 dark:hover:bg-zinc-800"
                           disabled={idx === 0}
                           onClick={() => moveGroup(g.id, -1)}
                           title="เลื่อนขึ้น"
                         >↑</button>
                         <button
                           type="button"
-                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                          className="rounded border border-zinc-200 px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 dark:border-zinc-700 dark:hover:bg-zinc-800"
                           disabled={idx === groupsSorted.length - 1}
                           onClick={() => moveGroup(g.id, 1)}
                           title="เลื่อนลง"
                         >↓</button>
                         <button
                           type="button"
-                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:border-zinc-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                          className="rounded border border-zinc-200 px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 text-[10px] font-semibold text-blue-600 hover:bg-blue-50 dark:border-zinc-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
                           onClick={() => openEditGroupModal(g)}
                           title="แก้ไขกลุ่มนี้"
                         >แก้</button>
                         <button
                           type="button"
-                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-red-500 hover:bg-red-50 dark:border-zinc-700 dark:text-red-400 dark:hover:bg-red-950/30"
+                          className="rounded border border-zinc-200 px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 text-[10px] font-semibold text-red-500 hover:bg-red-50 dark:border-zinc-700 dark:text-red-400 dark:hover:bg-red-950/30"
                           onClick={() => deleteGroup(g)}
                           title="ลบกลุ่มนี้"
                         >ลบ</button>
@@ -2780,17 +2915,17 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between gap-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-[11px] text-zinc-400">
               {groupModalMode === "create"
                 ? "กด Enter หรือปุ่ม \"เพิ่มกลุ่ม\" — ฟอร์มจะ reset ให้ใส่กลุ่มถัดไปได้ทันที"
                 : "กด \"บันทึกการแก้ไข\" เพื่อยืนยันการเปลี่ยนแปลง"}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {groupModalMode === "edit" && (
                 <button
                   type="button"
-                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
+                  className="rounded-lg border border-zinc-200 px-3 py-2 sm:py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
                   onClick={resetGroupFormToCreate}
                   disabled={groupSaving}
                 >
@@ -2828,20 +2963,44 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     return m;
   }, [members]);
 
-  const reserveForMap = useMemo(() => {
-    const active = members
-      .filter((m) => (guild ? Number(m.guild) === Number(guild) : true))
-      .filter((m) => normalizeActiveStatus(m.status) === "active")
-      .filter((m) => !isSpecialMember(m))
-      .filter((m) => !assignedIds.has(m.id))
-      .filter((m) => !isOnLeave(m.id, warTime));
-    active.sort((a, b) => (b.power ?? 0) - (a.power ?? 0));
-    return active;
-  }, [members, guild, assignedIds, warTime, isOnLeave]);
+  // จำนวนรอบที่สมาชิกอยู่ปาร์ตี้ — realtime ตามผังที่กำลังจัด (ไม่ต้องรอบันทึก)
+  const liveRoundCount = useMemo(() => {
+    const otherTime: WarTime = warTime === "20:00" ? "20:30" : "20:00";
+    const other = getDraft(otherTime) ?? buildPartiesFromMembers(members, otherTime);
+    const counts = new Map<number, number>();
+    for (const layout of [parties, other]) {
+      for (const p of layout) {
+        for (const sl of p.slots) {
+          if (sl.memberId) counts.set(sl.memberId, (counts.get(sl.memberId) ?? 0) + 1);
+        }
+      }
+    }
+    return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parties, warTime, members]);
 
-  const noteForMap = useMemo(() => {
-    return (noteLines ?? []).map((l) => ({ ...l, text: (l.text ?? "").trim() })).filter((l) => !!l.text);
-  }, [noteLines]);
+  const partyCountOf = (m: MemberRow) => liveRoundCount.get(m.id) ?? 0;
+
+  // สลับรอบ 20.00 <-> 20.30: เทียบสมาชิกในแต่ละช่องของปาร์ตี้ (เฉพาะตอนเปิดผัง)
+  const swapRows = warMapOpen
+    ? (() => {
+        const layoutOf = (time: WarTime): Party[] =>
+          time === warTime ? parties : getDraft(time) ?? buildPartiesFromMembers(members, time);
+        const r1 = layoutOf("20:00");
+        const r2 = layoutOf("20:30");
+
+        const out: Array<{ partyId: number; slot: number; a: number | null; b: number | null }> = [];
+        for (const p1 of r1) {
+          const p2 = r2.find((x) => x.id === p1.id);
+          for (let i = 0; i < p1.slots.length; i++) {
+            const a = p1.slots[i]?.memberId ?? null;
+            const b = p2?.slots[i]?.memberId ?? null;
+            if (a !== b) out.push({ partyId: p1.id, slot: i + 1, a, b });
+          }
+        }
+        return out;
+      })()
+    : [];
 
   const leaveCountForMap = useMemo(() => {
     return leaveByTime[warTime]?.size ?? 0;
@@ -2850,9 +3009,9 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
   const warMapModal =
     warMapOpen ? (
-      <div className="fixed inset-0 z-50 overflow-hidden bg-black/50 p-4">
-        <div className="mx-auto w-full max-w-[1700px] rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
+      <div className="fixed inset-0 z-50 overflow-hidden bg-black/50 p-2 sm:p-4">
+        <div className="mx-auto w-full max-w-[1700px] rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between border-b border-zinc-200 p-3 sm:p-4 dark:border-zinc-800">
             <div>
               <div className="text-sm font-semibold">ผังทัพวอ</div>
               <div className="mt-1 text-xs text-zinc-500">อ่านอย่างเดียว — ใช้สำหรับสรุป/แคปหน้าจอ</div>
@@ -2860,14 +3019,14 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
             <button
               type="button"
-              className="text-xs text-zinc-500 underline underline-offset-2"
+              className="shrink-0 ml-2 px-2 py-2 text-xs text-zinc-500 underline underline-offset-2"
               onClick={() => setWarMapOpen(false)}
             >
               ปิด
             </button>
           </div>
 
-          <div className="p-3 flex-1 min-h-0 overflow-hidden flex flex-col">
+          <div className="p-3 flex-1 min-h-0 overflow-y-auto xl:overflow-hidden flex flex-col">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
@@ -2878,12 +3037,12 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 </div>
               </div>
 
-              <div className="text-center text-3xl font-black tracking-[0.25em] text-zinc-800 dark:text-zinc-100">
+              <div className="text-center text-xl sm:text-3xl font-black tracking-[0.15em] sm:tracking-[0.25em] text-zinc-800 dark:text-zinc-100">
                 {guild ? `INFERNO-${guild}` : "INFERNO"}
               </div>
             </div>
 
-            <div className="mt-3 flex-1 min-h-0 grid grid-cols-1 gap-2 xl:grid-cols-[1fr_180px_200px]">
+            <div className="mt-3 grid grid-cols-1 gap-2 xl:flex-1 xl:min-h-0 xl:grid-cols-[1fr_300px]">
               {/* Parties */}
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {partiesForMap.map(({ party, groupColor, groupLabel }) => (
@@ -2897,78 +3056,64 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                     warTime={warTime}
                     isOnLeave={isOnLeave}
                     getLeaveReason={(id) => leaveReasonByMemberRef.current.get(id) ?? null}
+                    partyCountOf={partyCountOf}
                   />
                 ))}
               </div>
 
-              {/* NOTE (replaces leave panel) */}
+              {/* สลับรอบ 20.00 <-> 20.30 */}
               <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 overflow-hidden flex flex-col min-h-0">
                 <div className="bg-zinc-900 px-4 py-3 text-center text-sm font-extrabold text-white">
-                  NOTE [{noteForMap.length}]
+                  สลับรอบ [{swapRows.length}]
                 </div>
-                <div className="flex-1 min-h-0 flex flex-col">
-                  <div className="p-3 flex-[8] min-h-0 overflow-y-auto">
-                    {noteForMap.length === 0 ? (
-                      <div className="text-center text-sm text-zinc-400">ไม่มี</div>
-                    ) : (
-                      <div className="space-y-2">
-                        {noteForMap.map((l, idx) => (
-                          <div
-                            key={`${l.id}-${idx}`}
-                            className="text-sm font-semibold whitespace-pre-wrap break-words"
-                            style={l.color ? { color: l.color } : undefined}
-                          >
-                            {l.text}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="h-10 shrink-0 border-t border-zinc-200 px-3 flex items-center justify-center text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200 truncate">
-                    คนลา: {leaveCountForMap}
-                  </div>
+                <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-1.5 text-[11px] font-semibold text-zinc-500 dark:border-zinc-800">
+                  <span>20.00 น.</span>
+                  <span>⇄</span>
+                  <span>20.30 น.</span>
                 </div>
-
-              </div>
-
-              {/* Reserve */}
-              <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 overflow-hidden flex flex-col min-h-0">
-                <div className="bg-zinc-900 px-4 py-3 text-center text-sm font-extrabold text-white">
-                  สำรอง [{reserveForMap.length}]
-                </div>
-                <div className="p-3 flex-1 min-h-0 overflow-y-auto space-y-2">
-                  {reserveForMap.length === 0 ? (
-                    <div className="text-center text-sm text-zinc-400">ไม่มี</div>
+                <div className="flex-1 min-h-0 max-h-[50vh] xl:max-h-none overflow-y-auto p-2">
+                  {swapRows.length === 0 ? (
+                    <div className="py-6 text-center text-sm text-zinc-400">ไม่มีการสลับ</div>
                   ) : (
-                    reserveForMap.map((m) => {
-                      const cls = m.class_id ? classById.get(Number(m.class_id)) : null;
-                      const nameStyle = m.color ? { color: m.color } : undefined;
-	                      const pr = parseColoredPrefix(m.remark ?? "");
-	                      const remarkStyle = pr.color ? { color: pr.color } : undefined;
-	                      const remarkText = pr.text || "";
-                      return (
-                        <div
-                          key={`reserve-${m.id}`}
-                          className="flex items-center justify-between rounded-lg border border-zinc-100 bg-white px-2 py-1.5 dark:border-zinc-900 dark:bg-zinc-950/30"
-                        >
-                          <div className="min-w-0 flex items-center gap-2">
-                            <PartyCountBadge count={countMemberParties(m)} />
-                            <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={18} />
-	                            <div className="min-w-0 flex-1">
-	                              <div className="min-w-0 truncate text-[15px] font-bold" style={nameStyle}>
-	                                {m.special_text ? `${m.special_text} ` : ""}
-	                                {m.name}
-	                              </div>
-	                              <div className="mt-0.5 min-w-0 truncate text-[12px] font-semibold" style={remarkStyle}>
-	                                {remarkText}
-	                              </div>
-	                            </div>
+                    <div className="space-y-2">
+                      {Array.from(new Set(swapRows.map((r) => r.partyId))).map((pid) => (
+                        <div key={`swap-p-${pid}`}>
+                          <div className="mb-1 text-[11px] font-bold text-zinc-500">ตี้ {pid}</div>
+                          <div className="space-y-1">
+                            {swapRows
+                              .filter((r) => r.partyId === pid)
+                              .map((r) => {
+                                const ma = r.a ? membersById.get(r.a) ?? null : null;
+                                const mb = r.b ? membersById.get(r.b) ?? null : null;
+                                return (
+                                  <div
+                                    key={`swap-${pid}-${r.slot}`}
+                                    className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 rounded-lg border border-zinc-100 bg-white px-2 py-1.5 dark:border-zinc-900 dark:bg-zinc-950/30"
+                                  >
+                                    <div
+                                      className="min-w-0 truncate text-[13px] font-bold"
+                                      style={ma?.color ? { color: ma.color } : undefined}
+                                    >
+                                      {ma ? ma.name : <span className="font-normal text-zinc-300">ว่าง</span>}
+                                    </div>
+                                    <div className="text-xs text-zinc-400">⇄</div>
+                                    <div
+                                      className="min-w-0 truncate text-right text-[13px] font-bold"
+                                      style={mb?.color ? { color: mb.color } : undefined}
+                                    >
+                                      {mb ? mb.name : <span className="font-normal text-zinc-300">ว่าง</span>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                           </div>
                         </div>
-                      );
-                    })
+                      ))}
+                    </div>
                   )}
+                </div>
+                <div className="h-10 shrink-0 border-t border-zinc-200 px-3 flex items-center justify-center text-xs font-semibold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200 truncate">
+                  คนลา: {leaveCountForMap}
                 </div>
               </div>
             </div>
@@ -2978,28 +3123,30 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     ) : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24 md:pb-0">
       {header}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr] lg:items-start">
         {/* Roster */}
         <div
           className={[
-            "rounded-xl border bg-white dark:bg-zinc-900/40 flex flex-col",
+            "rounded-xl border bg-white dark:bg-zinc-900/40 flex flex-col h-[60vh] max-h-[480px] min-h-[280px] lg:max-h-none lg:min-h-0 lg:h-[var(--pane-h)]",
             dragOverTarget?.type === "ROSTER_BIN"
               ? "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
               : "border-zinc-200 dark:border-zinc-800",
           ].join(" ")}
-          style={{ height: paneHeight }}
+          style={{ "--pane-h": `${paneHeight}px` } as React.CSSProperties}
           onDragOver={onDragOverRosterBin}
           onDrop={onDropOnRosterBin}
         >
-          <div className="flex items-center justify-between border-b border-zinc-200 p-3 text-xs font-bold text-zinc-500 dark:border-zinc-800">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 border-b border-zinc-200 p-3 text-xs font-bold text-zinc-500 dark:border-zinc-800">
             <div>
               สมาชิก ({loading ? "กำลังโหลด..." : roster.length})
               {classFilter.size > 0 ? <span className="ml-2 font-normal text-[11px]">(กรอง)</span> : null}
             </div>
-            <div className="text-[11px] font-normal">ลากจากปาร์ตี้มาวางเพื่อเอาออก</div>
+            <div className="text-[11px] font-normal">
+              {tapMode ? "แตะช่องในปาร์ตี้เพื่อเลือกสมาชิก" : "ลากจากปาร์ตี้มาวางเพื่อเอาออก"}
+            </div>
           </div>
 
             <div ref={rosterScrollRef} className="flex-1 min-h-0 overflow-y-auto p-2">
@@ -3019,7 +3166,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 <div
                   key={m.id}
                   className={[
-                    "flex items-center justify-between rounded-lg border p-2 mb-2 select-none",
+                    "flex items-center justify-between rounded-lg border p-2.5 sm:p-2 mb-2 select-none",
                     isAssigned
                       ? "bg-zinc-50 text-zinc-300 border-zinc-100 dark:bg-zinc-950/30 dark:border-zinc-900"
                       : leaveThisTime
@@ -3043,7 +3190,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <ColorDot value={m.color} />
-                      <PartyCountBadge count={countMemberParties(m)} />
+                      <PartyCountBadge count={partyCountOf(m)} />
                       <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={16} />
                       <div className="min-w-0 flex items-center gap-2">
                         <span
@@ -3071,11 +3218,14 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         </div>
 
         {/* Party Pane (grouped) — 5-column proportional grid */}
-        <div ref={partyScrollRef} className="min-h-0 overflow-y-auto pr-1" style={{ height: paneHeight }}>
+        <div
+          ref={partyScrollRef}
+          className="min-h-0 min-w-0 lg:h-[var(--pane-h)] lg:overflow-y-auto lg:pr-1"
+          style={{ "--pane-h": `${paneHeight}px` } as React.CSSProperties}
+        >
           {/* Layout: 5-column grid, each group spans its party count */}
           <div
-            className="grid items-start gap-2"
-            style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
+            className="grid grid-cols-1 items-start gap-2 lg:[grid-template-columns:repeat(5,minmax(0,1fr))]"
           >
             {groupedPartySections.map((sec, secIdx) => {
               const partyCount = sec.parties.length;
@@ -3100,10 +3250,13 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                   onToggleSelect={toggleSelect}
                   onOpenRemark={openRemarkEditor}
                   onRemoveFromSlot={removeFromSlot}
+                  tapMode={tapMode}
+                  onTapSlot={openSlotSheet}
                   groupColor={sec.type === "group" ? (sec.g.color ?? null) : null}
                   warTime={warTime}
                   isOnLeave={isOnLeave}
                   getLeaveReason={(id) => leaveReasonByMemberRef.current.get(id) ?? null}
+                  partyCountOf={partyCountOf}
                 />
               ));
 
@@ -3111,8 +3264,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                 return (
                   <div
                     key={`ungrouped-${secIdx}`}
-                    className="flex flex-col gap-1.5"
-                    style={{ gridColumn: `span ${spanCols}` }}
+                    className="flex min-w-0 flex-col gap-1.5 lg:[grid-column:span_var(--span)]"
+                    style={{ "--span": spanCols } as React.CSSProperties}
                   >
                     {/* ungrouped header */}
                     <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950/20">
@@ -3125,8 +3278,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                     </div>
                     {/* party grid — 1 ตี้ต่อ 1 column */}
                     <div
-                      className="grid gap-2"
-                      style={{ gridTemplateColumns: `repeat(${spanCols}, minmax(0, 1fr))` }}
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:[grid-template-columns:repeat(var(--span),minmax(0,1fr))]"
                     >
                       {partyCards}
                     </div>
@@ -3140,8 +3292,8 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               return (
                 <div
                   key={`group-${g.id}`}
-                  className="flex flex-col gap-1.5"
-                  style={{ gridColumn: `span ${spanCols}` }}
+                  className="flex min-w-0 flex-col gap-1.5 lg:[grid-column:span_var(--span)]"
+                  style={{ "--span": spanCols } as React.CSSProperties}
                 >
                   {/* group header — spans full width of this group */}
                   <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950/20 overflow-hidden">
@@ -3167,19 +3319,19 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             type="button"
-                            className="rounded border border-zinc-200 px-1.5 py-0.5 text-[11px] text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                            className="rounded border border-zinc-200 px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 text-[11px] text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                             onClick={() => moveGroup(g.id, -1)}
                             title="เลื่อนกลุ่มไปทางซ้าย/ขึ้น"
                           >↑</button>
                           <button
                             type="button"
-                            className="rounded border border-zinc-200 px-1.5 py-0.5 text-[11px] text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                            className="rounded border border-zinc-200 px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 text-[11px] text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                             onClick={() => moveGroup(g.id, 1)}
                             title="เลื่อนกลุ่มไปทางขวา/ลง"
                           >↓</button>
                           <button
                             type="button"
-                            className="rounded border border-zinc-200 px-1.5 py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 dark:border-zinc-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                            className="rounded border border-zinc-200 px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 text-[11px] font-semibold text-blue-600 hover:bg-blue-50 dark:border-zinc-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
                             onClick={() => openEditGroupModal(g)}
                             title="แก้ไขกลุ่ม"
                           >แก้ไข</button>
@@ -3193,8 +3345,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
 
                   {/* party cards — 1 ตี้ต่อ 1 column ตรงกับ span ของกลุ่ม */}
                   <div
-                    className="grid gap-2"
-                    style={{ gridTemplateColumns: `repeat(${spanCols}, minmax(0, 1fr))` }}
+                    className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:[grid-template-columns:repeat(var(--span),minmax(0,1fr))]"
                   >
                     {partyCards}
                   </div>
@@ -3205,14 +3356,30 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
         </div>
       </div>
 
+      {/* Mobile: แถบปุ่มลอยติดขอบล่าง (แสดงผังทัพวอ + บันทึก) */}
+      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 border-t border-zinc-200 bg-white/90 px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90 md:hidden">
+        <Button
+          variant="outline"
+          className="h-12 flex-1"
+          onClick={() => setWarMapOpen(true)}
+          disabled={!guild || loading}
+        >
+          แสดงผังทัพวอ
+        </Button>
+        <Button className="h-12 flex-1" onClick={save} disabled={!canEdit || !guild || isQuickWarMode}>
+          บันทึก
+        </Button>
+      </div>
+
       {remarkModal}
       {groupModal}
+      {slotSheetModal}
       {warMapModal}
 
       {/* Quick War Pick Dialog */}
       {quickWarPickOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 backdrop-blur-sm sm:p-4">
+          <div className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
             <div className="mb-1 text-base font-bold">⚡ จัดวอด่วน</div>
             <div className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
               เลือกวันและรอบเวลาที่จะคัดลอกทีมมาใช้ — ระบบจะโหลดคนลาของวันที่เลือก และปิดการบันทึก
@@ -3266,8 +3433,9 @@ function WarMapPartyCard(props: {
   warTime: WarTime;
   isOnLeave: (memberId: number, time: WarTime) => boolean;
   getLeaveReason: (memberId: number) => string | null;
+  partyCountOf: (m: MemberRow) => number;
 }) {
-  const { party: p, groupColor, groupLabel, membersById, classById, warTime, isOnLeave, getLeaveReason } = props;
+  const { party: p, groupColor, groupLabel, membersById, classById, warTime, isOnLeave, getLeaveReason, partyCountOf } = props;
 
   return (
     <div
@@ -3275,7 +3443,7 @@ function WarMapPartyCard(props: {
       style={{ height: "clamp(360px, calc((100vh - 260px) / 2), 520px)" }}
     >
       <div
-        className="px-2 py-1.5 text-center text-2xl font-black tracking-widest text-white"
+        className="px-2 py-1.5 text-center text-xl sm:text-2xl font-black tracking-widest text-white break-words"
         style={{ backgroundColor: groupColor ?? "#111827" }}
       >
         {groupLabel}
@@ -3315,7 +3483,7 @@ function WarMapPartyCard(props: {
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-2 min-w-0">
-                  <PartyCountBadge count={countMemberParties(mem)} />
+                  <PartyCountBadge count={partyCountOf(mem)} />
                   <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={16} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
@@ -3359,12 +3527,15 @@ function PartyCard(props: {
   onToggleSelect: (memberId: number, disabled: boolean) => void;
   onOpenRemark: (memberId: number) => void;
   onRemoveFromSlot: (partyId: number, slotIndex: number) => void;
+  tapMode: boolean;
+  onTapSlot: (partyId: number, slotIndex: number) => void;
   groupColor: string | null;
 
   // NEW
   warTime: WarTime;
   isOnLeave: (memberId: number, time: WarTime) => boolean;
   getLeaveReason: (memberId: number) => string | null;
+  partyCountOf: (m: MemberRow) => number;
 }) {
   const {
     party: p,
@@ -3380,10 +3551,13 @@ function PartyCard(props: {
     onToggleSelect,
     onOpenRemark,
     onRemoveFromSlot,
+    tapMode,
+    onTapSlot,
     groupColor,
     warTime,
     isOnLeave,
     getLeaveReason,
+    partyCountOf,
   } = props;
 
   function NameText({ m }: { m: MemberRow }) {
@@ -3443,7 +3617,8 @@ function PartyCard(props: {
             <div
               key={idx}
               className={[
-                "flex flex-col rounded-lg border px-2 py-1 select-none",
+                "flex flex-col rounded-lg border px-2 py-1.5 sm:py-1 select-none",
+                tapMode && canEdit ? "cursor-pointer active:bg-zinc-50 dark:active:bg-zinc-800/40" : "",
                 isTarget
                   ? "border-red-300 bg-red-50 dark:bg-red-950/20"
                   : isSelected
@@ -3452,6 +3627,7 @@ function PartyCard(props: {
               ].join(" ")}
               onDragOver={(e) => onDragOverSlot(e, p.id, idx)}
               onDrop={(e) => onDropOnSlot(e, p.id, idx)}
+              onClick={tapMode && canEdit ? () => onTapSlot(p.id, idx) : undefined}
               title={tooltip || undefined}
             >
               {mem ? (
@@ -3471,9 +3647,28 @@ function PartyCard(props: {
                         })
                       }
                       onDragEnd={onDragEnd}
-                      onClick={() => onToggleSelect(mem.id, leaveThisTime)}
+                      onClick={tapMode ? undefined : () => onToggleSelect(mem.id, leaveThisTime)}
                     >
-                      <PartyCountBadge count={countMemberParties(mem)} />
+                      {tapMode ? (
+                        <button
+                          type="button"
+                          aria-label="เลือกเพื่อเปลี่ยนสีหลายคน"
+                          disabled={leaveThisTime}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleSelect(mem.id, leaveThisTime);
+                          }}
+                          className={[
+                            "flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[11px] font-bold",
+                            isSelected
+                              ? "border-red-500 bg-red-500 text-white"
+                              : "border-zinc-300 text-transparent dark:border-zinc-600",
+                          ].join(" ")}
+                        >
+                          ✓
+                        </button>
+                      ) : null}
+                      <PartyCountBadge count={partyCountOf(mem)} />
                       <ClassIcon iconUrl={cls?.icon_url} label={cls?.name ?? undefined} size={14} />
                       <div className="min-w-0 flex items-center gap-1 text-xs font-semibold flex-1">
                         <NameText m={mem} />
@@ -3490,13 +3685,13 @@ function PartyCard(props: {
                       <div className="flex shrink-0 items-center gap-0.5">
                         <button
                           type="button"
-                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                          className="rounded border border-zinc-200 px-3 py-1.5 sm:px-1.5 sm:py-0.5 text-xs sm:text-[10px] font-semibold text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                           title="แก้ไข remark / สี"
                           onClick={(e) => { e.stopPropagation(); onOpenRemark(mem.id); }}
                         >แก้</button>
                         <button
                           type="button"
-                          className="rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:border-zinc-700 dark:text-zinc-500 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                          className="rounded border border-zinc-200 px-3 py-1.5 sm:px-1.5 sm:py-0.5 text-xs sm:text-[10px] font-semibold text-zinc-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:border-zinc-700 dark:text-zinc-500 dark:hover:bg-red-950/30 dark:hover:text-red-400"
                           title="เอาออกจากตี้"
                           onClick={(e) => { e.stopPropagation(); onRemoveFromSlot(p.id, idx); }}
                         >ออก</button>
@@ -3515,8 +3710,13 @@ function PartyCard(props: {
                   ) : null}
                 </>
               ) : (
-                <div className="flex items-center justify-center py-0.5 text-[10px] text-zinc-300 font-semibold tracking-widest">
-                  —
+                <div
+                  className={[
+                    "flex items-center justify-center py-0.5 text-[10px] font-semibold tracking-widest",
+                    tapMode && canEdit ? "py-1.5 text-xs tracking-normal text-zinc-400" : "text-zinc-300",
+                  ].join(" ")}
+                >
+                  {tapMode && canEdit ? "+ เลือกสมาชิก" : "—"}
                 </div>
               )}
             </div>

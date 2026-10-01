@@ -219,9 +219,9 @@ export function SkillStonesTab() {
             return (
               <div
                 key={t}
-                className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-4"
+                className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-3 sm:p-4"
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-semibold text-zinc-900 dark:text-zinc-100">
                     {typeLabel(t)}{" "}
                     <span className="text-xs text-zinc-500 font-normal">({selected.length})</span>
@@ -269,7 +269,7 @@ export function SkillStonesTab() {
                           )}
 
                           <div className="min-w-0">
-                            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[160px]">
+                            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[40vw] sm:max-w-[160px]">
                               {e ? e.name : `ID: ${s.equipment_create_id}`}
                             </div>
                             <div className="text-xs text-zinc-500">
@@ -302,9 +302,9 @@ export function SkillStonesTab() {
 
       {/* Modal */}
       {openType ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xl">
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xl">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
               <div className="font-semibold text-zinc-900 dark:text-zinc-100">
                 เพิ่มหินสกิล: {typeLabel(openType)}
               </div>
@@ -320,12 +320,12 @@ export function SkillStonesTab() {
               </Button>
             </div>
 
-            <div className="p-4">
+            <div className="min-h-0 overflow-y-auto p-3 sm:p-4">
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="ค้นหา..."
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-base sm:text-sm"
               />
 
               <div className="mt-3 max-h-[55vh] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -341,7 +341,7 @@ export function SkillStonesTab() {
                       const picked = colorPick[e.id] ?? "";
 
                       return (
-                        <div key={e.id} className="flex items-center justify-between gap-3 p-3">
+                        <div key={e.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                           <div className="flex items-center gap-3 min-w-0">
                             {e.image_url ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -362,7 +362,7 @@ export function SkillStonesTab() {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex w-full items-center gap-2 sm:w-auto">
                             {/* ✅ ต้องเลือกสีถึงจะเพิ่มได้ */}
                             <select
                               value={picked}
@@ -370,7 +370,7 @@ export function SkillStonesTab() {
                                 const v = ev.target.value as StoneColor | "";
                                 setColorPick((prev) => ({ ...prev, [e.id]: v }));
                               }}
-                              className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm"
+                              className="min-w-0 flex-1 sm:flex-none rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2.5 sm:py-2 text-base sm:text-sm"
                               disabled={already}
                             >
                               <option value="">เลือกสี</option>

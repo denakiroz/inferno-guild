@@ -592,7 +592,7 @@ export default function EventAdminClient() {
     return acc;
   }, {});
 
-  const tabBase   = "px-4 py-2 text-sm rounded-xl transition font-medium whitespace-nowrap";
+  const tabBase   = "flex-1 sm:flex-none text-center px-3 sm:px-4 py-2.5 sm:py-2 text-sm rounded-xl transition font-medium whitespace-nowrap";
   const tabActive = "bg-red-600 text-white shadow-sm";
   const tabIdle   = "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100";
 
@@ -600,7 +600,7 @@ export default function EventAdminClient() {
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-[60] px-4 py-3 rounded-xl text-sm font-medium shadow-lg border ${
+        <div className={`fixed top-4 inset-x-4 sm:inset-x-auto sm:right-4 z-[60] px-4 py-3 rounded-xl text-sm font-medium shadow-lg border ${
           toast.ok
             ? "bg-emerald-50 border-emerald-200 text-emerald-900 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200"
             : "bg-red-50 border-red-200 text-red-900 dark:bg-red-950/40 dark:border-red-800 dark:text-red-200"
@@ -624,7 +624,7 @@ export default function EventAdminClient() {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex flex-wrap gap-1.5 bg-zinc-100 dark:bg-zinc-900 rounded-2xl p-1 w-fit">
+      <div className="flex flex-wrap gap-1.5 bg-zinc-100 dark:bg-zinc-900 rounded-2xl p-1 w-full sm:w-fit">
         {(["events", "registrations", "parties", "league"] as Tab[]).map((t) => {
           const labels: Record<Tab, string> = {
             events:        "📋 Events",
@@ -658,24 +658,24 @@ export default function EventAdminClient() {
           </span>
 
           {/* ── เปลี่ยนสถานะ (inline ใน banner) ── */}
-          <div className="flex items-center gap-1 pl-1 border-l border-zinc-200 dark:border-zinc-700">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-1 w-full sm:w-auto sm:pl-1 sm:border-l border-zinc-200 dark:border-zinc-700">
             <span className="text-[11px] text-zinc-400 mr-1">เปลี่ยน:</span>
             {selectedEvent.status !== "open" && (
               <button
                 onClick={() => requestStatusChange(selectedEvent.id, selectedEvent.name, selectedEvent.status, "open")}
-                className="text-xs px-2 py-1 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:opacity-80 transition"
+                className="text-xs px-3 sm:px-2 py-2 sm:py-1 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:opacity-80 transition"
               >เปิด</button>
             )}
             {selectedEvent.status !== "closed" && (
               <button
                 onClick={() => requestStatusChange(selectedEvent.id, selectedEvent.name, selectedEvent.status, "closed")}
-                className="text-xs px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:opacity-80 transition"
+                className="text-xs px-3 sm:px-2 py-2 sm:py-1 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:opacity-80 transition"
               >ปิด</button>
             )}
             {selectedEvent.status !== "finished" && (
               <button
                 onClick={() => requestStatusChange(selectedEvent.id, selectedEvent.name, selectedEvent.status, "finished")}
-                className="text-xs px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:opacity-80 transition"
+                className="text-xs px-3 sm:px-2 py-2 sm:py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:opacity-80 transition"
               >จบ</button>
             )}
           </div>
@@ -691,14 +691,14 @@ export default function EventAdminClient() {
             <span className="text-sm text-zinc-500">{events.length} Event{events.length !== 1 ? "s" : ""}</span>
             <button
               onClick={() => setCreatingEvent(true)}
-              className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition"
+              className="h-10 sm:h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition"
             >+ สร้าง Event</button>
           </div>
 
           {/* Create modal */}
           {creatingEvent && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setCreatingEvent(false)}>
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
                 <div className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">🏆 สร้าง Event ใหม่</div>
                 <div className="space-y-3">
                   <div>
@@ -727,17 +727,17 @@ export default function EventAdminClient() {
                   <button
                     onClick={createEvent}
                     disabled={savingEvent || !newEventName.trim()}
-                    className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+                    className="flex-1 h-11 sm:h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
                   >{savingEvent ? "กำลังสร้าง..." : "✓ สร้าง"}</button>
-                  <button onClick={() => setCreatingEvent(false)} className="h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition">ยกเลิก</button>
+                  <button onClick={() => setCreatingEvent(false)} className="h-11 sm:h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition">ยกเลิก</button>
                 </div>
               </div>
             </div>
           )}
 
           {/* Events table */}
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+            <table className="w-full min-w-[460px] text-sm">
               <thead>
                 <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">ชื่อ Event</th>
@@ -754,15 +754,15 @@ export default function EventAdminClient() {
                 ) : events.map((ev) => (
                   <tr key={ev.id} className={`border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition ${selectedEvent?.id === ev.id ? "bg-red-50/40 dark:bg-red-950/10" : ""}`}>
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-zinc-900 dark:text-zinc-100">{ev.name}</div>
-                      {ev.description && <div className="text-xs text-zinc-400 truncate max-w-xs">{ev.description}</div>}
+                      <div className="font-semibold text-zinc-900 dark:text-zinc-100 break-words">{ev.name}</div>
+                      {ev.description && <div className="text-xs text-zinc-400 truncate max-w-[200px] sm:max-w-xs">{ev.description}</div>}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLOR[ev.status]}`}>
                         {STATUS_LABEL[ev.status]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-center text-sm font-medium text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
                       {ev.registration_count} คน
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -771,7 +771,7 @@ export default function EventAdminClient() {
                           setSelectedEvent(ev);
                           setTab("registrations");
                         }}
-                        className="text-xs font-semibold text-red-600 hover:underline"
+                        className="text-xs font-semibold text-red-600 hover:underline whitespace-nowrap py-2 px-1"
                       >จัดการ →</button>
                     </td>
                   </tr>
@@ -790,8 +790,8 @@ export default function EventAdminClient() {
             <button onClick={() => loadRegs(selectedEvent.id)} className="text-xs text-zinc-400 hover:text-zinc-600">↺ รีเฟรช</button>
           </div>
 
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
                   <th
@@ -843,21 +843,21 @@ export default function EventAdminClient() {
                   })
                   .map((r) => (
                   <tr key={r.id} className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition">
-                    <td className="px-4 py-3 font-medium text-zinc-800 dark:text-zinc-200">{r.member_name || r.discord_user_id}</td>
+                    <td className="px-4 py-3 font-medium text-zinc-800 dark:text-zinc-200 break-words">{r.member_name || r.discord_user_id}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
                         {r.class_icon && <img src={r.class_icon} alt="" className="w-5 h-5 rounded" />}
-                        <span className="text-xs text-zinc-500">{r.class_name || "-"}</span>
+                        <span className="text-xs text-zinc-500 whitespace-nowrap">{r.class_name || "-"}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-zinc-400">{new Date(r.registered_at).toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-400 whitespace-nowrap">{new Date(r.registered_at).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => setConfirmDeleteReg({
                           discord_user_id: r.discord_user_id,
                           member_name: r.member_name || r.discord_user_id,
                         })}
-                        className="text-xs text-red-500 hover:underline"
+                        className="text-xs text-red-500 hover:underline whitespace-nowrap py-2 px-1"
                       >ลบ</button>
                     </td>
                   </tr>
@@ -873,45 +873,45 @@ export default function EventAdminClient() {
         <div className="space-y-6">
           {/* ── Save bar: sticky ที่บน เลื่อนก็เห็น ── */}
           {dirtyPartyIds.size > 0 && (
-            <div className="sticky top-2 z-30 flex items-center gap-3 bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-300 dark:border-amber-700 rounded-2xl px-4 py-3 shadow-lg backdrop-blur">
+            <div className="sticky top-2 z-30 flex flex-wrap items-center gap-2 sm:gap-3 bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-300 dark:border-amber-700 rounded-2xl px-4 py-3 shadow-lg backdrop-blur">
               <span className="text-lg">⚠️</span>
-              <div className="flex-1 text-sm text-amber-900 dark:text-amber-200">
+              <div className="flex-1 min-w-[140px] text-sm text-amber-900 dark:text-amber-200">
                 <span className="font-semibold">มีลำดับที่ยังไม่ได้บันทึก</span>
                 <span className="ml-2 text-xs opacity-75">({dirtyPartyIds.size} ปาร์ตี้)</span>
               </div>
               <button
                 onClick={discardAllOrders}
                 disabled={savingOrder}
-                className="h-8 px-3 rounded-xl border border-zinc-300 dark:border-zinc-600 text-xs text-zinc-700 dark:text-zinc-200 bg-white/70 dark:bg-zinc-900/70 hover:bg-white dark:hover:bg-zinc-800 disabled:opacity-50 transition"
+                className="h-10 sm:h-8 px-3 rounded-xl border border-zinc-300 dark:border-zinc-600 text-xs text-zinc-700 dark:text-zinc-200 bg-white/70 dark:bg-zinc-900/70 hover:bg-white dark:hover:bg-zinc-800 disabled:opacity-50 transition"
               >↺ ยกเลิก</button>
               <button
                 onClick={saveAllOrders}
                 disabled={savingOrder}
-                className="h-8 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50 transition shadow"
+                className="h-10 sm:h-8 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50 transition shadow"
               >{savingOrder ? "กำลังบันทึก..." : "💾 บันทึก"}</button>
             </div>
           )}
 
           {/* Create party */}
           <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
+            <div className="space-y-1 w-full sm:w-auto">
               <label className="block text-xs font-medium text-zinc-500">ชื่อปาร์ตี้</label>
               <input
                 type="text"
                 value={newPartyName}
                 onChange={(e) => setNewPartyName(e.target.value)}
                 placeholder="เช่น Team Alpha"
-                className="h-9 w-48 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                className="h-10 sm:h-9 w-full sm:w-48 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
               />
             </div>
             <div className="space-y-1">
               <label className="block text-xs font-medium text-zinc-500">สี</label>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1.5 sm:gap-1">
                 {PARTY_COLORS.map((c) => (
                   <button
                     key={c}
                     onClick={() => setNewPartyColor(c)}
-                    className={`w-6 h-6 rounded-full border-2 transition ${newPartyColor === c ? "border-zinc-900 dark:border-zinc-100 scale-110" : "border-transparent"}`}
+                    className={`w-8 h-8 sm:w-6 sm:h-6 rounded-full border-2 transition ${newPartyColor === c ? "border-zinc-900 dark:border-zinc-100 scale-110" : "border-transparent"}`}
                     style={{ background: c }}
                   />
                 ))}
@@ -920,7 +920,7 @@ export default function EventAdminClient() {
             <button
               onClick={createParty}
               disabled={savingParty || !newPartyName.trim()}
-              className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+              className="h-10 sm:h-9 w-full sm:w-auto px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
             >+ สร้างปาร์ตี้</button>
           </div>
 
@@ -935,11 +935,11 @@ export default function EventAdminClient() {
                     const selectedParty = parties.find((p) => p.id === assignToParty);
                     const usedPositions = new Set((selectedParty?.members ?? []).map((m) => m.position));
                     return (
-                    <div key={r.discord_user_id} className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2.5 py-1.5">
+                    <div key={r.discord_user_id} className="flex flex-wrap items-center gap-1.5 max-w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2.5 py-1.5">
                       {r.class_icon && <img src={r.class_icon} alt="" className="w-4 h-4 rounded" />}
                       <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{r.member_name || r.discord_user_id}</span>
                       {assigningUid === r.discord_user_id ? (
-                        <div className="flex items-center gap-1 ml-1">
+                        <div className="flex flex-wrap items-center gap-1 ml-1 max-w-full">
                           <select
                             value={assignToParty}
                             onChange={(e) => {
@@ -958,7 +958,7 @@ export default function EventAdminClient() {
                                 setAssignToPosition(null);
                               }
                             }}
-                            className="h-6 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1"
+                            className="h-9 sm:h-6 max-w-full text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1"
                           >
                             <option value="">เลือกปาร์ตี้</option>
                             {parties.map((p) => {
@@ -977,7 +977,7 @@ export default function EventAdminClient() {
                                 const v = e.target.value;
                                 setAssignToPosition(v === "" ? null : Number(v));
                               }}
-                              className="h-6 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1"
+                              className="h-9 sm:h-6 max-w-full text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-1"
                             >
                               <option value="">ตำแหน่ง</option>
                               {Array.from({ length: PARTY_MAX_SIZE }).map((_, i) => {
@@ -1002,11 +1002,11 @@ export default function EventAdminClient() {
                               );
                             }}
                             disabled={!assignToParty || assignToPosition == null || usedPositions.has(assignToPosition) || (selectedParty?.members.length ?? 0) >= PARTY_MAX_SIZE}
-                            className="h-6 px-2 rounded-lg bg-red-600 text-white text-[10px] disabled:opacity-50"
+                            className="h-9 sm:h-6 px-3 sm:px-2 rounded-lg bg-red-600 text-white text-[10px] disabled:opacity-50"
                           >ใส่</button>
                           <button
                             onClick={() => { setAssigningUid(null); setAssignToParty(""); setAssignToPosition(null); }}
-                            className="text-zinc-400 text-xs"
+                            className="text-zinc-400 text-xs px-2 py-2 sm:p-0"
                           >✕</button>
                         </div>
                       ) : (
@@ -1016,7 +1016,7 @@ export default function EventAdminClient() {
                             setAssignToParty("");
                             setAssignToPosition(null);
                           }}
-                          className="ml-1 text-[10px] text-red-600 hover:underline font-semibold"
+                          className="ml-1 text-[10px] text-red-600 hover:underline font-semibold py-2 px-1 sm:p-0"
                         >+ ใส่</button>
                       )}
                     </div>
@@ -1047,14 +1047,14 @@ export default function EventAdminClient() {
                     <button
                       onClick={() => setColorPickerPid((cur) => (cur === p.id ? null : p.id))}
                       title="เปลี่ยนสี"
-                      className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-white/20 shadow-sm hover:ring-2 hover:ring-offset-1 hover:ring-red-300 transition"
+                      className="inline-flex shrink-0 items-center justify-center w-5 h-5 sm:w-4 sm:h-4 rounded-full border border-white/20 shadow-sm hover:ring-2 hover:ring-offset-1 hover:ring-red-300 transition"
                       style={{ background: p.color }}
                     />
                     {colorPickerPid === p.id && (
                       <>
                         {/* backdrop — click outside to close */}
                         <div className="fixed inset-0 z-20" onClick={() => setColorPickerPid(null)} />
-                        <div className="absolute z-30 top-full left-3 mt-1 flex gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl p-1.5 shadow-xl">
+                        <div className="absolute z-30 top-full left-3 mt-1 flex flex-wrap max-w-[calc(100%-1.5rem)] gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl p-1.5 shadow-xl">
                           {PARTY_COLORS.map((c) => (
                             <button
                               key={c}
@@ -1082,11 +1082,11 @@ export default function EventAdminClient() {
                       />
                     ) : (
                       <>
-                        <span className="font-bold text-zinc-900 dark:text-zinc-100 flex-1 truncate">{p.name}</span>
+                        <span className="font-bold text-zinc-900 dark:text-zinc-100 flex-1 min-w-0 truncate">{p.name}</span>
                         <button
                           onClick={() => { setRenamingPartyId(p.id); setRenamingPartyName(p.name); }}
                           title="เปลี่ยนชื่อ"
-                          className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                          className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-2 -m-1 sm:p-0 sm:m-0"
                         >✎</button>
                       </>
                     )}
@@ -1097,14 +1097,14 @@ export default function EventAdminClient() {
                     {dirtyPartyIds.has(p.id) && (
                       <span title="ยังไม่ได้บันทึก" className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                     )}
-                    <button onClick={() => deleteParty(p.id)} className="text-xs text-red-400 hover:text-red-600">🗑</button>
+                    <button onClick={() => deleteParty(p.id)} className="text-xs text-red-400 hover:text-red-600 p-2 -m-1 sm:p-0 sm:m-0">🗑</button>
                   </div>
                   {/* Members */}
                   <div className="p-3 space-y-1 min-h-[60px]">
                     {p.members.length === 0 ? (
                       <div className="text-xs text-zinc-400 text-center py-2">ยังไม่มีสมาชิก</div>
                     ) : p.members.map((m, mi) => (
-                      <div key={m.discord_user_id} className="flex items-center gap-1.5">
+                      <div key={m.discord_user_id} className="flex items-center gap-1.5 min-w-0">
                         <span className="inline-flex items-center justify-center w-4 h-4 rounded text-[9px] font-bold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 shrink-0" title={`ตำแหน่งที่ ${mi + 1}`}>{mi + 1}</span>
                         {m.class_icon && <img src={m.class_icon} alt="" className="w-4 h-4 rounded" />}
                         <span className="text-xs text-zinc-700 dark:text-zinc-300 flex-1 truncate">{m.member_name || m.discord_user_id}</span>
@@ -1114,18 +1114,18 @@ export default function EventAdminClient() {
                             onClick={() => moveMember(p.id, m.discord_user_id, "up")}
                             disabled={mi === 0}
                             title="เลื่อนขึ้น"
-                            className="w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-[10px] leading-none disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            className="w-8 h-8 sm:w-5 sm:h-5 flex items-center justify-center rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-[10px] leading-none disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                           >▲</button>
                           <button
                             onClick={() => moveMember(p.id, m.discord_user_id, "down")}
                             disabled={mi === p.members.length - 1}
                             title="เลื่อนลง"
-                            className="w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-[10px] leading-none disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            className="w-8 h-8 sm:w-5 sm:h-5 flex items-center justify-center rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-[10px] leading-none disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                           >▼</button>
                           <button
                             onClick={() => removeMember(p.id, m.discord_user_id)}
                             title="ลบออกจากปาร์ตี้"
-                            className="w-5 h-5 flex items-center justify-center rounded text-zinc-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-xs ml-0.5"
+                            className="w-8 h-8 sm:w-5 sm:h-5 flex items-center justify-center rounded text-zinc-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 text-xs ml-0.5"
                           >✕</button>
                         </div>
                       </div>
@@ -1145,7 +1145,7 @@ export default function EventAdminClient() {
           onClick={() => !statusChanging && setConfirmStatus(null)}
         >
           <div
-            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">
@@ -1170,14 +1170,14 @@ export default function EventAdminClient() {
               <button
                 onClick={doStatusChange}
                 disabled={statusChanging}
-                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+                className="flex-1 h-11 sm:h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
               >
                 {statusChanging ? "กำลังเปลี่ยน..." : "✓ ยืนยัน"}
               </button>
               <button
                 onClick={() => setConfirmStatus(null)}
                 disabled={statusChanging}
-                className="h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition"
+                className="h-11 sm:h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition"
               >
                 ยกเลิก
               </button>
@@ -1193,7 +1193,7 @@ export default function EventAdminClient() {
           onClick={() => !deletingReg && setConfirmDeleteReg(null)}
         >
           <div
-            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 sm:p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">
@@ -1210,14 +1210,14 @@ export default function EventAdminClient() {
               <button
                 onClick={doDeleteRegistration}
                 disabled={deletingReg}
-                className="flex-1 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+                className="flex-1 h-11 sm:h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
               >
                 {deletingReg ? "กำลังลบ..." : "🗑 ลบ"}
               </button>
               <button
                 onClick={() => setConfirmDeleteReg(null)}
                 disabled={deletingReg}
-                className="h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition"
+                className="h-11 sm:h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition"
               >
                 ยกเลิก
               </button>
@@ -1234,7 +1234,7 @@ export default function EventAdminClient() {
             <button
               onClick={generateLeague}
               disabled={generatingLeague || parties.length < 2}
-              className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+              className="h-10 sm:h-9 w-full sm:w-auto px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
             >{generatingLeague ? "กำลังสร้าง..." : "🔄 สร้างตารางแข่ง (Round-Robin)"}</button>
             {parties.length < 2 && (
               <span className="text-xs text-zinc-400">ต้องมีอย่างน้อย 2 ปาร์ตี้ก่อน</span>
@@ -1256,7 +1256,8 @@ export default function EventAdminClient() {
                   <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
                     <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100">🏅 ตารางคะแนน</span>
                   </div>
-                  <table className="w-full text-xs">
+                  <div className="overflow-x-auto">
+                  <table className="w-full min-w-[300px] text-xs">
                     <thead>
                       <tr className="border-b border-zinc-100 dark:border-zinc-800">
                         <th className="px-3 py-2 text-left text-zinc-500">#</th>
@@ -1274,7 +1275,7 @@ export default function EventAdminClient() {
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-1.5">
                               {colorSwatch(s.color)}
-                              <span className="font-semibold text-zinc-800 dark:text-zinc-200">{s.name}</span>
+                              <span className="font-semibold text-zinc-800 dark:text-zinc-200 break-words">{s.name}</span>
                             </div>
                           </td>
                           <td className="px-3 py-2 text-center text-zinc-500">{s.played}</td>
@@ -1285,6 +1286,7 @@ export default function EventAdminClient() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
 
@@ -1299,15 +1301,16 @@ export default function EventAdminClient() {
                     </div>
                     <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                       {rMatches.map((m) => (
-                        <div key={m.id} className="flex items-center gap-3 px-4 py-3">
+                        <div key={m.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3">
+                         <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                           {/* Party 1 */}
-                          <div className={`flex items-center gap-1.5 flex-1 justify-end ${m.winner?.id === m.party1?.id ? "font-bold" : "opacity-70"}`}>
-                            <span className="text-sm text-zinc-800 dark:text-zinc-200">{m.party1?.name ?? "?"}</span>
+                          <div className={`flex items-center gap-1.5 flex-1 min-w-0 justify-end text-right ${m.winner?.id === m.party1?.id ? "font-bold" : "opacity-70"}`}>
+                            <span className="text-sm text-zinc-800 dark:text-zinc-200 break-words min-w-0">{m.party1?.name ?? "?"}</span>
                             {m.party1 && colorSwatch(m.party1.color)}
                           </div>
 
                           {/* VS / Result */}
-                          <div className="text-center w-16 shrink-0">
+                          <div className="text-center w-12 sm:w-16 shrink-0">
                             {m.status === "done" ? (
                               <div className="text-xs font-bold text-zinc-400">จบแล้ว</div>
                             ) : (
@@ -1316,13 +1319,14 @@ export default function EventAdminClient() {
                           </div>
 
                           {/* Party 2 */}
-                          <div className={`flex items-center gap-1.5 flex-1 ${m.winner?.id === m.party2?.id ? "font-bold" : "opacity-70"}`}>
+                          <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${m.winner?.id === m.party2?.id ? "font-bold" : "opacity-70"}`}>
                             {m.party2 && colorSwatch(m.party2.color)}
-                            <span className="text-sm text-zinc-800 dark:text-zinc-200">{m.party2?.name ?? "?"}</span>
+                            <span className="text-sm text-zinc-800 dark:text-zinc-200 break-words min-w-0">{m.party2?.name ?? "?"}</span>
                           </div>
 
+                         </div>
                           {/* Record result */}
-                          <div className="shrink-0 w-28">
+                          <div className="shrink-0 w-full sm:w-28">
                             {m.status === "done" ? (
                               <div className="flex items-center gap-1.5">
                                 <span className="text-xs font-semibold" style={{ color: m.winner?.color }}>
@@ -1330,19 +1334,19 @@ export default function EventAdminClient() {
                                 </span>
                                 <button
                                   onClick={() => recordResult(m.id, null)}
-                                  className="text-[10px] text-zinc-400 hover:text-zinc-600 underline"
+                                  className="text-[10px] text-zinc-400 hover:text-zinc-600 underline py-2 px-1 sm:p-0"
                                 >รีเซ็ต</button>
                               </div>
                             ) : (
                               <div className="flex gap-1">
                                 <button
                                   onClick={() => recordResult(m.id, m.party1?.id ?? null)}
-                                  className="flex-1 h-7 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90"
+                                  className="flex-1 h-9 sm:h-7 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90"
                                   style={{ background: m.party1?.color ?? "#666" }}
                                 >P1 ชนะ</button>
                                 <button
                                   onClick={() => recordResult(m.id, m.party2?.id ?? null)}
-                                  className="flex-1 h-7 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90"
+                                  className="flex-1 h-9 sm:h-7 rounded-lg text-[11px] font-semibold text-white transition hover:opacity-90"
                                   style={{ background: m.party2?.color ?? "#666" }}
                                 >P2 ชนะ</button>
                               </div>

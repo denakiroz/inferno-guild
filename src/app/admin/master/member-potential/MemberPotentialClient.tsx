@@ -87,7 +87,7 @@ function PlayerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4"
       onClick={onClose}
     >
       <div
@@ -95,7 +95,7 @@ function PlayerModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-5 py-4 flex items-center gap-3">
+        <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-3 sm:px-5 py-3 sm:py-4 flex items-center gap-3">
           {row.class_icon && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={row.class_icon} alt="" className="w-8 h-8 rounded-lg ring-1 ring-zinc-200 dark:ring-zinc-700" loading="lazy" decoding="async" />
@@ -106,12 +106,12 @@ function PlayerModal({
           </div>
           <button
             onClick={onClose}
-            className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+            className="h-10 w-10 sm:h-8 sm:w-8 shrink-0 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
           >✕</button>
         </div>
 
         {/* Date range picker */}
-        <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-5 py-3 flex flex-wrap items-center gap-3">
+        <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-3 sm:px-5 py-3 flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="text-xs font-medium text-zinc-500">ช่วงวันที่:</span>
           <div className="flex items-center gap-2">
             <input
@@ -133,7 +133,7 @@ function PlayerModal({
 
           {/* Batch quick-select pills */}
           {allBatches.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 ml-2">
+            <div className="flex flex-wrap gap-1.5 sm:ml-2">
               {/* Quick: 3 batch / 6 batch / ทั้งหมด — dedup based on actual count */}
               {((): { n: number; label: string }[] => {
                 const opts: { n: number; label: string }[] = [];
@@ -170,7 +170,7 @@ function PlayerModal({
         </div>
 
         {/* Table */}
-        <div className="flex-1 overflow-auto p-5">
+        <div className="flex-1 overflow-auto p-3 sm:p-5">
           {loading ? (
             <div className="py-12 text-center text-sm text-zinc-400">กำลังโหลด...</div>
           ) : batches.length === 0 ? (
@@ -1116,12 +1116,12 @@ export default function MemberPotentialClient() {
 
   // ---------- Render ----------
   const tabCls = (t: Tab) =>
-    `px-4 py-2 text-sm rounded-xl border transition ${tab === t
+    `px-3 sm:px-4 py-2.5 sm:py-2 text-sm rounded-xl border transition ${tab === t
       ? "bg-red-600 text-white border-red-600"
       : "border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`;
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4">
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Member Potential</h1>
@@ -1147,7 +1147,7 @@ export default function MemberPotentialClient() {
             const currentSeason = seasons.find((s) => s.start_date <= today && s.end_date >= today);
 
             const pillCls = (active: boolean) =>
-              `h-8 px-3 rounded-xl text-xs font-semibold border transition whitespace-nowrap ${
+              `h-9 sm:h-8 px-3 rounded-xl text-xs font-semibold border transition whitespace-nowrap ${
                 active
                   ? "bg-red-600 text-white border-red-600"
                   : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
@@ -1191,7 +1191,7 @@ export default function MemberPotentialClient() {
                 <button
                   key={g ?? "all"}
                   onClick={() => setGuildFilter(g)}
-                  className={`h-8 px-3 rounded-xl text-sm border transition ${active
+                  className={`h-10 sm:h-8 px-3 rounded-xl text-sm border transition ${active
                     ? "bg-red-600 text-white border-red-600"
                     : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
                 >
@@ -1233,7 +1233,7 @@ export default function MemberPotentialClient() {
               return 0;
             };
 
-            const btnCls = (key: string | null) => `h-7 rounded-lg text-xs border transition flex items-center gap-1.5 px-2.5 ${
+            const btnCls = (key: string | null) => `h-9 sm:h-7 rounded-lg text-xs border transition flex items-center gap-1.5 px-2.5 ${
               roleFilter === key
                 ? "bg-zinc-800 text-white border-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
                 : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
@@ -1294,11 +1294,11 @@ export default function MemberPotentialClient() {
             ) : (
               <>
                 <button onClick={() => fileRef.current?.click()} disabled={importing}
-                  className="h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition">
+                  className="h-10 sm:h-8 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition">
                   {importing ? "กำลัง Import..." : "📥 Import Excel"}
                 </button>
                 <button onClick={handleDownloadTemplate}
-                  className="h-8 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm transition">
+                  className="h-10 sm:h-8 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm transition">
                   📋 Download Template
                 </button>
               </>
@@ -1308,7 +1308,7 @@ export default function MemberPotentialClient() {
           <div className="flex items-center gap-2">
             <input value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="ค้นหาชื่อ / Discord ID..."
-              className="h-9 w-64 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm" />
+              className="h-10 sm:h-9 min-w-0 flex-1 sm:flex-none sm:w-64 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm" />
             <span className="text-xs text-zinc-500">{sorted.length} คน</span>
           </div>
 
@@ -1397,7 +1397,7 @@ export default function MemberPotentialClient() {
               <button
                 key={g ?? "all"}
                 onClick={() => setBatchGuildFilter(g)}
-                className={`h-8 px-3 rounded-xl text-xs font-semibold transition border ${
+                className={`h-10 sm:h-8 px-3 rounded-xl text-xs font-semibold transition border ${
                   batchGuildFilter === g
                     ? "bg-red-600 text-white border-red-600 shadow-sm"
                     : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-red-400"
@@ -1409,8 +1409,8 @@ export default function MemberPotentialClient() {
           </div>
 
           {/* Table */}
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+            <table className="w-full min-w-[640px] sm:min-w-0 text-sm">
               <thead>
                 <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">ชื่อ Batch</th>
@@ -1438,7 +1438,7 @@ export default function MemberPotentialClient() {
                     <td className="px-4 py-3 text-xs text-zinc-500">{new Date(b.imported_at).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-3 text-center text-xs text-zinc-600">{b.record_count} คน</td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-3 sm:gap-2 whitespace-nowrap">
                         <button
                           onClick={() => openViewBatch(b)}
                           className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:underline"
@@ -1464,21 +1464,21 @@ export default function MemberPotentialClient() {
       {/* ===== EDIT BATCH MODAL ===== */}
       {editingBatch && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4"
           onClick={() => setEditingBatch(null)}
         >
           <div
-            className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md"
+            className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="border-b border-zinc-100 dark:border-zinc-800 px-5 py-4 flex items-center justify-between">
+            <div className="border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-5 py-4 flex items-center justify-between">
               <h3 className="font-bold text-zinc-900 dark:text-zinc-100">✏️ แก้ไข Batch</h3>
               <button
                 onClick={() => setEditingBatch(null)}
-                className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+                className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
               >✕</button>
             </div>
-            <div className="px-5 py-4 space-y-4">
+            <div className="px-4 sm:px-5 py-4 space-y-4">
               {/* Battle date (used for season filter) */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400">
@@ -1513,7 +1513,7 @@ export default function MemberPotentialClient() {
                     <button
                       key={g ?? "none"}
                       onClick={() => setEditBatchGuild(g)}
-                      className={`flex-1 h-9 rounded-xl text-xs font-semibold transition border ${
+                      className={`flex-1 h-10 sm:h-9 rounded-xl text-xs font-semibold transition border ${
                         editBatchGuild === g
                           ? "bg-red-600 text-white border-red-600"
                           : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-red-400"
@@ -1525,15 +1525,15 @@ export default function MemberPotentialClient() {
                 </div>
               </div>
             </div>
-            <div className="border-t border-zinc-100 dark:border-zinc-800 px-5 py-4 flex justify-end gap-2">
+            <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 sm:px-5 py-4 flex justify-end gap-2">
               <button
                 onClick={() => setEditingBatch(null)}
-                className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                className="h-10 sm:h-9 flex-1 sm:flex-none px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
               >ยกเลิก</button>
               <button
                 onClick={saveBatchEdit}
                 disabled={savingBatch}
-                className="h-9 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+                className="h-10 sm:h-9 flex-1 sm:flex-none px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
               >{savingBatch ? "กำลังบันทึก..." : "💾 บันทึก"}</button>
             </div>
           </div>
@@ -1617,7 +1617,7 @@ export default function MemberPotentialClient() {
 
         return (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4"
             onClick={safeClose}
           >
             <div
@@ -1625,7 +1625,7 @@ export default function MemberPotentialClient() {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-4 flex items-start gap-3">
+              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-6 py-3 sm:py-4 flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">
@@ -1648,13 +1648,13 @@ export default function MemberPotentialClient() {
                 </div>
                 <button
                   onClick={safeClose}
-                  className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+                  className="h-10 w-10 sm:h-8 sm:w-8 shrink-0 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
                 >✕</button>
               </div>
 
               {/* Class filter pills */}
               {bdClassOptions.length > 0 && (
-                <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-3 flex flex-wrap items-center gap-1.5">
+                <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-6 py-3 flex flex-wrap items-center gap-1.5 max-h-28 sm:max-h-none overflow-y-auto sm:overflow-visible">
                   <span className="text-xs text-zinc-400 mr-1">กรองอาชีพ:</span>
                   <button
                     type="button"
@@ -1697,14 +1697,14 @@ export default function MemberPotentialClient() {
               )}
 
               {/* Search bar */}
-              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-3 flex items-center gap-2">
+              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-6 py-3 flex items-center gap-2">
                 <input
                   value={batchDetailSearch}
                   onChange={(e) => setBatchDetailSearch(e.target.value)}
                   placeholder="ค้นหาชื่อ / อาชีพ..."
-                  className="h-9 w-72 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                  className="h-10 sm:h-9 min-w-0 flex-1 sm:flex-none sm:w-72 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
                 />
-                <span className="text-xs text-zinc-500">
+                <span className="shrink-0 text-xs text-zinc-500">
                   แสดง {sortedRecs.length} / {viewingBatchRecords.length} คน
                 </span>
               </div>
@@ -1851,7 +1851,7 @@ export default function MemberPotentialClient() {
               </div>
 
               {/* Footer */}
-              <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 px-6 py-3 flex items-center gap-2">
+              <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 px-4 sm:px-6 py-3 flex flex-wrap items-center gap-2">
                 {batchEditMode && hasUnsavedChanges && (
                   <span className="text-xs text-amber-600 dark:text-amber-400">
                     ✏️ Draft <span className="font-semibold">{batchEdits.size} คน</span> · ยังไม่ได้บันทึก
@@ -1862,7 +1862,7 @@ export default function MemberPotentialClient() {
                     โหมดแก้ไข — คลิกที่ตัวเลขเพื่อพิมพ์แก้
                   </span>
                 )}
-                <div className="ml-auto flex gap-2">
+                <div className="w-full sm:w-auto sm:ml-auto flex gap-2 [&>button]:flex-1 sm:[&>button]:flex-none [&>button]:!h-10 sm:[&>button]:!h-9">
                   {batchEditMode ? (
                     <>
                       <button
@@ -1922,7 +1922,7 @@ export default function MemberPotentialClient() {
               <button
                 onClick={saveAllWeights}
                 disabled={savingW}
-                className="h-8 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
+                className="h-10 sm:h-8 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 {savingW ? "กำลังบันทึก..." : "💾 บันทึก"}
               </button>
@@ -1938,7 +1938,7 @@ export default function MemberPotentialClient() {
                   <thead>
                     <tr className="border-b border-zinc-200 dark:border-zinc-800">
                       {/* Category col */}
-                      <th className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 text-left text-xs font-semibold text-zinc-500 w-36 sticky left-0 z-10">
+                      <th className="bg-zinc-50 dark:bg-zinc-900 px-3 sm:px-4 py-3 text-left text-xs font-semibold text-zinc-500 w-28 sm:w-36 sticky left-0 z-10">
                         หมวด
                       </th>
                       <th className="bg-zinc-50 dark:bg-zinc-900 px-3 py-3 text-center text-xs font-semibold text-zinc-400 w-16">
@@ -1979,7 +1979,7 @@ export default function MemberPotentialClient() {
                         <tr key={cat}
                           className={`border-b border-zinc-100 dark:border-zinc-800/60 ${rowBg}`}>
                           {/* Category label */}
-                          <td className={`px-4 py-3 sticky left-0 z-10 ${rowBg}`}>
+                          <td className={`px-3 sm:px-4 py-3 sticky left-0 z-10 ${rowBg}`}>
                             <div className="flex items-center gap-2">
                               {isDeath && <span className="text-red-500 text-base">⚠️</span>}
                               <span className={`font-semibold text-sm ${isDeath ? "text-red-600 dark:text-red-400" : "text-zinc-700 dark:text-zinc-200"}`}>
@@ -2051,7 +2051,7 @@ export default function MemberPotentialClient() {
       {tab === "seasons" && (
         <div className="space-y-5">
           {/* Create new season form */}
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 space-y-4">
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 sm:p-5 space-y-4">
             <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm">➕ สร้าง Season ใหม่</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-1">
@@ -2061,7 +2061,7 @@ export default function MemberPotentialClient() {
                   placeholder="เช่น Season 1"
                   value={newSeasonName}
                   onChange={(e) => setNewSeasonName(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                  className="w-full h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
                 />
               </div>
               <div>
@@ -2071,7 +2071,7 @@ export default function MemberPotentialClient() {
                   value={newSeasonStart}
                   max={newSeasonEnd || undefined}
                   onChange={(e) => setNewSeasonStart(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                  className="w-full h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
                 />
               </div>
               <div>
@@ -2081,7 +2081,7 @@ export default function MemberPotentialClient() {
                   value={newSeasonEnd}
                   min={newSeasonStart || undefined}
                   onChange={(e) => setNewSeasonEnd(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                  className="w-full h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
                 />
               </div>
             </div>
@@ -2089,7 +2089,7 @@ export default function MemberPotentialClient() {
               <button
                 onClick={handleCreateSeason}
                 disabled={savingSeason}
-                className="h-9 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+                className="h-10 sm:h-9 w-full sm:w-auto px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
               >
                 {savingSeason ? "กำลังสร้าง..." : "💾 สร้าง Season"}
               </button>
@@ -2102,8 +2102,8 @@ export default function MemberPotentialClient() {
           ) : seasons.length === 0 ? (
             <div className="py-8 text-center text-sm text-zinc-400">ยังไม่มี Season — กรอกฟอร์มด้านบนเพื่อสร้าง</div>
           ) : (
-            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+              <table className="w-full min-w-[560px] sm:min-w-0 text-sm">
                 <thead>
                   <tr className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-500">ชื่อ</th>
@@ -2146,7 +2146,7 @@ export default function MemberPotentialClient() {
                           ) : null}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-3 sm:gap-2 whitespace-nowrap">
                             <button
                               onClick={() => openEditSeason(s)}
                               className="text-xs text-blue-500 hover:underline"
@@ -2170,21 +2170,21 @@ export default function MemberPotentialClient() {
       {/* ===== Edit Season Modal ===== */}
       {editingSeason && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4"
           onClick={() => setEditingSeason(null)}
         >
           <div
-            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md"
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="border-b border-zinc-100 dark:border-zinc-800 px-5 py-4 flex items-center justify-between">
+            <div className="border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-5 py-4 flex items-center justify-between">
               <h3 className="font-bold text-zinc-900 dark:text-zinc-100">✏️ แก้ไข Season</h3>
               <button
                 onClick={() => setEditingSeason(null)}
-                className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+                className="h-10 w-10 sm:h-8 sm:w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
               >✕</button>
             </div>
-            <div className="px-5 py-4 space-y-4">
+            <div className="px-4 sm:px-5 py-4 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">ชื่อ Season</label>
                 <input
@@ -2194,7 +2194,7 @@ export default function MemberPotentialClient() {
                   className="w-full h-10 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">วันเริ่มต้น</label>
                   <input
@@ -2217,15 +2217,15 @@ export default function MemberPotentialClient() {
                 </div>
               </div>
             </div>
-            <div className="border-t border-zinc-100 dark:border-zinc-800 px-5 py-4 flex justify-end gap-2">
+            <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 sm:px-5 py-4 flex justify-end gap-2">
               <button
                 onClick={() => setEditingSeason(null)}
-                className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                className="h-10 sm:h-9 flex-1 sm:flex-none px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
               >ยกเลิก</button>
               <button
                 onClick={handleSaveEditSeason}
                 disabled={savingSeason}
-                className="h-9 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+                className="h-10 sm:h-9 flex-1 sm:flex-none px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 transition"
               >{savingSeason ? "กำลังบันทึก..." : "💾 บันทึก"}</button>
             </div>
           </div>
@@ -2240,8 +2240,8 @@ export default function MemberPotentialClient() {
             <p className="text-sm font-semibold mb-1">ลบ Season นี้?</p>
             <p className="text-xs text-zinc-500 mb-5">ข้อมูล batch และ record จะยังคงอยู่ แค่ลบช่วงวันที่ season นี้</p>
             <div className="flex gap-2 justify-center">
-              <button onClick={() => setDeletingSeason(null)} className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm">ยกเลิก</button>
-              <button onClick={() => handleDeleteSeason(deletingSeason)} className="h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm">ลบ</button>
+              <button onClick={() => setDeletingSeason(null)} className="h-10 sm:h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm">ยกเลิก</button>
+              <button onClick={() => handleDeleteSeason(deletingSeason)} className="h-10 sm:h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm">ลบ</button>
             </div>
           </div>
         </div>
@@ -2255,8 +2255,8 @@ export default function MemberPotentialClient() {
             <p className="text-sm font-semibold mb-1">ลบ Batch นี้?</p>
             <p className="text-xs text-zinc-500 mb-5">ข้อมูลสถิติใน batch นี้จะถูกลบทั้งหมด</p>
             <div className="flex gap-2 justify-center">
-              <button onClick={() => setDeletingBatch(null)} className="h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm">ยกเลิก</button>
-              <button onClick={() => deleteBatch(deletingBatch)} className="h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm">ลบ</button>
+              <button onClick={() => setDeletingBatch(null)} className="h-10 sm:h-9 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm">ยกเลิก</button>
+              <button onClick={() => deleteBatch(deletingBatch)} className="h-10 sm:h-9 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm">ลบ</button>
             </div>
           </div>
         </div>
@@ -2264,14 +2264,14 @@ export default function MemberPotentialClient() {
 
       {/* Delete success toast */}
       {deleteToast ? (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1100] bg-green-500 text-white px-6 py-3 rounded-xl text-sm shadow-lg pointer-events-none">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1100] w-max max-w-[calc(100vw-2rem)] text-center bg-green-500 text-white px-4 sm:px-6 py-3 rounded-xl text-sm shadow-lg pointer-events-none">
           ลบ Batch สำเร็จ ✓
         </div>
       ) : null}
 
       {/* General toast */}
       {toast ? (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[1100] px-6 py-3 rounded-xl text-sm shadow-lg pointer-events-none ${toast.ok ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}>
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[1100] w-max max-w-[calc(100vw-2rem)] text-center px-4 sm:px-6 py-3 rounded-xl text-sm shadow-lg pointer-events-none ${toast.ok ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}>
           {toast.msg}
         </div>
       ) : null}
@@ -2333,7 +2333,7 @@ export default function MemberPotentialClient() {
 
         return (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4"
             onClick={() => setPendingImport(null)}
           >
             <div
@@ -2341,8 +2341,8 @@ export default function MemberPotentialClient() {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-4 flex items-center justify-between">
-                <div>
+              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+                <div className="min-w-0">
                   <div className="font-bold text-zinc-900 dark:text-zinc-100 text-lg">📥 ยืนยัน Import</div>
                   <p className="text-xs text-zinc-500 mt-0.5">
                     ตรวจสอบข้อมูลก่อนนำเข้า — พบข้อมูลทั้งหมด <span className="font-semibold text-red-600 dark:text-red-400">{pendingImport.records.length}</span> คน
@@ -2351,12 +2351,12 @@ export default function MemberPotentialClient() {
                 </div>
                 <button
                   onClick={() => setPendingImport(null)}
-                  className="h-8 w-8 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
+                  className="h-10 w-10 sm:h-8 sm:w-8 shrink-0 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition text-sm"
                 >✕</button>
               </div>
 
               {/* Meta inputs */}
-              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1">
                     วันที่ war
@@ -2365,7 +2365,7 @@ export default function MemberPotentialClient() {
                     type="date"
                     value={importLabel}
                     onChange={(e) => setImportLabel(e.target.value)}
-                    className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                    className="w-full h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
                   />
                 </div>
                 <div>
@@ -2377,14 +2377,14 @@ export default function MemberPotentialClient() {
                     value={importOpponentGuild}
                     onChange={(e) => setImportOpponentGuild(e.target.value)}
                     placeholder="เช่น Guild XYZ"
-                    className="w-full h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
+                    className="w-full h-10 sm:h-9 px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm text-zinc-800 dark:text-zinc-200 focus:outline-none focus:border-red-400"
                   />
                 </div>
               </div>
 
               {/* Class filter pills */}
               {classOptions.length > 0 && (
-                <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-6 py-3 flex flex-wrap items-center gap-1.5">
+                <div className="shrink-0 border-b border-zinc-100 dark:border-zinc-800 px-4 sm:px-6 py-3 flex flex-wrap items-center gap-1.5 max-h-28 sm:max-h-none overflow-y-auto sm:overflow-visible">
                   <span className="text-xs text-zinc-400 mr-1">กรองอาชีพ:</span>
                   <button
                     type="button"
@@ -2428,14 +2428,14 @@ export default function MemberPotentialClient() {
 
               {/* Preview table */}
               <div className="flex-1 overflow-auto">
-                <div className="px-6 py-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400 sticky top-0 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 z-10 flex items-center justify-between">
+                <div className="px-4 sm:px-6 py-3 gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 sticky top-0 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 z-10 flex items-center justify-between">
                   <span>👁️ Preview ข้อมูลที่จะนำเข้า</span>
                   <span className="font-normal text-zinc-400">
                     แสดง {filteredRecords.length} / {pendingImport.records.length} คน
                   </span>
                 </div>
-                <div className="px-6 pb-4">
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                <div className="px-3 sm:px-6 pb-4">
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800">
@@ -2550,15 +2550,15 @@ export default function MemberPotentialClient() {
               </div>
 
               {/* Footer actions */}
-              <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 px-6 py-4 flex items-center gap-2">
-                <span className="text-xs text-zinc-400">
+              <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-zinc-400 min-w-0">
                   ตรวจสอบข้อมูลให้ถูกต้องก่อนกด Import (จะ import ทั้งหมด {pendingImport.records.length} คน ไม่ว่าเลือก filter อะไร)
                 </span>
-                <div className="ml-auto flex gap-2">
+                <div className="w-full sm:w-auto sm:ml-auto flex gap-2">
                   <button
                     type="button"
                     onClick={() => setPendingImport(null)}
-                    className="h-10 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                    className="h-10 flex-1 sm:flex-none px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                   >
                     ยกเลิก
                   </button>
@@ -2566,7 +2566,7 @@ export default function MemberPotentialClient() {
                     type="button"
                     onClick={handleConfirmImport}
                     disabled={importing}
-                    className="h-10 px-6 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50 transition"
+                    className="h-10 flex-1 sm:flex-none px-4 sm:px-6 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50 transition"
                   >
                     {importing ? "กำลัง Import..." : `✓ ยืนยัน Import ${pendingImport.records.length} คน`}
                   </button>

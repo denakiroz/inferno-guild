@@ -65,17 +65,17 @@ export default function AdminClient({ displayName }: Props) {
   }, [cronUrl, qc]);
 
   return (
-    <div className="p-6">
+    <div className="p-1 sm:p-6">
       <div className="mx-auto w-full max-w-[1200px] space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0">
           <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Admin</div>
-          <div className="text-sm text-zinc-500 dark:text-zinc-400">
+          <div className="text-sm text-zinc-500 dark:text-zinc-400 break-words">
             {displayName ? `Signed in as ${displayName}` : "Signed in"}
           </div>
         </div>
 
-        <Link href="/admin/members" className="text-sm underline text-zinc-700 dark:text-zinc-200">
+        <Link href="/admin/members" className="text-sm underline py-2 text-zinc-700 dark:text-zinc-200">
           ไปหน้า Members
         </Link>
       </div>
@@ -89,8 +89,8 @@ export default function AdminClient({ displayName }: Props) {
             Sync Discord Members
           </Button>
 
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            Calls: <code className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900">{"/api/cron/sync-discord-members?secret=***"}</code>
+          <span className="min-w-0 text-xs text-zinc-500 dark:text-zinc-400">
+            Calls: <code className="px-1 py-0.5 rounded break-all bg-zinc-100 dark:bg-zinc-900">{"/api/cron/sync-discord-members?secret=***"}</code>
           </span>
         </div>
 

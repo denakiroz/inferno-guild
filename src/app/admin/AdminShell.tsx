@@ -22,6 +22,7 @@ import {
 
 import { Button } from "@/app/components/UI";
 import { useTheme } from "@/app/theme/ThemeProvider";
+import { guildName } from "@/lib/guildLabel";
 import { useMe } from "@/hooks/api/members";
 
 type MeRes = {
@@ -153,9 +154,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <button
         type="button"
         className={[
-          "fixed left-4 top-4 z-[60]",
+          "fixed left-3 top-3 sm:left-4 sm:top-4 z-[60]",
           "rounded-2xl border border-zinc-200 dark:border-zinc-800",
-          "bg-white/70 dark:bg-zinc-950/60 backdrop-blur px-3 py-2 shadow-sm",
+          "bg-white/70 dark:bg-zinc-950/60 backdrop-blur px-3 py-2.5 md:py-2 shadow-sm",
           "hover:bg-white/90 dark:hover:bg-zinc-950/80",
         ].join(" ")}
         onClick={toggleMenu}
@@ -179,14 +180,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <aside
         className={[
           "fixed z-50 left-0 top-0 bottom-0",
-          "w-72 md:w-64",
+          "w-72 max-w-[85vw] md:w-64",
           "bg-white/85 dark:bg-zinc-950/70 backdrop-blur",
           "border-r border-zinc-200 dark:border-zinc-800",
           "transition-transform duration-200 ease-out",
           menuOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
-        <div className="h-full p-4 overflow-auto">
+        <div className="h-full p-4 overflow-y-auto overscroll-contain pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <div className="pt-14 md:pt-12">
             <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Inferno Admin</div>
             <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Manage guild data</div>
@@ -227,7 +228,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                               href={it.href}
                               onClick={() => setMenuOpen(false)}
                               className={[
-                                "flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition",
+                                "flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl text-sm border transition",
                                 active
                                   ? "bg-red-600 text-white border-red-600"
                                   : "bg-white/50 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-transparent hover:border-zinc-200 dark:hover:border-zinc-800",
@@ -268,7 +269,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                       {me?.user?.displayName ?? "Guest"}
                     </div>
                     <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-                      {roleLabel ?? "-"} • Guild {me?.user?.guild ?? "-"}
+                      {roleLabel ?? "-"} • {guildName(me?.user?.guild)}
                     </div>
                   </div>
                   <ChevronDown className="w-4 h-4 text-zinc-500" />
@@ -306,11 +307,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       <div
         className={[
           "transition-[padding-left] duration-200 ease-out",
-          "pt-14 md:pt-0",
+          "pt-14 md:pt-0 min-w-0",
           menuOpen ? "md:pl-64" : "md:pl-0",
         ].join(" ")}
       >
-        <main className="p-4 md:p-6">{children}</main>
+        <main className="p-4 md:p-6 min-w-0">{children}</main>
       </div>
     </div>
   );

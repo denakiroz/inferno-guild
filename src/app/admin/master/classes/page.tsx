@@ -94,7 +94,7 @@ export default function AdminMasterClassesPage() {
   return (
     <div className="mx-auto w-full max-w-4xl px-3 sm:px-4 md:px-0 py-2">
         <div className="space-y-6">
-        <Card>
+        <Card className="!p-4 sm:!p-6">
             <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Master Data • Classes</div>
             <div className="mt-1 text-sm text-zinc-500">เพิ่ม/แก้ไขอาชีพ (name, icon_url)</div>
 
@@ -112,22 +112,22 @@ export default function AdminMasterClassesPage() {
             </div>
 
             <div className="mt-4 flex justify-end">
-            <Button onClick={createRow} disabled={!canSubmitCreate}>
+            <Button className="w-full sm:w-auto" onClick={createRow} disabled={!canSubmitCreate}>
                 {creating ? "กำลังเพิ่ม..." : "เพิ่ม Class"}
             </Button>
             </div>
         </Card>
 
-        <Card>
-            <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">รายการทั้งหมด</div>
-            <Button variant="outline" onClick={load} disabled={loading}>
+        <Card className="!p-4 sm:!p-6">
+            <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 text-lg font-semibold text-zinc-900 dark:text-zinc-100">รายการทั้งหมด</div>
+            <Button variant="outline" className="shrink-0" onClick={load} disabled={loading}>
                 {loading ? "กำลังโหลด..." : "รีเฟรช"}
             </Button>
             </div>
 
             <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[480px] sm:min-w-0 text-sm">
                 <thead>
                 <tr className="text-left text-zinc-500">
                     <th className="py-2 pr-3">ID</th>
@@ -189,6 +189,7 @@ export default function AdminMasterClassesPage() {
         </Card>
 
         <Modal
+          className="max-h-[90vh] overflow-y-auto"
             open={open}
             onClose={() => {
             setOpen(false);

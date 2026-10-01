@@ -14,7 +14,7 @@ export const Card: React.FC<CardProps> = ({ className, noPadding, ...props }) =>
     className={cn(
       "rounded-2xl border border-zinc-200 bg-white shadow-sm",
       "dark:border-zinc-800 dark:bg-zinc-950",
-      noPadding ? "" : "p-6",
+      noPadding ? "" : "p-4 sm:p-6",
       className
     )}
     {...props}
@@ -106,7 +106,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
       ref={ref}
       suppressHydrationWarning
       className={cn(
-        "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm",
+        "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-base sm:text-sm",
         "placeholder:text-zinc-400",
         "focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500",
         "dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500",
@@ -128,7 +128,7 @@ export const Select = React.forwardRef<
     suppressHydrationWarning
     aria-invalid={invalid ? true : undefined}
     className={cn(
-      "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm",
+      "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-base sm:text-sm",
       "focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500",
       "dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
       // ✅ FIX: Tailwind syntax ต้องเป็น focus:!xxx ไม่ใช่ !focus:xxx
@@ -163,10 +163,11 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
-      <div className="absolute inset-0 flex items-center justify-center p-4">
+      <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-4">
         <div
           className={cn(
             "w-full max-w-lg rounded-2xl border border-zinc-200 bg-white shadow-xl",
+            "flex max-h-[90vh] flex-col sm:block sm:max-h-none",
             "dark:border-zinc-800 dark:bg-zinc-950",
             className
           )}
@@ -174,23 +175,23 @@ export const Modal: React.FC<ModalProps> = ({
           aria-modal="true"
         >
           {(title || footer) && (
-            <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-200 px-4 py-3 sm:px-5 sm:py-4 dark:border-zinc-800">
               <div className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
                 {title}
               </div>
               <button
                 onClick={onClose}
-                className="rounded-lg px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                className="shrink-0 rounded-lg px-3 py-2 text-sm text-zinc-500 sm:px-2 sm:py-1 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
               >
                 ปิด
               </button>
             </div>
           )}
 
-          <div className="px-5 py-4">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:flex-none sm:overflow-visible sm:px-5 sm:py-4">{children}</div>
 
           {footer && (
-            <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-zinc-200 px-4 py-3 sm:px-5 sm:py-4 dark:border-zinc-800">
               {footer}
             </div>
           )}

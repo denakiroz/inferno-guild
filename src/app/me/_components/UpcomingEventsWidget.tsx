@@ -150,14 +150,14 @@ export function UpcomingEventsWidget() {
           <button
             type="button"
             onClick={prevMonth}
-            className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition"
+            className="p-2.5 sm:p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition"
           >
             <ChevronLeft size={16} />
           </button>
           <button
             type="button"
             onClick={nextMonth}
-            className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition"
+            className="p-2.5 sm:p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition"
           >
             <ChevronRight size={16} />
           </button>
@@ -194,7 +194,7 @@ export function UpcomingEventsWidget() {
               type="button"
               onClick={() => setSelected(isSelected ? null : iso)}
               className={[
-                "relative flex flex-col items-center justify-center rounded-xl py-1 transition",
+                "relative flex flex-col items-center justify-center rounded-xl py-1.5 sm:py-1 transition",
                 "hover:bg-zinc-100 dark:hover:bg-zinc-800",
                 isSelected
                   ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
@@ -253,7 +253,7 @@ export function UpcomingEventsWidget() {
                 <div className={`w-1 rounded-full flex-shrink-0 self-stretch ${bar}`} />
 
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                  <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 break-words">
                     {ev.title}
                   </div>
 

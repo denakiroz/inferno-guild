@@ -44,12 +44,12 @@ export default function AdminWarBuilderClient() {
 
   return (
     <div className="mx-auto w-full max-w-[1700px] space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="text-sm font-semibold">War Builder</div>
 
         {canPickGuild ? (
           <select
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+            className="min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 sm:py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
             value={guild ?? 1}
             onChange={(e) => setSelectedGuild(Number(e.target.value))}
           >

@@ -265,15 +265,15 @@ export function InternalPowerTab() {
 
   return (
     <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-48">
           <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">กำลังภายใน</div>
           <div className="mt-1 text-xs text-zinc-500">
             เพิ่มได้สูงสุด 2 เซ็ต • แต่ละเซ็ตเลือกธาตุ (0–3 ขั้น) รวมกันต้องไม่เกิน 7 ขั้น • อัปโหลดรูปได้ 2 รูปต่อเซ็ต
           </div>
         </div>
 
-        <Button variant="outline" onClick={addSet} disabled={!canAdd || loading}>
+        <Button variant="outline" onClick={addSet} disabled={!canAdd || loading} className="w-full sm:w-auto">
           <Plus className="w-4 h-4" />
           เพิ่มเซ็ต
         </Button>
@@ -297,7 +297,7 @@ export function InternalPowerTab() {
             return (
               <div
                 key={String(s.id ?? `draft-${idx}`)}
-                className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-4"
+                className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-3 sm:p-4"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="font-semibold text-zinc-900 dark:text-zinc-100">เซ็ต {idx + 1}</div>
@@ -317,7 +317,7 @@ export function InternalPowerTab() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
+                <div className="mt-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-4 sm:gap-6">
                   {/* ✅ Images (ซ้าย-ขวา) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <ImageBox
@@ -387,7 +387,7 @@ export function InternalPowerTab() {
                     {s.err ? <div className="mt-3 text-sm text-rose-600">Error: {s.err}</div> : null}
 
                     <div className="mt-5 flex items-center justify-end">
-                      <Button onClick={() => saveSet(idx)} disabled={s.saving || over}>
+                      <Button onClick={() => saveSet(idx)} disabled={s.saving || over} className="w-full sm:w-auto">
                         <Save className="w-4 h-4" />
                         {s.saving ? "กำลังบันทึก..." : "บันทึกเซ็ต"}
                       </Button>

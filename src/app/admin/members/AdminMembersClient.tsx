@@ -103,7 +103,7 @@ export default function AdminMembersClient(initial: Props) {
         type="button"
         onClick={() => setViewTab(value)}
         className={[
-          "px-4 py-2 rounded-xl text-sm font-semibold border transition",
+          "px-4 py-2.5 sm:py-2 rounded-xl text-sm font-semibold border transition",
           active
             ? "bg-red-600 text-white border-red-600"
             : "bg-white/60 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-800",
@@ -116,7 +116,7 @@ export default function AdminMembersClient(initial: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-6 pt-2">
+      <div className="mx-auto w-full max-w-[1400px] px-0 sm:px-4 md:px-6 pt-2">
         <div className="flex items-center gap-2 flex-wrap">
           <TabBtn value="members" label="Members" />
           <TabBtn value="club" label="Club" />

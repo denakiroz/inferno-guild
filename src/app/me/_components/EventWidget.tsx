@@ -17,12 +17,12 @@ function PromoBanner() {
       />
 
       {/* Info — warm brown/gold palette เข้ากับรูป */}
-      <div className="px-5 py-5 space-y-4 text-white" style={{ background: "linear-gradient(180deg,#2a1a06 0%,#1c1007 100%)" }}>
+      <div className="px-4 py-4 sm:px-5 sm:py-5 space-y-4 text-white" style={{ background: "linear-gradient(180deg,#2a1a06 0%,#1c1007 100%)" }}>
 
         {/* Title */}
         <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: "#4a3010" }}>
           <span className="text-xl">⚔️</span>
-          <span className="font-bold text-2xl tracking-wide" style={{ color: "#e8c060", textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}>
+          <span className="font-bold text-xl sm:text-2xl tracking-wide min-w-0 break-words" style={{ color: "#e8c060", textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}>
             Inferno 6-6 Tournament
           </span>
         </div>
@@ -44,7 +44,7 @@ function PromoBanner() {
         </div>
 
         {/* Sponsor block */}
-        <div className="rounded-xl px-4 py-3.5 space-y-2.5" style={{ background: "rgba(0,0,0,0.35)", border: "1px solid #5a3a10" }}>
+        <div className="rounded-xl px-3 py-3 sm:px-4 sm:py-3.5 space-y-2.5" style={{ background: "rgba(0,0,0,0.35)", border: "1px solid #5a3a10" }}>
           <p className="font-bold text-base text-center" style={{ color: "#f0c040" }}>
             🔥 สมาชิก Inferno ห้ามพลาด! กิจกรรมพิเศษจากสปอนเซอร์ใจดี! 🔥
           </p>
@@ -144,7 +144,7 @@ export function EventWidget() {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 sm:p-5">
         <div className="h-4 w-32 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
       </div>
     );
@@ -157,7 +157,7 @@ export function EventWidget() {
   return (
     <div className="space-y-4">
     <PromoBanner />
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 relative">
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 sm:p-5 relative">
       {/* Toast */}
       {toast && (
         <div className="absolute top-3 right-3 z-10 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium px-3 py-1.5 rounded-xl shadow">
@@ -166,7 +166,7 @@ export function EventWidget() {
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xl">🏆</span>
           <div className="min-w-0">
@@ -186,7 +186,7 @@ export function EventWidget() {
           <button
             onClick={handleRegister}
             disabled={acting}
-            className={`shrink-0 h-9 px-4 rounded-xl text-sm font-semibold transition disabled:opacity-50 ${
+            className={`w-full sm:w-auto shrink-0 h-10 sm:h-9 px-4 rounded-xl text-sm font-semibold transition disabled:opacity-50 ${
               registered
                 ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600"
                 : "bg-red-600 hover:bg-red-700 text-white"

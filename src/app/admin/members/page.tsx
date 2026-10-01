@@ -6,6 +6,7 @@ import MembersClient from "./MembersClient";
 import { env } from "@/lib/env";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { attachWarParty } from "@/lib/warParty";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,6 @@ const SELECT_MEMBER_WITH_CLASS = `
   name,
   class_id,
   power,
-  party,
-  party_2,
-  pos_party,
-  pos_party_2,
   color,
   is_special,
   guild,
@@ -80,8 +77,11 @@ export default async function AdminMembersPage() {
   if (memErr) return <div className="p-6 text-sm">Failed to load members: {memErr.message}</div>;
 
   const safeLeaves = leaveRes.error ? [] : (leaveRes.data ?? []);
-  const safeClubMembers = clubRes.error ? [] : (clubRes.data ?? []);
-  const safeClub2Members = club2Res.error ? [] : (club2Res.data ?? []);
+  const [membersWithParty, safeClubMembers, safeClub2Members] = await Promise.all([
+    attachWarParty((members ?? []) as any[]),
+    attachWarParty((clubRes.error ? [] : (clubRes.data ?? [])) as any[]),
+    attachWarParty((club2Res.error ? [] : (club2Res.data ?? [])) as any[]),
+  ]);
 
   const clubIds = safeClubMembers.map((m: any) => m.id).filter(Boolean);
   const club2Ids = safeClub2Members.map((m: any) => m.id).filter(Boolean);
@@ -105,7 +105,7 @@ export default async function AdminMembersPage() {
 
   return (
     <AdminMembersClient
-      members={(members ?? []) as any}
+      members={membersWithParty as any}
       leaves={safeLeaves as any}
       clubMembers={safeClubMembers as any}
       clubLeaves={safeClubLeaves as any}

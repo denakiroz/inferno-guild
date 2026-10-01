@@ -90,20 +90,18 @@ export function ProfileTab(props: {
       />
 
       {/* ── หินสกิลอาวุธ ── */}
-      <div className="border-t border-zinc-100 dark:border-zinc-800 mt-5 pt-5">
-        <WeaponStoneSection
-          equipment={stoneEquipment}
-          allStonesByType={allStonesByType}
-          setAllStonesByType={setAllStonesByType}
-          loading={stonesLoading}
-          disabled={saving}
-        />
-      </div>
+      <WeaponStoneSection
+        equipment={stoneEquipment}
+        allStonesByType={allStonesByType}
+        setAllStonesByType={setAllStonesByType}
+        loading={stonesLoading}
+        disabled={saving}
+      />
 
       {err && <div className="mt-3 text-sm text-rose-600">Error: {err}</div>}
 
       <div className="mt-5 flex items-center justify-end gap-2">
-        <Button onClick={onSaveProfile} disabled={saving}>
+        <Button onClick={onSaveProfile} disabled={saving} className="w-full sm:w-auto">
           {saving ? "กำลังบันทึก..." : "บันทึก"}
         </Button>
       </div>

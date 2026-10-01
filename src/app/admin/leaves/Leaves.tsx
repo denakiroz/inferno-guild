@@ -454,7 +454,7 @@ export default function Leaves({
         type="button"
         onClick={() => setTab(value)}
         className={[
-          "px-4 py-2 rounded-xl text-sm font-semibold border transition",
+          "px-4 py-2.5 sm:py-2 rounded-xl text-sm font-semibold border transition",
           active
             ? "bg-red-600 text-white border-red-600"
             : "bg-white/60 dark:bg-zinc-950/40 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-800",
@@ -496,8 +496,8 @@ export default function Leaves({
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-6">
-      <Card noPadding className="sticky top-4 z-10">
-        <div className="p-4 bg-white/70 dark:bg-zinc-950/50 backdrop-blur rounded-2xl border border-zinc-200 dark:border-zinc-800">
+      <Card noPadding className="md:sticky md:top-4 z-10">
+        <div className="p-3 sm:p-4 bg-white/70 dark:bg-zinc-950/50 backdrop-blur rounded-2xl border border-zinc-200 dark:border-zinc-800">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex gap-2 flex-wrap">
               {lockedGuild ? (
@@ -648,21 +648,21 @@ export default function Leaves({
       </div>
 
       {visibleItems.length === 0 ? (
-        <Card className="p-6 text-sm text-zinc-500 dark:text-zinc-400">ไม่พบรายการลา</Card>
+        <Card className="p-4 sm:p-6 text-sm text-zinc-500 dark:text-zinc-400">ไม่พบรายการลา</Card>
       ) : (
         <div className="space-y-6">
           {pageGroups.map((m) => (
             <Card key={m.key} noPadding className="overflow-hidden border border-zinc-200 dark:border-zinc-800">
               {/* Month header (theme-aware: ดำ/ขาว) */}
               <div className="px-4 py-3 bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 border-b border-zinc-200 dark:border-zinc-800">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                   <div className="text-base font-semibold">{m.label}</div>
                   <div className="text-xs opacity-90">รวม {m.rows.length} รายการ</div>
                 </div>
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[860px] text-sm">
                   <thead>
                     <tr className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-950/40 border-b border-zinc-200 dark:border-zinc-800">
                       <th className="text-left px-4 py-3 whitespace-nowrap">วันที่</th>
@@ -697,7 +697,7 @@ export default function Leaves({
                                 colSpan={8}
                                 className="px-4 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-100 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800"
                               >
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between gap-3">
                                   <div>{d.title}</div>
                                   <div className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400">{d.rows.length} รายการ</div>
                                 </div>
