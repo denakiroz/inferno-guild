@@ -1,8 +1,13 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 export function DiscordLoginButton() {
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setIsMobile(/android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || ""));
+  }, []);
 
   const onLogin = async () => {
     try {
@@ -24,6 +29,20 @@ export function DiscordLoginButton() {
       setLoading(false);
     }
   };
+
+  const cls = `w-full h-12 rounded-2xl font-semibold bg-[#5865F2] hover:bg-[#4f5ae0] active:bg-[#4450cd]
+                 shadow-[0_0_30px_rgba(88,101,242,0.35)] transition-all flex items-center justify-center gap-3
+                 disabled:opacity-70 disabled:cursor-not-allowed`;
+
+  // มือถือ: ใช้ลิงก์จริง (แตะแล้วเปลี่ยนหน้าทันที ไม่ผ่าน fetch/JS และไม่ใช้ prompt=none)
+  // เพื่อให้ Android/iOS เปิดแอป Discord ไปหน้า "อนุญาต" ได้ (deep link ทำงานเฉพาะการแตะลิงก์จริง)
+  if (isMobile) {
+    return (
+      <a href="/api/auth/discord/start" className={cls}>
+        <span>Sign in with Discord</span>
+      </a>
+    );
+  }
 
   return (
     <button

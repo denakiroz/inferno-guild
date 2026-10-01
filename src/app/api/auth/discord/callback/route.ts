@@ -48,6 +48,12 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
 
+  // prompt=none ไม่สำเร็จ (ยังไม่เคยอนุญาต/ยังไม่ล็อกอิน Discord ในเบราว์เซอร์) -> ไปต่อแบบปกติที่มีหน้าอนุญาต
+  const oauthErr = url.searchParams.get("error");
+  if (!code && (oauthErr === "interaction_required" || oauthErr === "login_required" || oauthErr === "consent_required")) {
+    return NextResponse.redirect(new URL("/api/auth/discord/start", env.BASE_URL).toString());
+  }
+
   if (!code) return redirectLogin({ error: "missing_code" });
 
   // ✅ ตรวจ state (สำคัญมาก โดยเฉพาะมือถือ / in-app browser)
