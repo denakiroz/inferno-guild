@@ -1,5 +1,5 @@
 // scripts/register-discord-commands.mjs
-// ลงทะเบียนคำสั่ง /login ในเซิร์ฟเวอร์ของกิลด์ (ใช้ POST สร้างเฉพาะคำสั่งนี้ — ไม่แตะคำสั่งอื่นของบอท)
+// ลงทะเบียนคำสั่ง /weblogin ในเซิร์ฟเวอร์ของกิลด์ (ใช้ POST สร้างเฉพาะคำสั่งนี้ — ไม่แตะคำสั่งอื่นของบอท)
 // รัน: node scripts/register-discord-commands.mjs
 
 import * as dotenv from "dotenv";
@@ -21,7 +21,7 @@ const res = await fetch(
     method: "POST",
     headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      name: "login",
+      name: "weblogin",
       description: "รับลิงก์เข้าสู่เว็บ Celestier Guild Portal (เห็นเฉพาะคุณ)",
       type: 1,
     }),

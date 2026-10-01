@@ -1,6 +1,6 @@
 import { env } from "@/lib/env";
 
-// -------------------- role utils (ใช้ร่วมกันระหว่าง OAuth callback และ /login ผ่านบอท) --------------------
+// -------------------- role utils (ใช้ร่วมกันระหว่าง OAuth callback และ /weblogin ผ่านบอท) --------------------
 export function resolveGuildFromRoles(roles: string[]): number | null {
   // Priority: HEAD > MEMBER
   if (env.DISCORD_HEAD_1_ROLE_ID && roles.includes(env.DISCORD_HEAD_1_ROLE_ID)) return 1;

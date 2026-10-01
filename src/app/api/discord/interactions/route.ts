@@ -8,7 +8,7 @@ import { createLoginTicket, LOGIN_TICKET_TTL_SECONDS } from "@/lib/loginTicket";
 export const runtime = "nodejs";
 
 /**
- * Discord Interactions Endpoint (HTTP) — คำสั่ง /login
+ * Discord Interactions Endpoint (HTTP) — คำสั่ง /weblogin
  * ตั้งค่าที่ Developer Portal -> General Information -> Interactions Endpoint URL
  *   = {BASE_URL}/api/discord/interactions
  */
@@ -54,8 +54,8 @@ export async function POST(req: Request) {
   // PING (Discord ใช้ตรวจสอบ endpoint)
   if (it.type === 1) return NextResponse.json({ type: 1 });
 
-  // Slash command /login
-  if (it.type === 2 && it.data?.name === "login") {
+  // Slash command /weblogin
+  if (it.type === 2 && it.data?.name === "weblogin") {
     // ต้องใช้ในเซิร์ฟเวอร์ของกิลด์เท่านั้น (ต้องมี member/roles)
     if (!it.guild_id || it.guild_id !== env.DISCORD_GUILD_ID || !it.member?.user) {
       return reply("❌ ใช้คำสั่งนี้ในเซิร์ฟเวอร์ของกิลด์เท่านั้น");

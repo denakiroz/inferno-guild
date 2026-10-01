@@ -4,7 +4,7 @@ import { env } from "@/lib/env";
 import type { SessionUser } from "@/lib/session";
 
 /**
- * Login ticket (magic link) — ออกให้ผ่านคำสั่ง /login ของบอท Discord
+ * Login ticket (magic link) — ออกให้ผ่านคำสั่ง /weblogin ของบอท Discord
  * - เก็บใน Redis 5 นาที, ใช้ได้ครั้งเดียว (getdel)
  */
 const redis = new Redis({

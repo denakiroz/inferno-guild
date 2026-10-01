@@ -11,7 +11,7 @@ function redirectLogin(params: Record<string, string>) {
   return NextResponse.redirect(u.toString());
 }
 
-/** เข้าสู่ระบบด้วยลิงก์ที่บอทส่งให้ (/login ใน Discord) */
+/** เข้าสู่ระบบด้วยลิงก์ที่บอทส่งให้ (/weblogin ใน Discord) */
 export async function GET(req: Request) {
   const t = new URL(req.url).searchParams.get("t") ?? "";
 
