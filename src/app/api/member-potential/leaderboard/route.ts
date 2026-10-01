@@ -63,6 +63,7 @@ export async function GET(req: Request) {
         userdiscordid: r.userdiscordid,
         name: r.discordname,
         class_name: r.class_name,
+        class_name_en: r.class_name_en,
         class_icon: r.class_icon,
         guild: r.guild,
         score: r.score,

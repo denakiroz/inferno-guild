@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from("class")
-      .select("id, name, icon_url")
+      .select("id, name, name_en, icon_url")
       .order("id", { ascending: true });
 
     if (error) throw new Error(error.message);

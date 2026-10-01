@@ -24,7 +24,7 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("class")
-      .select("id, name, icon_url")
+      .select("id, name, name_en, icon_url")
       .order("id", { ascending: true });
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -45,13 +45,14 @@ export async function POST(req: Request) {
 
     const name = String(body.name ?? "").trim();
     const icon_url = String(body.icon_url ?? "").trim();
+    const name_en = String(body.name_en ?? "").trim() || null;
 
     if (!name) return NextResponse.json({ ok: false, error: "name_required" }, { status: 400 });
 
     const { data, error } = await supabaseAdmin
       .from("class")
-      .insert({ name, icon_url })
-      .select("id, name, icon_url")
+      .insert({ name, name_en, icon_url })
+      .select("id, name, name_en, icon_url")
       .single();
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -78,6 +79,7 @@ export async function PUT(req: Request) {
     const patch: Record<string, any> = {};
     if (typeof body.name === "string") patch.name = body.name.trim();
     if (typeof body.icon_url === "string") patch.icon_url = body.icon_url.trim();
+    if (typeof body.name_en === "string") patch.name_en = body.name_en.trim() || null;
 
     if (!patch.name) return NextResponse.json({ ok: false, error: "name_required" }, { status: 400 });
 
@@ -85,7 +87,7 @@ export async function PUT(req: Request) {
       .from("class")
       .update(patch)
       .eq("id", id)
-      .select("id, name, icon_url")
+      .select("id, name, name_en, icon_url")
       .single();
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button, Card, Input, Modal } from "@/app/components/UI";
 
-type ClassRow = { id: number; name: string; icon_url: string | null };
+type ClassRow = { id: number; name: string; name_en?: string | null; icon_url: string | null };
 type ApiRes =
   | { ok: true; classes: ClassRow[] }
   | { ok: false; error?: string };
@@ -15,6 +15,7 @@ export default function AdminMasterClassesPage() {
 
   // create form
   const [name, setName] = useState("");
+  const [nameEn, setNameEn] = useState("");
   const [iconUrl, setIconUrl] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -51,11 +52,12 @@ export default function AdminMasterClassesPage() {
       const res = await fetch("/api/admin/classes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), icon_url: iconUrl.trim() }),
+        body: JSON.stringify({ name: name.trim(), name_en: nameEn.trim(), icon_url: iconUrl.trim() }),
       });
       const j = await res.json();
       if (!j.ok) throw new Error(j.error ?? "create_failed");
       setName("");
+      setNameEn("");
       setIconUrl("");
       await load();
     } catch (e: any) {
@@ -76,6 +78,7 @@ export default function AdminMasterClassesPage() {
         body: JSON.stringify({
           id: edit.id,
           name: String(edit.name ?? "").trim(),
+          name_en: String(edit.name_en ?? "").trim(),
           icon_url: String(edit.icon_url ?? "").trim(),
         }),
       });
@@ -96,7 +99,7 @@ export default function AdminMasterClassesPage() {
         <div className="space-y-6">
         <Card className="!p-4 sm:!p-6">
             <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Master Data • Classes</div>
-            <div className="mt-1 text-sm text-zinc-500">เพิ่ม/แก้ไขอาชีพ (name, icon_url)</div>
+            <div className="mt-1 text-sm text-zinc-500">เพิ่ม/แก้ไขอาชีพ (name, name_en, icon_url)</div>
 
             {err ? <div className="mt-3 text-sm text-rose-600">Error: {err}</div> : null}
 
@@ -104,6 +107,10 @@ export default function AdminMasterClassesPage() {
             <div>
                 <div className="text-xs text-zinc-500 mb-1">Name</div>
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="เช่น Ironclan" />
+            </div>
+            <div>
+                <div className="text-xs text-zinc-500 mb-1">Name (EN)</div>
+                <Input value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="English name (optional)" />
             </div>
             <div>
                 <div className="text-xs text-zinc-500 mb-1">Icon URL</div>
@@ -132,6 +139,7 @@ export default function AdminMasterClassesPage() {
                 <tr className="text-left text-zinc-500">
                     <th className="py-2 pr-3">ID</th>
                     <th className="py-2 pr-3">Name</th>
+                    <th className="py-2 pr-3">Name (EN)</th>
                     <th className="py-2 pr-3">Icon</th>
                     <th className="py-2 pr-3">Icon URL</th>
                     <th className="py-2"></th>
@@ -141,13 +149,13 @@ export default function AdminMasterClassesPage() {
                 <tbody className="align-top">
                 {loading ? (
                     <tr>
-                    <td className="py-3 text-zinc-500" colSpan={5}>
+                    <td className="py-3 text-zinc-500" colSpan={6}>
                         Loading...
                     </td>
                     </tr>
                 ) : rows.length === 0 ? (
                     <tr>
-                    <td className="py-3 text-zinc-500" colSpan={5}>
+                    <td className="py-3 text-zinc-500" colSpan={6}>
                         ไม่มีข้อมูล
                     </td>
                     </tr>
@@ -156,6 +164,7 @@ export default function AdminMasterClassesPage() {
                     <tr key={r.id} className="border-t border-zinc-200 dark:border-zinc-800">
                         <td className="py-3 pr-3 text-zinc-500">#{r.id}</td>
                         <td className="py-3 pr-3 font-semibold text-zinc-900 dark:text-zinc-100">{r.name}</td>
+                        <td className="py-3 pr-3 text-zinc-700 dark:text-zinc-300">{r.name_en || <span className="text-zinc-400">-</span>}</td>
                         <td className="py-3 pr-3">
                         {r.icon_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -203,6 +212,15 @@ export default function AdminMasterClassesPage() {
                 <Input
                 value={edit?.name ?? ""}
                 onChange={(e) => setEdit((x) => (x ? { ...x, name: e.target.value } : x))}
+                />
+            </div>
+
+            <div>
+                <div className="text-xs text-zinc-500 mb-1">Name (EN)</div>
+                <Input
+                value={edit?.name_en ?? ""}
+                onChange={(e) => setEdit((x) => (x ? { ...x, name_en: e.target.value } : x))}
+                placeholder="English name (optional)"
                 />
             </div>
 

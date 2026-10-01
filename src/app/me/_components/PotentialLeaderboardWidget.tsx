@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { TrendingUp, TrendingDown, Minus, BarChart2, Trophy } from "lucide-react";
-import { defineDict, useT } from "@/i18n";
+import { defineDict, useT, useLang } from "@/i18n";
 
 const CATEGORIES = [
   "kill", "assist", "supply", "damage_player",
@@ -63,6 +63,7 @@ type RankedRow = {
   userdiscordid: string;
   name: string;
   class_name: string;
+  class_name_en?: string;
   class_icon: string;
   guild: number | null;
   score: number;
@@ -689,6 +690,7 @@ type SeasonInfo = { name: string; start_date: string; end_date: string };
 // ── Main widget ────────────────────────────────────────────────────
 export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
   const t = useT(dict);
+  const { lang } = useLang();
   const [batches, setBatches] = useState<BatchData[]>([]);
   const [classId, setClassId] = useState<number | null>(null);
   const [lbItems, setLbItems] = useState<RankedRow[]>([]);
@@ -802,6 +804,13 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
   }
   const dpsClasses = Array.from(dpsClassMap.values()).sort((a, b) => b.count - a.count);
 
+  // ชื่ออาชีพตามภาษา: class_name (ไทย) ยังเป็น key เดิม, แสดงผลใช้ class_name_en เมื่อเลือก EN
+  const classNameEn = new Map<string, string>();
+  for (const r of lbItems) {
+    if (r.class_name && r.class_name_en) classNameEn.set(r.class_name, r.class_name_en);
+  }
+  const showClass = (name: string) => (lang === "en" ? classNameEn.get(name) || name : name);
+
   // derive tank / healer class info from lbItems
   const tankEntry   = lbItems.find((r) => r.role === "tank");
   const healerEntry = lbItems.find((r) => r.role === "healer");
@@ -823,9 +832,9 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
 
   const tabLabel = (tab: string): string => {
     if (tab === "dps") return "DPS";
-    if (tab === "tank") return tankClass.class_name;
-    if (tab === "healer") return healerClass.class_name;
-    if (tab.startsWith("dps:")) return tab.slice(4);
+    if (tab === "tank") return showClass(tankClass.class_name);
+    if (tab === "healer") return showClass(healerClass.class_name);
+    if (tab.startsWith("dps:")) return showClass(tab.slice(4));
     return tab;
   };
 
@@ -946,7 +955,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
                   )}
-                  {class_name}
+                  {showClass(class_name)}
                 </button>
               );
             })}
@@ -976,7 +985,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={info.class_icon} alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
                 )}
-                {info.class_name}
+                {showClass(info.class_name)}
               </button>
             ))}
           </div>
@@ -1008,7 +1017,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
 
                   {/* Class icon */}
                   {row.class_icon ? (
-                    <img src={row.class_icon} alt={row.class_name}
+                    <img src={row.class_icon} alt={showClass(row.class_name)}
                       className="h-6 w-6 rounded-md object-cover shrink-0 ring-1 ring-zinc-200 dark:ring-zinc-700" />
                   ) : (
                     <div className="h-6 w-6 rounded-md bg-zinc-200 dark:bg-zinc-700 shrink-0" />
@@ -1059,7 +1068,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
                   <div className="flex items-center gap-2.5 rounded-xl px-3 py-2 bg-red-50 dark:bg-red-950/20 ring-1 ring-red-200 dark:ring-red-900/40">
                     <span className="w-5 text-center text-xs font-bold text-zinc-500 shrink-0">#{myRow.rank}</span>
                     {myRow.class_icon ? (
-                      <img src={myRow.class_icon} alt={myRow.class_name}
+                      <img src={myRow.class_icon} alt={showClass(myRow.class_name)}
                         className="h-6 w-6 rounded-md object-cover shrink-0 ring-1 ring-zinc-200 dark:ring-zinc-700" />
                     ) : (
                       <div className="h-6 w-6 rounded-md bg-zinc-200 dark:bg-zinc-700 shrink-0" />

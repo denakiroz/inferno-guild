@@ -16,6 +16,7 @@ export type MeRes = {
 export type ClassRow = {
   id: number;
   name: string;
+  name_en?: string | null;
   icon_url: string | null;
 };
 

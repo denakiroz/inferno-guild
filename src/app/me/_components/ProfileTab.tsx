@@ -3,7 +3,7 @@
 import React from "react";
 import { Button, Card, Select } from "@/app/components/UI";
 import type { ClassRow, MemberRow, SpecialSkillRow, UltimateSkillRow } from "../_lib/types";
-import { defineDict, useT } from "@/i18n";
+import { defineDict, useT, useLang, classLabel } from "@/i18n";
 import { UltimateMultiSelect } from "./UltimateMultiSelect";
 import { SpecialSkillMultiSelect } from "./SpecialSkillMultiSelect";
 import {
@@ -65,6 +65,7 @@ export function ProfileTab(props: {
     stonesLoading,
   } = props;
   const t = useT(dict);
+  const { lang } = useLang();
 
   return (
     <Card>
@@ -79,7 +80,7 @@ export function ProfileTab(props: {
           >
             {classes.map((c) => (
               <option key={c.id} value={String(c.id)}>
-                {c.name}
+                {classLabel(c, lang)}
               </option>
             ))}
           </Select>

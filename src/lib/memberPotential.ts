@@ -23,6 +23,7 @@ export type LeaderboardItem = {
   discordname: string;
   class_id: number | null;
   class_name: string;
+  class_name_en: string;
   class_icon: string;
   guild: number | null;
   batch_count: number;
@@ -70,7 +71,7 @@ export async function buildLeaderboard(season?: SeasonFilter): Promise<BuildResu
     }),
     supabaseAdmin
       .from("member")
-      .select("discord_user_id,name,class_id,guild,class:class!member_class_id_fkey(id,name,icon_url)")
+      .select("discord_user_id,name,class_id,guild,class:class!member_class_id_fkey(id,name,name_en,icon_url)")
       .not("discord_user_id", "is", null)
       .eq("status", "active"),
     supabaseAdmin
@@ -93,7 +94,7 @@ export async function buildLeaderboard(season?: SeasonFilter): Promise<BuildResu
 
   const memberMap = new Map<string, {
     name: string; class_id: number | null;
-    class_name: string; class_icon: string; guild: number | null;
+    class_name: string; class_name_en: string; class_icon: string; guild: number | null;
   }>();
   for (const m of members ?? []) {
     if (!m.discord_user_id) continue;
@@ -102,6 +103,7 @@ export async function buildLeaderboard(season?: SeasonFilter): Promise<BuildResu
       name: m.name ?? "",
       class_id: m.class_id ? Number(m.class_id) : null,
       class_name: cls?.name ?? "",
+      class_name_en: cls?.name_en ?? "",
       class_icon: cls?.icon_url ?? "",
       guild: m.guild ? Number(m.guild) : null,
     });
@@ -170,6 +172,7 @@ export async function buildLeaderboard(season?: SeasonFilter): Promise<BuildResu
       discordname: mem.name,
       class_id: classId,
       class_name: mem.class_name,
+      class_name_en: mem.class_name_en,
       class_icon: mem.class_icon,
       guild: mem.guild,
       batch_count: agg ? Number(agg.batch_count) || 0 : 0,

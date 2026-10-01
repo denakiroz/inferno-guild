@@ -6,7 +6,7 @@ import { Moon, Sun } from "lucide-react";
 import { Button, Card, Modal } from "@/app/components/UI";
 import { useTheme } from "@/app/theme/ThemeProvider";
 import { guildName } from "@/lib/guildLabel";
-import { defineDict, useT, LangToggle } from "@/i18n";
+import { defineDict, useT, useLang, classLabel, LangToggle } from "@/i18n";
 
 import LeaveRequestButton, { type LeaveCreateRow } from "@/app/components/LeaveRequestButton";
 import type { DbLeave } from "@/type/db";
@@ -76,6 +76,7 @@ const tabActive = "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 sh
 
 export default function MePage() {
   const t = useT(dict);
+  const { lang } = useLang();
   const { theme, toggleTheme } = useTheme();
 
   const [tab, setTab] = useState<TabKey>("overview");
@@ -439,7 +440,7 @@ export default function MePage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={iconUrl}
-                          alt={currentClass?.name ?? t("classIconAlt")}
+                          alt={currentClass ? classLabel(currentClass, lang) : t("classIconAlt")}
                           className="h-6 w-6 rounded-sm object-contain shrink-0"
                         />
                       );

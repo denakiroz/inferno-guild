@@ -116,3 +116,13 @@ export function LangToggle({ className = "" }: { className?: string }) {
     </div>
   );
 }
+
+/** ชื่อที่แสดงของอาชีพตามภาษา: en -> name_en (ถ้ามี) ไม่งั้น fallback เป็น name (ไทย) */
+export function classLabel(c: { name?: string | null; name_en?: string | null } | null | undefined, lang: Lang): string {
+  if (!c) return "";
+  if (lang === "en") {
+    const en = String(c.name_en ?? "").trim();
+    if (en) return en;
+  }
+  return String(c.name ?? "");
+}
