@@ -4,6 +4,25 @@ import React, { useMemo, useState } from "react";
 import { Gem } from "lucide-react";
 import { Button } from "@/app/components/UI";
 import { ProfileSection, SelectedTile } from "./ProfileSection";
+import { defineDict, useT } from "@/i18n";
+
+const dict = defineDict({
+  colorRed: { th: "แดง", en: "Red" },
+  colorPurple: { th: "ม่วง", en: "Purple" },
+  colorGold: { th: "ทอง", en: "Gold" },
+  title: { th: "หินสกิลอาวุธ", en: "Weapon skill stones" },
+  edit: { th: "เพิ่ม/แก้ไข", en: "Add/Edit" },
+  add: { th: "เพิ่มหินสกิลอาวุธ", en: "Add weapon skill stones" },
+  empty: { th: "ยังไม่ได้เลือกหินสกิลอาวุธ", en: "No weapon skill stones selected" },
+  colorTag: { th: "สี{c}", en: "{c}" },
+  close: { th: "ปิด", en: "Close" },
+  searchPlaceholder: { th: "ค้นหา...", en: "Search..." },
+  notFound: { th: "ไม่พบรายการ", en: "No items found" },
+  pickColor: { th: "เลือกสี", en: "Pick color" },
+  selected: { th: "เลือกแล้ว", en: "Selected" },
+  addBtn: { th: "เพิ่ม", en: "Add" },
+  done: { th: "เสร็จสิ้น", en: "Done" },
+});
 
 /* ── exported types (used by page.tsx too) ── */
 export type StoneColor = "red" | "purple" | "gold";
@@ -24,10 +43,10 @@ export type SelectedStone = {
 export type SelectedByType = Record<EquipmentType, SelectedStone[]>;
 
 /* ── helpers ── */
-const COLOR_OPTIONS: Array<{ value: StoneColor; label: string }> = [
-  { value: "red",    label: "แดง" },
-  { value: "purple", label: "ม่วง" },
-  { value: "gold",   label: "ทอง" },
+const COLOR_OPTIONS: Array<{ value: StoneColor; labelKey: "colorRed" | "colorPurple" | "colorGold" }> = [
+  { value: "red",    labelKey: "colorRed" },
+  { value: "purple", labelKey: "colorPurple" },
+  { value: "gold",   labelKey: "colorGold" },
 ];
 
 const STONE_DOT: Record<StoneColor, string> = {
@@ -35,10 +54,6 @@ const STONE_DOT: Record<StoneColor, string> = {
   purple: "bg-purple-500",
   gold: "bg-amber-400",
 };
-
-function colorLabel(c: StoneColor) {
-  return COLOR_OPTIONS.find((o) => o.value === c)?.label ?? "-";
-}
 
 export function normalizeSelected(input: unknown): SelectedStone[] {
   const raw = Array.isArray(input) ? input : [];
@@ -75,6 +90,11 @@ export function WeaponStoneSection({
   loading: boolean;
   disabled: boolean;
 }) {
+  const t = useT(dict);
+  const colorLabel = (c: StoneColor) => {
+    const o = COLOR_OPTIONS.find((x) => x.value === c);
+    return o ? t(o.labelKey) : "-";
+  };
   const [modalOpen, setModalOpen] = useState(false);
   const [q, setQ]                 = useState("");
   const [colorPick, setColorPick] = useState<Record<number, StoneColor | "">>({});
@@ -103,14 +123,14 @@ export function WeaponStoneSection({
     <div>
       <ProfileSection
         icon={<Gem className="h-4 w-4" />}
-        title="หินสกิลอาวุธ"
+        title={t("title")}
         count={weaponSelected.length}
-        editLabel={weaponSelected.length ? "เพิ่ม/แก้ไข" : "เพิ่มหินสกิลอาวุธ"}
+        editLabel={weaponSelected.length ? t("edit") : t("add")}
         onEdit={openPicker}
         onClear={() => setAllStonesByType((prev) => ({ ...prev, 1: [] }))}
         disabled={disabled}
         loading={loading}
-        emptyText="ยังไม่ได้เลือกหินสกิลอาวุธ"
+        emptyText={t("empty")}
       >
         {weaponSelected.map((s) => {
           const e = equipMap.get(s.equipment_create_id) ?? null;
@@ -122,7 +142,7 @@ export function WeaponStoneSection({
               meta={
                 <span className="inline-flex items-center gap-1.5">
                   <span className={"h-2 w-2 rounded-full " + STONE_DOT[s.color]} />
-                  สี{colorLabel(s.color)}
+                  {t("colorTag", { c: colorLabel(s.color) })}
                 </span>
               }
               onRemove={() =>
@@ -142,9 +162,9 @@ export function WeaponStoneSection({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
           <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xl">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
-              <div className="font-semibold text-zinc-900 dark:text-zinc-100">เพิ่มหินสกิลอาวุธ</div>
+              <div className="font-semibold text-zinc-900 dark:text-zinc-100">{t("add")}</div>
               <Button variant="outline" onClick={() => { setModalOpen(false); setQ(""); setColorPick({}); }}>
-                ปิด
+                {t("close")}
               </Button>
             </div>
 
@@ -152,13 +172,13 @@ export function WeaponStoneSection({
               <input
                 value={q}
                 onChange={(ev) => setQ(ev.target.value)}
-                placeholder="ค้นหา..."
+                placeholder={t("searchPlaceholder")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-base sm:text-sm"
               />
 
               <div className="mt-3 max-h-[50vh] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
                 {modalList.length === 0 ? (
-                  <div className="p-4 text-sm text-zinc-500">ไม่พบรายการ</div>
+                  <div className="p-4 text-sm text-zinc-500">{t("notFound")}</div>
                 ) : (
                   <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
                     {modalList.map((e) => {
@@ -192,9 +212,9 @@ export function WeaponStoneSection({
                               disabled={already}
                               className="min-w-0 flex-1 sm:flex-none rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2.5 sm:py-2 text-base sm:text-sm"
                             >
-                              <option value="">เลือกสี</option>
+                              <option value="">{t("pickColor")}</option>
                               {COLOR_OPTIONS.map((c) => (
-                                <option key={c.value} value={c.value}>{c.label}</option>
+                                <option key={c.value} value={c.value}>{t(c.labelKey)}</option>
                               ))}
                             </select>
                             <Button
@@ -211,7 +231,7 @@ export function WeaponStoneSection({
                                 setColorPick((prev) => ({ ...prev, [e.id]: "" }));
                               }}
                             >
-                              {already ? "เลือกแล้ว" : "เพิ่ม"}
+                              {already ? t("selected") : t("addBtn")}
                             </Button>
                           </div>
                         </div>
@@ -223,7 +243,7 @@ export function WeaponStoneSection({
 
               <div className="mt-3 flex justify-end">
                 <Button variant="outline" onClick={() => { setModalOpen(false); setQ(""); setColorPick({}); }}>
-                  เสร็จสิ้น
+                  {t("done")}
                 </Button>
               </div>
             </div>

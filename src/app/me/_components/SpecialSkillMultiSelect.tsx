@@ -5,6 +5,25 @@ import { Button, Input, Modal } from "@/app/components/UI";
 import type { SpecialSkillRow } from "../_lib/types";
 import { Users } from "lucide-react";
 import { ProfileSection, SelectedTile } from "./ProfileSection";
+import { defineDict, useT } from "@/i18n";
+
+const dict = defineDict({
+  title: { th: "ศิษย์พี่", en: "Senior Disciples" },
+  subtitle: { th: "สกิลพิเศษที่ขั้นเต็ม", en: "Special skills at max level" },
+  edit: { th: "เลือก/แก้ไข", en: "Select/Edit" },
+  pick: { th: "เลือก ศิษย์พี่", en: "Select Senior Disciples" },
+  empty: { th: "ยังไม่ได้เลือก ศิษย์พี่", en: "No Senior Disciples selected" },
+  modalTitle: { th: "เลือก ศิษย์พี่ (ที่ขั้นเต็ม)", en: "Select Senior Disciples (max level)" },
+  search: { th: "ค้นหาชื่อ ศิษย์พี่...", en: "Search Senior Disciple name..." },
+  selectedCount: { th: "เลือกแล้ว {n} รายการ", en: "{n} selected" },
+  clear: { th: "ล้าง", en: "Clear" },
+  none: { th: "ยังไม่ได้เลือก", en: "Nothing selected" },
+  tapRemove: { th: "แตะเพื่อลบ", en: "Tap to remove" },
+  notFound: { th: "ไม่พบรายการ", en: "No items found" },
+  checked: { th: "เลือก", en: "Selected" },
+  cancel: { th: "ยกเลิก", en: "Cancel" },
+  confirm: { th: "ยืนยัน", en: "Confirm" },
+});
 
 export function SpecialSkillMultiSelect(props: {
   skills: SpecialSkillRow[];
@@ -13,6 +32,7 @@ export function SpecialSkillMultiSelect(props: {
   disabled?: boolean;
 }) {
   const { skills, selectedIds, onChange, disabled } = props;
+  const t = useT(dict);
 
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -57,14 +77,14 @@ export function SpecialSkillMultiSelect(props: {
     <div className="mt-4">
       <ProfileSection
         icon={<Users className="h-4 w-4" />}
-        title="ศิษย์พี่"
-        subtitle="สกิลพิเศษที่ขั้นเต็ม"
+        title={t("title")}
+        subtitle={t("subtitle")}
         count={selectedRows.length}
-        editLabel={selectedRows.length ? "เลือก/แก้ไข" : "เลือก ศิษย์พี่"}
+        editLabel={selectedRows.length ? t("edit") : t("pick")}
         onEdit={openPicker}
         onClear={() => onChange([])}
         disabled={disabled}
-        emptyText="ยังไม่ได้เลือก ศิษย์พี่"
+        emptyText={t("empty")}
       >
         {selectedRows.map((s) => (
           <SelectedTile
@@ -80,20 +100,20 @@ export function SpecialSkillMultiSelect(props: {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="เลือก ศิษย์พี่ (ที่ขั้นเต็ม)"
+        title={t("modalTitle")}
       >
         <div className="space-y-3">
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="ค้นหาชื่อ ศิษย์พี่..."
+            placeholder={t("search")}
             disabled={disabled}
           />
 
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 bg-white/60 dark:bg-zinc-950/40">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                เลือกแล้ว {draft.length} รายการ
+                {t("selectedCount", { n: draft.length })}
               </div>
               <button
                 type="button"
@@ -101,12 +121,12 @@ export function SpecialSkillMultiSelect(props: {
                 disabled={disabled}
                 className="text-xs underline text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
               >
-                ล้าง
+                {t("clear")}
               </button>
             </div>
 
             {draft.length === 0 ? (
-              <div className="mt-2 text-sm text-zinc-500">ยังไม่ได้เลือก</div>
+              <div className="mt-2 text-sm text-zinc-500">{t("none")}</div>
             ) : (
               <div className="mt-2 flex flex-wrap gap-2">
                 {skills
@@ -118,7 +138,7 @@ export function SpecialSkillMultiSelect(props: {
                       onClick={() => toggleDraft(s.id)}
                       disabled={disabled}
                       className="inline-flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/50 px-3 py-1 text-sm hover:bg-white dark:hover:bg-zinc-950"
-                      title="แตะเพื่อลบ"
+                      title={t("tapRemove")}
                     >
                       {s.special_skill_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -140,7 +160,7 @@ export function SpecialSkillMultiSelect(props: {
 
           <div className="max-h-[50vh] sm:max-h-[420px] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 p-2 sm:p-3">
             {filtered.length === 0 ? (
-              <div className="text-sm text-zinc-500">ไม่พบรายการ</div>
+              <div className="text-sm text-zinc-500">{t("notFound")}</div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                 {filtered.map((s) => {
@@ -184,7 +204,7 @@ export function SpecialSkillMultiSelect(props: {
 
                       {checked ? (
                         <div className="absolute top-2 right-2 rounded-full bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-2 py-1 text-xs font-semibold shadow">
-                          &checkmark; เลือก
+                          &checkmark; {t("checked")}
                         </div>
                       ) : null}
                     </button>
@@ -200,7 +220,7 @@ export function SpecialSkillMultiSelect(props: {
               className="flex-1"
               onClick={() => setOpen(false)}
             >
-              ยกเลิก
+              {t("cancel")}
             </Button>
             <Button
               className="flex-1"
@@ -210,7 +230,7 @@ export function SpecialSkillMultiSelect(props: {
                 setOpen(false);
               }}
             >
-              ยืนยัน
+              {t("confirm")}
             </Button>
           </div>
         </div>

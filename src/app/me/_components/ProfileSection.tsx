@@ -2,6 +2,13 @@
 
 import React from "react";
 import { Plus, X } from "lucide-react";
+import { defineDict, useT } from "@/i18n";
+
+const dict = defineDict({
+  clearAll: { th: "ล้างทั้งหมด", en: "Clear all" },
+  loading: { th: "กำลังโหลด...", en: "Loading..." },
+  remove: { th: "ลบ", en: "Remove" },
+});
 
 /** กล่องหัวข้อ + รายการที่เลือก ใช้ร่วมกันใน ProfileTab */
 export function ProfileSection(props: {
@@ -18,6 +25,7 @@ export function ProfileSection(props: {
   children?: React.ReactNode;
 }) {
   const { icon, title, subtitle, count, editLabel, onEdit, onClear, disabled, loading, emptyText, children } = props;
+  const t = useT(dict);
 
   return (
     <section className="mt-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 p-3 sm:p-4">
@@ -45,7 +53,7 @@ export function ProfileSection(props: {
               disabled={disabled}
               className="rounded-lg px-3 py-2.5 sm:px-2.5 sm:py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-200/60 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 disabled:opacity-50"
             >
-              ล้างทั้งหมด
+              {t("clearAll")}
             </button>
           )}
           <button
@@ -63,7 +71,7 @@ export function ProfileSection(props: {
       <div className="mt-3">
         {loading || count === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-5 text-center text-sm text-zinc-500">
-            {loading ? "กำลังโหลด..." : emptyText}
+            {loading ? t("loading") : emptyText}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{children}</div>
@@ -82,6 +90,7 @@ export function SelectedTile(props: {
   disabled?: boolean;
 }) {
   const { imageUrl, name, meta, onRemove, disabled } = props;
+  const t = useT(dict);
 
   return (
     <div className="group flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 pr-2.5 shadow-sm transition-colors hover:border-red-300 dark:hover:border-red-900">
@@ -106,7 +115,7 @@ export function SelectedTile(props: {
         type="button"
         onClick={onRemove}
         disabled={disabled}
-        aria-label={`remove ${name}`}
+        aria-label={`${t("remove")} ${name}`}
         className="flex h-9 w-9 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50"
       >
         <X className="h-4 w-4" />

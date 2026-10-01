@@ -5,6 +5,25 @@ import { Button, Input, Modal } from "@/app/components/UI";
 import type { UltimateSkillRow } from "../_lib/types";
 import { Zap } from "lucide-react";
 import { ProfileSection, SelectedTile } from "./ProfileSection";
+import { defineDict, useT } from "@/i18n";
+
+const dict = defineDict({
+  subtitle: { th: "เลือกเฉพาะอันที่เลเวลเต็ม", en: "Select only fully leveled ones" },
+  edit: { th: "เลือก/แก้ไข", en: "Select/Edit" },
+  pick: { th: "เลือก Ultimate", en: "Select Ultimate" },
+  empty: { th: "ยังไม่ได้เลือก Ultimate", en: "No Ultimate selected" },
+  modalTitle: { th: "เลือก Ultimate Skill (ที่ขั้นเต็ม)", en: "Select Ultimate Skill (max level)" },
+  search: { th: "ค้นหาชื่อ Ultimate...", en: "Search Ultimate name..." },
+  selectedCount: { th: "เลือกแล้ว {n} รายการ", en: "{n} selected" },
+  maxHint: { th: " (สูงสุด {n})", en: " (max {n})" },
+  clear: { th: "ล้าง", en: "Clear" },
+  none: { th: "ยังไม่ได้เลือก", en: "Nothing selected" },
+  tapRemove: { th: "แตะเพื่อลบ", en: "Tap to remove" },
+  notFound: { th: "ไม่พบรายการ", en: "No items found" },
+  checked: { th: "✓ เลือก", en: "✓ Selected" },
+  cancel: { th: "ยกเลิก", en: "Cancel" },
+  confirm: { th: "ยืนยัน", en: "Confirm" },
+});
 
 export function UltimateMultiSelect(props: {
   skills: UltimateSkillRow[];
@@ -14,6 +33,7 @@ export function UltimateMultiSelect(props: {
   maxSelect?: number; // optional limit
 }) {
   const { skills, selectedIds, onChange, disabled, maxSelect } = props;
+  const t = useT(dict);
 
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -74,13 +94,13 @@ export function UltimateMultiSelect(props: {
       <ProfileSection
         icon={<Zap className="h-4 w-4" />}
         title="Ultimate Skill"
-        subtitle="เลือกเฉพาะอันที่เลเวลเต็ม"
+        subtitle={t("subtitle")}
         count={selectedRows.length}
-        editLabel={selectedRows.length ? "เลือก/แก้ไข" : "เลือก Ultimate"}
+        editLabel={selectedRows.length ? t("edit") : t("pick")}
         onEdit={openPicker}
         onClear={clearSelected}
         disabled={disabled}
-        emptyText="ยังไม่ได้เลือก Ultimate"
+        emptyText={t("empty")}
       >
         {selectedRows.map((s) => (
           <SelectedTile
@@ -97,14 +117,14 @@ export function UltimateMultiSelect(props: {
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title="เลือก Ultimate Skill (ที่ขั้นเต็ม)"
+        title={t("modalTitle")}
       >
         <div className="space-y-3">
           {/* Search */}
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="ค้นหาชื่อ Ultimate..."
+            placeholder={t("search")}
             disabled={disabled}
           />
 
@@ -112,8 +132,8 @@ export function UltimateMultiSelect(props: {
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 bg-white/60 dark:bg-zinc-950/40">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                เลือกแล้ว {draft.length} รายการ
-                {typeof maxSelect === "number" && maxSelect > 0 ? ` (สูงสุด ${maxSelect})` : ""}
+                {t("selectedCount", { n: draft.length })}
+                {typeof maxSelect === "number" && maxSelect > 0 ? t("maxHint", { n: maxSelect }) : ""}
               </div>
 
               <button
@@ -122,12 +142,12 @@ export function UltimateMultiSelect(props: {
                 disabled={disabled}
                 className="text-xs underline text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
               >
-                ล้าง
+                {t("clear")}
               </button>
             </div>
 
             {draft.length === 0 ? (
-              <div className="mt-2 text-sm text-zinc-500">ยังไม่ได้เลือก</div>
+              <div className="mt-2 text-sm text-zinc-500">{t("none")}</div>
             ) : (
               <div className="mt-2 flex flex-wrap gap-2">
                 {skills
@@ -139,7 +159,7 @@ export function UltimateMultiSelect(props: {
                       onClick={() => toggleDraft(s.id)}
                       disabled={disabled}
                       className="inline-flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/50 px-3 py-1 text-sm hover:bg-white dark:hover:bg-zinc-950"
-                      title="แตะเพื่อลบ"
+                      title={t("tapRemove")}
                     >
                       {s.ultimate_skill_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -162,7 +182,7 @@ export function UltimateMultiSelect(props: {
           {/* Grid list */}
           <div className="max-h-[50vh] sm:max-h-[420px] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800 p-2 sm:p-3">
             {filtered.length === 0 ? (
-              <div className="text-sm text-zinc-500">ไม่พบรายการ</div>
+              <div className="text-sm text-zinc-500">{t("notFound")}</div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                 {filtered.map((s) => {
@@ -208,7 +228,7 @@ export function UltimateMultiSelect(props: {
                       {/* check overlay */}
                       {checked ? (
                         <div className="absolute top-2 right-2 rounded-full bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-2 py-1 text-xs font-semibold shadow">
-                          ✓ เลือก
+                          {t("checked")}
                         </div>
                       ) : null}
                     </button>
@@ -225,7 +245,7 @@ export function UltimateMultiSelect(props: {
               className="flex-1"
               onClick={() => setOpen(false)}
             >
-              ยกเลิก
+              {t("cancel")}
             </Button>
 
             <Button
@@ -236,7 +256,7 @@ export function UltimateMultiSelect(props: {
                 setOpen(false);
               }}
             >
-              ยืนยัน
+              {t("confirm")}
             </Button>
           </div>
         </div>

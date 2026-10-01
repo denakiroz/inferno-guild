@@ -47,9 +47,9 @@ export function isSaturday(dateStr: string) {
   return d.getDay() === 6;
 }
 
-export function prettyDate(dateStr: string) {
+export function prettyDate(dateStr: string, locale: string = "th-TH") {
   const dt = new Date(`${dateStr}T00:00:00+07:00`);
-  return dt.toLocaleDateString("th-TH", {
+  return dt.toLocaleDateString(locale, {
     timeZone: BKK_TZ,
     weekday: "long",
     year: "numeric",

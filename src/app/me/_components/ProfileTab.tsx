@@ -3,6 +3,7 @@
 import React from "react";
 import { Button, Card, Select } from "@/app/components/UI";
 import type { ClassRow, MemberRow, SpecialSkillRow, UltimateSkillRow } from "../_lib/types";
+import { defineDict, useT } from "@/i18n";
 import { UltimateMultiSelect } from "./UltimateMultiSelect";
 import { SpecialSkillMultiSelect } from "./SpecialSkillMultiSelect";
 import {
@@ -10,6 +11,15 @@ import {
   type EquipmentCreateRow,
   type SelectedByType,
 } from "./WeaponStoneSection";
+
+const dict = defineDict({
+  title: { th: "โปรไฟล์", en: "Profile" },
+  class: { th: "อาชีพ", en: "Class" },
+  weaponStones: { th: "หินสกิลอาวุธ", en: "Weapon skill stones" },
+  error: { th: "Error:", en: "Error:" },
+  saving: { th: "กำลังบันทึก...", en: "Saving..." },
+  save: { th: "บันทึก", en: "Save" },
+});
 
 export function ProfileTab(props: {
   member: MemberRow | null;
@@ -54,14 +64,15 @@ export function ProfileTab(props: {
     setAllStonesByType,
     stonesLoading,
   } = props;
+  const t = useT(dict);
 
   return (
     <Card>
-      <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">โปรไฟล์</div>
+      <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t("title")}</div>
 
       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <div className="text-xs text-zinc-500 mb-1">อาชีพ</div>
+          <div className="text-xs text-zinc-500 mb-1">{t("class")}</div>
           <Select
             value={classId}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setClassId(e.target.value)}
@@ -98,11 +109,11 @@ export function ProfileTab(props: {
         disabled={saving}
       />
 
-      {err && <div className="mt-3 text-sm text-rose-600">Error: {err}</div>}
+      {err && <div className="mt-3 text-sm text-rose-600">{t("error")} {err}</div>}
 
       <div className="mt-5 flex items-center justify-end gap-2">
         <Button onClick={onSaveProfile} disabled={saving} className="w-full sm:w-auto">
-          {saving ? "กำลังบันทึก..." : "บันทึก"}
+          {saving ? t("saving") : t("save")}
         </Button>
       </div>
     </Card>

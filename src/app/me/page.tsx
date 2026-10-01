@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Moon, Sun, LogOut } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 
 import { Button, Card, Modal } from "@/app/components/UI";
 import { useTheme } from "@/app/theme/ThemeProvider";
 import { guildName } from "@/lib/guildLabel";
+import { defineDict, useT, LangToggle } from "@/i18n";
 
 import LeaveRequestButton, { type LeaveCreateRow } from "@/app/components/LeaveRequestButton";
 import type { DbLeave } from "@/type/db";
@@ -38,12 +39,43 @@ import { EventWidget } from "./_components/EventWidget";
 
 type TabKey = "overview" | "event" | "profile" | "internalPower" | "leaves";
 
+const dict = defineDict({
+  loading: { th: "กำลังโหลด...", en: "Loading..." },
+  unauthorized: { th: "Unauthorized", en: "Unauthorized" },
+  pleaseLogin: { th: "กรุณาเข้าสู่ระบบใหม่", en: "Please sign in again" },
+  goLogin: { th: "ไปหน้า Login", en: "Go to Login" },
+  loadFailed: { th: "โหลดข้อมูลไม่สำเร็จ", en: "Failed to load data" },
+  saveOk: { th: "บันทึกสำเร็จ", en: "Saved successfully" },
+  avatarAlt: { th: "avatar", en: "avatar" },
+  classIconAlt: { th: "class icon", en: "class icon" },
+  goAdmin: { th: "ไป Admin", en: "Go to Admin" },
+  toolbar: { th: "เครื่องมือ", en: "Toolbar" },
+  toggleTheme: { th: "สลับธีม", en: "Toggle theme" },
+  tabDashboard: { th: "Dashboard", en: "Dashboard" },
+  tabProfile: { th: "โปรไฟล์", en: "Profile" },
+  tabLeaves: { th: "การลาของฉัน", en: "My Leaves" },
+  me: { th: "ฉัน", en: "Me" },
+  confirmCancelTitle: { th: "ยืนยันการยกเลิก", en: "Confirm cancellation" },
+  confirmCancelBefore: { th: "ต้องการยกเลิก", en: "Cancel" },
+  confirmCancelAfter: { th: "ใช่หรือไม่", en: "?" },
+  dateLabel: { th: "วันที่:", en: "Date:" },
+  timeLabel: { th: "เวลา:", en: "Time:" },
+  pastCutoff: {
+    th: "ตอนนี้เกินเวลา 20:00 แล้ว ไม่สามารถยกเลิกของวันนี้ได้",
+    en: "It is past 20:00, so today's leave can no longer be cancelled",
+  },
+  back: { th: "กลับ", en: "Back" },
+  cancelling: { th: "กำลังยกเลิก...", en: "Cancelling..." },
+  cancel: { th: "ยกเลิก", en: "Cancel" },
+});
+
 const tabBase = "px-3 py-2.5 sm:px-4 sm:py-2 text-sm rounded-lg transition whitespace-nowrap";
 const tabIdle =
   "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100";
 const tabActive = "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow";
 
 export default function MePage() {
+  const t = useT(dict);
   const { theme, toggleTheme } = useTheme();
 
   const [tab, setTab] = useState<TabKey>("overview");
@@ -72,10 +104,10 @@ export default function MePage() {
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const [leaveErr, setLeaveErr] = useState<string | null>(null);
   const [canceling, setCanceling] = useState<number | null>(null);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   // ✅ confirm cancel
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -209,7 +241,7 @@ export default function MePage() {
         loadMySpecialSkills(),
         loadStones(),
       ]);
-    })().catch(() => setErr("โหลดข้อมูลไม่สำเร็จ"));
+    })().catch(() => setLoadFailed(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -324,15 +356,6 @@ export default function MePage() {
     }
   }
 
-  async function onLogout() {
-    setLoggingOut(true);
-    try {
-      await fetch("/api/logout", { method: "POST" });
-    } finally {
-      location.href = "/login";
-    }
-  }
-
   const upcomingGrouped = useMemo(() => {
     const nowHHMM = bkkNowHHMM();
 
@@ -358,17 +381,17 @@ export default function MePage() {
     return map;
   }, [activeLeaves, todayBkk]);
 
-  if (!me) return <main className="p-4 sm:p-6">Loading...</main>;
+  if (!me) return <main className="p-4 sm:p-6">{t("loading")}</main>;
 
   if (!me.ok) {
     return (
       <main className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-4 sm:p-6">
         <Card className="max-w-md w-full">
           <div className="text-lg font-semibold">Unauthorized</div>
-          <div className="mt-2 text-sm text-zinc-400">กรุณาเข้าสู่ระบบใหม่</div>
+          <div className="mt-2 text-sm text-zinc-400">{t("pleaseLogin")}</div>
           <div className="mt-4">
             <a className="underline" href="/login">
-              ไปหน้า Login
+              {t("goLogin")}
             </a>
           </div>
         </Card>
@@ -386,7 +409,7 @@ export default function MePage() {
             className="fixed top-4 right-4 left-4 sm:left-auto z-[60] text-center sm:text-left rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-lg
                       dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200"
           >
-            บันทึกสำเร็จ
+            {t("saveOk")}
           </div>
         )}
 
@@ -399,7 +422,7 @@ export default function MePage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={me.user?.avatarUrl}
-                  alt="avatar"
+                  alt={t("avatarAlt")}
                   className="h-12 w-12 sm:h-14 sm:w-14 shrink-0 rounded-2xl border border-zinc-200 dark:border-zinc-800"
                 />
 
@@ -416,7 +439,7 @@ export default function MePage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={iconUrl}
-                          alt={currentClass?.name ?? "class icon"}
+                          alt={currentClass?.name ?? t("classIconAlt")}
                           className="h-6 w-6 rounded-sm object-contain shrink-0"
                         />
                       );
@@ -432,22 +455,29 @@ export default function MePage() {
                   </div>
                 </div>
 
-                <div className="flex w-full flex-wrap items-center gap-2 sm:contents">
                 {canAccessAdmin && (
                   <a href="/admin" className="text-sm underline text-red-600 whitespace-nowrap py-2 sm:py-0">
-                    ไป Admin
+                    {t("goAdmin")}
                   </a>
                 )}
 
-                <Button variant="outline" onClick={toggleTheme} className="flex-1 sm:flex-none">
-                  {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                  สลับธีม
-                </Button>
+                {/* แถบเครื่องมือ (สลับธีม / ภาษา / ออกจากระบบ): ไอคอนกะทัดรัด เพื่อไม่ให้บังชื่อ */}
+                <div
+                  className="flex items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900 ml-auto"
+                  role="toolbar"
+                  aria-label={t("toolbar")}
+                >
+                  <button
+                    type="button"
+                    onClick={toggleTheme}
+                    title={t("toggleTheme")}
+                    aria-label={t("toggleTheme")}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-zinc-700 hover:bg-white dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                  </button>
 
-                <Button variant="outline" onClick={onLogout} disabled={loggingOut} className="flex-1 sm:flex-none">
-                  <LogOut className="w-4 h-4 text-rose-600" />
-                  {loggingOut ? "กำลังออก..." : "Logout"}
-                </Button>
+                  <LangToggle className="mx-0.5 shrink-0" />
                 </div>
               </div>
             </Card>
@@ -463,7 +493,7 @@ export default function MePage() {
                     onClick={() => setTab("overview")}
                     className={`${tabBase} ${tab === "overview" ? tabActive : tabIdle}`}
                   >
-                    Dashboard
+                    {t("tabDashboard")}
                   </button>
 
                   <button
@@ -471,7 +501,7 @@ export default function MePage() {
                     onClick={() => setTab("profile")}
                     className={`${tabBase} ${tab === "profile" ? tabActive : tabIdle}`}
                   >
-                    โปรไฟล์
+                    {t("tabProfile")}
                   </button>
 
                   <button
@@ -479,7 +509,7 @@ export default function MePage() {
                     onClick={() => setTab("leaves")}
                     className={`${tabBase} ${tab === "leaves" ? tabActive : tabIdle}`}
                   >
-                    การลาของฉัน
+                    {t("tabLeaves")}
                   </button>
                 </div>
 
@@ -487,7 +517,7 @@ export default function MePage() {
                 <div className="flex items-center justify-end [&>*]:w-full sm:[&>*]:w-auto">
                   {member !== null && !member.is_special ? (
                     <LeaveRequestButton
-                      memberName={member.name ?? "ฉัน"}
+                      memberName={member.name ?? t("me")}
                       existingLeaves={activeLeaves}
                       onCreate={createMyLeave}
                     />
@@ -518,7 +548,7 @@ export default function MePage() {
             classId={classId}
             setClassId={setClassId}
             saving={saving}
-            err={err}
+            err={err ?? (loadFailed ? t("loadFailed") : null)}
             onSaveProfile={onSaveProfile}
             ultimateSkills={ultimateSkills}
             selectedUltimateIds={selectedUltimateIds}
@@ -552,20 +582,21 @@ export default function MePage() {
             setConfirmOpen(false);
             setConfirmTarget(null);
           }}
-          title="ยืนยันการยกเลิก"
+          title={t("confirmCancelTitle")}
         >
           <div className="space-y-3">
             <div className="text-sm text-zinc-600 dark:text-zinc-300">
-              ต้องการยกเลิก <span className="font-semibold">{confirmTarget?.label}</span> ใช่หรือไม่
+              {t("confirmCancelBefore")} <span className="font-semibold">{confirmTarget?.label}</span>{" "}
+              {t("confirmCancelAfter")}
             </div>
 
             <div className="text-xs text-zinc-500">
-              วันที่: <span className="font-semibold">{confirmTarget?.date}</span> เวลา:{" "}
+              {t("dateLabel")} <span className="font-semibold">{confirmTarget?.date}</span> {t("timeLabel")}{" "}
               <span className="font-semibold">{confirmTarget?.time}</span>
             </div>
 
             {confirmTarget?.date === bkkDateOf(new Date()) && bkkNowHHMM() >= "20:00" ? (
-              <div className="text-sm text-rose-600">ตอนนี้เกินเวลา 20:00 แล้ว ไม่สามารถยกเลิกของวันนี้ได้</div>
+              <div className="text-sm text-rose-600">{t("pastCutoff")}</div>
             ) : null}
 
             <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row">
@@ -577,7 +608,7 @@ export default function MePage() {
                   setConfirmTarget(null);
                 }}
               >
-                กลับ
+                {t("back")}
               </Button>
 
               <Button
@@ -591,7 +622,7 @@ export default function MePage() {
                   setConfirmTarget(null);
                 }}
               >
-                {canceling === confirmTarget?.id ? "กำลังยกเลิก..." : "ยกเลิก"}
+                {canceling === confirmTarget?.id ? t("cancelling") : t("cancel")}
               </Button>
             </div>
           </div>

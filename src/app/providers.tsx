@@ -8,6 +8,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { makeQueryClient } from "@/lib/queryClient";
 import { ThemeProvider } from "@/app/theme/ThemeProvider";
+import { LangProvider } from "@/i18n";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // useState ensures QueryClient ถูกสร้างครั้งเดียวต่อ browser session
@@ -16,7 +17,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>{children}</ThemeProvider>
+      <ThemeProvider>
+        <LangProvider>{children}</LangProvider>
+      </ThemeProvider>
       {process.env.NODE_ENV !== "production" && (
         <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
       )}

@@ -8,15 +8,50 @@ import type { DateRange } from "react-day-picker";
 
 import type { DbLeave } from "@/type/db";
 import { Button, Input, Modal, Select } from "@/app/components/UI";
+import { defineDict, useT } from "@/i18n";
+
+const dict = defineDict({
+  loadingCalendar: { th: "กำลังโหลดปฏิทิน…", en: "Loading calendar…" },
+  button: { th: "แจ้งลา", en: "Request leave" },
+  modalTitle: { th: "แจ้งลาวอ", en: "Request war leave" },
+  member: { th: "สมาชิก:", en: "Member:" },
+  pickRange: {
+    th: "เลือกช่วงวันที่ (วันที่ลาแล้วจะเลือกไม่ได้)",
+    en: "Select a date range (dates already on leave cannot be selected)",
+  },
+  selectedRange: { th: "ช่วงที่เลือก:", en: "Selected range:" },
+  to: { th: "ถึง", en: "to" },
+  reasonPlaceholder: {
+    th: "เหตุผล (เช่น ลาวอ / ลากิจ / ลาป่วย)",
+    en: "Reason (e.g. war leave / personal / sick)",
+  },
+  satTitle: { th: "เลือกรอบสำหรับวันเสาร์", en: "Choose rounds for Saturday" },
+  satHint: { th: "วันเสาร์มี 2 รอบ: 20:00 และ 20:30", en: "Saturday has 2 rounds: 20:00 and 20:30" },
+  pickRound: { th: "เลือกรอบ...", en: "Select round..." },
+  round2000: { th: "รอบ 20:00", en: "Round 20:00" },
+  round2030: { th: "รอบ 20:30", en: "Round 20:30" },
+  alreadyLeave: { th: " (ลาแล้ว)", en: " (already on leave)" },
+  both: { th: "ทั้งสองรอบ", en: "Both rounds" },
+  notSelectable: { th: " (เลือกไม่ได้)", en: " (unavailable)" },
+  satFull: { th: "วันเสาร์นี้ลาไว้ครบแล้ว", en: "This Saturday is fully booked" },
+  cancel: { th: "ยกเลิก", en: "Cancel" },
+  saving: { th: "กำลังบันทึก...", en: "Saving..." },
+  save: { th: "บันทึก", en: "Save" },
+});
+
+function LoadingCalendar() {
+  const t = useT(dict);
+  return (
+    <div className="py-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
+      {t("loadingCalendar")}
+    </div>
+  );
+}
 
 // ⚡ react-day-picker + CSS ของมันค่อนข้างใหญ่ — lazy-load เฉพาะตอนเปิด modal แจ้งลา
 const DayPicker = dynamic(() => import("@/app/components/DayPickerLazy"), {
   ssr: false,
-  loading: () => (
-    <div className="py-6 text-center text-xs text-zinc-500 dark:text-zinc-400">
-      กำลังโหลดปฏิทิน…
-    </div>
-  ),
+  loading: () => <LoadingCalendar />,
 });
 
 const BKK_OFFSET = "+07:00";
@@ -168,9 +203,10 @@ export default function LeaveRequestButton({
   onAfterSave,
   hidden = false,
   disabled = false,
-  buttonLabel = "แจ้งลา",
+  buttonLabel,
   className,
 }: Props) {
+  const t = useT(dict);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -325,17 +361,17 @@ export default function LeaveRequestButton({
     <>
       <Button variant="outline" className={className} onClick={onOpen} disabled={disabled}>
         <CalendarDays className="w-4 h-4" />
-        {buttonLabel}
+        {buttonLabel ?? t("button")}
       </Button>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="แจ้งลาวอ">
+      <Modal open={open} onClose={() => setOpen(false)} title={t("modalTitle")}>
         <div className="space-y-3">
           <div className="text-sm text-zinc-600 dark:text-zinc-300">
-            สมาชิก: <span className="font-semibold">{memberName}</span>
+            {t("member")} <span className="font-semibold">{memberName}</span>
           </div>
 
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
-            <div className="text-xs text-zinc-500 mb-2">เลือกช่วงวันที่ (วันที่ลาแล้วจะเลือกไม่ได้)</div>
+            <div className="text-xs text-zinc-500 mb-2">{t("pickRange")}</div>
 
             <div className="flex justify-center overflow-x-auto">
               <DayPicker
@@ -350,15 +386,15 @@ export default function LeaveRequestButton({
             </div>
 
             <div className="mt-2 text-xs text-zinc-500">
-              ช่วงที่เลือก:{" "}
+              {t("selectedRange")}{" "}
               <span className="font-semibold text-zinc-700 dark:text-zinc-200">
-                {leaveStart || "-"} ถึง {leaveEnd || "-"}
+                {leaveStart || "-"} {t("to")} {leaveEnd || "-"}
               </span>
             </div>
           </div>
 
           <Input
-            placeholder="เหตุผล (เช่น ลาวอ / ลากิจ / ลาป่วย)"
+            placeholder={t("reasonPlaceholder")}
             value={leaveReason}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLeaveReason(e.target.value)}
           />
@@ -366,9 +402,9 @@ export default function LeaveRequestButton({
           {saturdayDates.length > 0 ? (
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
               <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                เลือกรอบสำหรับวันเสาร์
+                {t("satTitle")}
               </div>
-              <div className="text-xs text-zinc-500">วันเสาร์มี 2 รอบ: 20:00 และ 20:30</div>
+              <div className="text-xs text-zinc-500">{t("satHint")}</div>
 
               <div className="space-y-2">
                 {saturdayDates.map((d) => {
@@ -402,22 +438,22 @@ export default function LeaveRequestButton({
                         }}
                       >
                         <option value="select" disabled>
-                          เลือกรอบ...
+                          {t("pickRound")}
                         </option>
 
                         <option value="20:00" disabled={disable20}>
-                          รอบ 20:00{disable20 ? " (ลาแล้ว)" : ""}
+                          {t("round2000")}{disable20 ? t("alreadyLeave") : ""}
                         </option>
                         <option value="20:30" disabled={disable2030}>
-                          รอบ 20:30{disable2030 ? " (ลาแล้ว)" : ""}
+                          {t("round2030")}{disable2030 ? t("alreadyLeave") : ""}
                         </option>
                         <option value="both" disabled={disableBoth}>
-                          ทั้งสองรอบ{disableBoth ? " (เลือกไม่ได้)" : ""}
+                          {t("both")}{disableBoth ? t("notSelectable") : ""}
                         </option>
                       </Select>
 
                       {disableSelect ? (
-                        <span className="text-xs text-zinc-500">วันเสาร์นี้ลาไว้ครบแล้ว</span>
+                        <span className="text-xs text-zinc-500">{t("satFull")}</span>
                       ) : null}
                     </div>
                   );
@@ -429,10 +465,10 @@ export default function LeaveRequestButton({
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row">
             <Button variant="secondary" className="flex-1" onClick={() => setOpen(false)} disabled={saving}>
               <X className="w-4 h-4" />
-              ยกเลิก
+              {t("cancel")}
             </Button>
             <Button className="flex-1" onClick={save} disabled={saving || !leaveStart || !leaveEnd}>
-              {saving ? "กำลังบันทึก..." : "บันทึก"}
+              {saving ? t("saving") : t("save")}
             </Button>
           </div>
         </div>

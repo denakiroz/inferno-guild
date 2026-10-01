@@ -3,6 +3,35 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Gem, X } from "lucide-react";
 import { Button, Card } from "@/app/components/UI";
+import { defineDict, useT } from "@/i18n";
+
+const dict = defineDict({
+  typeWeapon: { th: "อาวุธ", en: "Weapon" },
+  typeArmor: { th: "เสื้อ", en: "Armor" },
+  typeShoes: { th: "รองเท้า", en: "Shoes" },
+  colorRed: { th: "แดง", en: "Red" },
+  colorPurple: { th: "ม่วง", en: "Purple" },
+  colorGold: { th: "ทอง", en: "Gold" },
+  title: { th: "หินสกิล", en: "Skill stones" },
+  saving: { th: "กำลังบันทึก...", en: "Saving..." },
+  save: { th: "บันทึก", en: "Save" },
+  error: { th: "Error:", en: "Error:" },
+  loading: { th: "กำลังโหลด...", en: "Loading..." },
+  clearAll: { th: "ล้างทั้งหมด", en: "Clear all" },
+  add: { th: "เพิ่ม", en: "Add" },
+  none: { th: "ยังไม่ได้เลือก", en: "Nothing selected" },
+  colorLine: { th: "สี: {c}", en: "Color: {c}" },
+  remove: { th: "ลบ", en: "Remove" },
+  addTitle: { th: "เพิ่มหินสกิล: {type}", en: "Add skill stones: {type}" },
+  close: { th: "ปิด", en: "Close" },
+  searchPlaceholder: { th: "ค้นหา...", en: "Search..." },
+  notFound: { th: "ไม่พบรายการ", en: "No items found" },
+  pickColor: { th: "เลือกสี", en: "Pick color" },
+  selected: { th: "เลือกแล้ว", en: "Selected" },
+  done: { th: "เสร็จสิ้น", en: "Done" },
+});
+
+type DictKey = keyof typeof dict;
 
 type EquipmentType = 1 | 2 | 3;
 
@@ -30,36 +59,22 @@ type SkillStonesRes =
     }
   | { ok: false; error?: string };
 
-function typeLabel(t: EquipmentType) {
-  switch (t) {
-    case 1:
-      return "อาวุธ";
-    case 2:
-      return "เสื้อ";
-    case 3:
-      return "รองเท้า";
-    default:
-      return "-";
-  }
-}
+const TYPE_KEYS: Record<EquipmentType, DictKey> = {
+  1: "typeWeapon",
+  2: "typeArmor",
+  3: "typeShoes",
+};
 
-function colorLabel(c: StoneColor) {
-  switch (c) {
-    case "red":
-      return "แดง";
-    case "purple":
-      return "ม่วง";
-    case "gold":
-      return "ทอง";
-    default:
-      return "-";
-  }
-}
+const COLOR_KEYS: Record<StoneColor, DictKey> = {
+  red: "colorRed",
+  purple: "colorPurple",
+  gold: "colorGold",
+};
 
-const COLOR_OPTIONS: Array<{ value: StoneColor; label: string }> = [
-  { value: "red", label: "แดง" },
-  { value: "purple", label: "ม่วง" },
-  { value: "gold", label: "ทอง" },
+const COLOR_OPTIONS: Array<{ value: StoneColor; labelKey: DictKey }> = [
+  { value: "red", labelKey: "colorRed" },
+  { value: "purple", labelKey: "colorPurple" },
+  { value: "gold", labelKey: "colorGold" },
 ];
 
 const EMPTY_SELECTED: SelectedByType = { 1: [], 2: [], 3: [] };
@@ -87,6 +102,9 @@ function normalizeSelected(input: unknown): SelectedStone[] {
 }
 
 export function SkillStonesTab() {
+  const tr = useT(dict);
+  const typeLabel = (ty: EquipmentType) => (TYPE_KEYS[ty] ? tr(TYPE_KEYS[ty]) : "-");
+  const colorLabel = (c: StoneColor) => (COLOR_KEYS[c] ? tr(COLOR_KEYS[c]) : "-");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -196,21 +214,21 @@ export function SkillStonesTab() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Gem className="w-5 h-5" />
-          <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">หินสกิล</div>
+          <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{tr("title")}</div>
         </div>
 
         <div className="flex items-center gap-2">
           <Button onClick={() => void onSave()} disabled={loading || saving}>
-            {saving ? "กำลังบันทึก..." : "บันทึก"}
+            {saving ? tr("saving") : tr("save")}
           </Button>
         </div>
       </div>
 
 
-      {err ? <div className="mt-3 text-sm text-rose-600">Error: {err}</div> : null}
+      {err ? <div className="mt-3 text-sm text-rose-600">{tr("error")} {err}</div> : null}
 
       {loading ? (
-        <div className="mt-4 text-sm text-zinc-500">กำลังโหลด...</div>
+        <div className="mt-4 text-sm text-zinc-500">{tr("loading")}</div>
       ) : (
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           {([1, 2, 3] as EquipmentType[]).map((t) => {
@@ -235,18 +253,18 @@ export function SkillStonesTab() {
                         disabled={saving}
                       >
                         <X className="w-4 h-4" />
-                        ล้างทั้งหมด
+                        {tr("clearAll")}
                       </Button>
                     ) : null}
 
                     <Button variant="outline" onClick={() => openModal(t)} disabled={saving}>
-                      เพิ่ม
+                      {tr("add")}
                     </Button>
                   </div>
                 </div>
 
                 {selected.length === 0 ? (
-                  <div className="mt-3 text-sm text-zinc-500">ยังไม่ได้เลือก</div>
+                  <div className="mt-3 text-sm text-zinc-500">{tr("none")}</div>
                 ) : (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selected.map((s) => {
@@ -273,7 +291,7 @@ export function SkillStonesTab() {
                               {e ? e.name : `ID: ${s.equipment_create_id}`}
                             </div>
                             <div className="text-xs text-zinc-500">
-                               สี: {colorLabel(s.color)}
+                               {tr("colorLine", { c: colorLabel(s.color) })}
                             </div>
                           </div>
 
@@ -287,7 +305,7 @@ export function SkillStonesTab() {
                             }}
                             disabled={saving}
                           >
-                            ลบ
+                            {tr("remove")}
                           </Button>
                         </div>
                       );
@@ -306,7 +324,7 @@ export function SkillStonesTab() {
           <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-xl">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 px-4 py-3">
               <div className="font-semibold text-zinc-900 dark:text-zinc-100">
-                เพิ่มหินสกิล: {typeLabel(openType)}
+                {tr("addTitle", { type: typeLabel(openType) })}
               </div>
               <Button
                 variant="outline"
@@ -316,7 +334,7 @@ export function SkillStonesTab() {
                   setColorPick({});
                 }}
               >
-                ปิด
+                {tr("close")}
               </Button>
             </div>
 
@@ -324,13 +342,13 @@ export function SkillStonesTab() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="ค้นหา..."
+                placeholder={tr("searchPlaceholder")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-base sm:text-sm"
               />
 
               <div className="mt-3 max-h-[55vh] overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
                 {modalList.length === 0 ? (
-                  <div className="p-4 text-sm text-zinc-500">ไม่พบรายการ</div>
+                  <div className="p-4 text-sm text-zinc-500">{tr("notFound")}</div>
                 ) : (
                   <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
                     {modalList.map((e) => {
@@ -373,10 +391,10 @@ export function SkillStonesTab() {
                               className="min-w-0 flex-1 sm:flex-none rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2.5 sm:py-2 text-base sm:text-sm"
                               disabled={already}
                             >
-                              <option value="">เลือกสี</option>
+                              <option value="">{tr("pickColor")}</option>
                               {COLOR_OPTIONS.map((c) => (
                                 <option key={c.value} value={c.value}>
-                                  {c.label}
+                                  {tr(c.labelKey)}
                                 </option>
                               ))}
                             </select>
@@ -397,7 +415,7 @@ export function SkillStonesTab() {
                                 setColorPick((prev) => ({ ...prev, [e.id]: "" }));
                               }}
                             >
-                              {already ? "เลือกแล้ว" : "เพิ่ม"}
+                              {already ? tr("selected") : tr("add")}
                             </Button>
                           </div>
                         </div>
@@ -416,7 +434,7 @@ export function SkillStonesTab() {
                     setColorPick({});
                   }}
                 >
-                  เสร็จสิ้น
+                  {tr("done")}
                 </Button>
               </div>
             </div>

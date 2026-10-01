@@ -632,6 +632,10 @@ export default function WarBuilderClient({ forcedGuild, canEdit }: Props) {
       .on("postgres_changes", { event: "*", schema: "public", table: "member" }, () => {
         void qc.invalidateQueries({ queryKey: qk.members(guild) });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "war_party_member" }, () => {
+        // admin คนอื่นจัดปาร์ตี้ -> sync
+        void qc.invalidateQueries({ queryKey: qk.members(guild) });
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "leave" }, () => {
         // member list อาจไม่เปลี่ยน — แต่ leave ของวันที่กำลังดูอาจเปลี่ยน
         // → invalidate (เผื่อ leaves ที่ฝังใน members response เปลี่ยน) + เรียก leave loader ตรง ๆ
@@ -2024,6 +2028,10 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
     // current warTime draft is clean
     setDraft(warTime, parties, false);
 
+    // ปาร์ตี้อยู่ในตาราง war_party_member (ไม่ใช่ member) -> ต้อง invalidate cache สมาชิกเอง
+    // ไม่งั้น load() จะได้ข้อมูลเก่าจาก React Query แล้วค่าที่ล้าง/แก้จะ "กลับมา"
+    await qc.invalidateQueries({ queryKey: qk.members(guild) });
+
     lastLoadKeyRef.current = "";
     await load();
     alert("บันทึกสำเร็จ");
@@ -2982,25 +2990,47 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
   const partyCountOf = (m: MemberRow) => liveRoundCount.get(m.id) ?? 0;
 
   // สลับรอบ 20.00 <-> 20.30: เทียบสมาชิกในแต่ละช่องของปาร์ตี้ (เฉพาะตอนเปิดผัง)
-  const swapRows = warMapOpen
+  const swapInfo = warMapOpen
     ? (() => {
         const layoutOf = (time: WarTime): Party[] =>
           time === warTime ? parties : getDraft(time) ?? buildPartiesFromMembers(members, time);
         const r1 = layoutOf("20:00");
         const r2 = layoutOf("20:30");
 
-        const out: Array<{ partyId: number; slot: number; a: number | null; b: number | null }> = [];
+        const partyOf = (layout: Party[]) => {
+          const m = new Map<number, number>();
+          for (const p of layout) for (const sl of p.slots) if (sl.memberId) m.set(sl.memberId, p.id);
+          return m;
+        };
+        const at1 = partyOf(r1);
+        const at2 = partyOf(r2);
+
+        // ย้ายตี้: อยู่ทั้งสองรอบ แต่คนละตี้ (เช่น ตี้ 3 → ตี้ 5)
+        const moves: Array<{ memberId: number; from: number; to: number }> = [];
+        for (const [memberId, from] of at1) {
+          const to = at2.get(memberId);
+          if (to != null && to !== from) moves.push({ memberId, from, to });
+        }
+        moves.sort((x, y) => x.from - y.from || x.to - y.to);
+
+        // สลับคน: คนที่อยู่แค่รอบเดียว จับคู่กับคนที่มาแทนในตี้เดียวกัน
+        const swaps: Array<{ partyId: number; slot: number; a: number | null; b: number | null }> = [];
         for (const p1 of r1) {
           const p2 = r2.find((x) => x.id === p1.id);
-          for (let i = 0; i < p1.slots.length; i++) {
-            const a = p1.slots[i]?.memberId ?? null;
-            const b = p2?.slots[i]?.memberId ?? null;
-            if (a !== b) out.push({ partyId: p1.id, slot: i + 1, a, b });
+          const ids1 = p1.slots.map((sl) => sl.memberId).filter((x): x is number => !!x);
+          const ids2 = (p2?.slots ?? []).map((sl) => sl.memberId).filter((x): x is number => !!x);
+          const outs = ids1.filter((id) => !at2.has(id)); // อยู่ 20.00 แต่ไม่อยู่ตี้ไหนเลยตอน 20.30
+          const ins = ids2.filter((id) => !at1.has(id)); // เพิ่งเข้ามาตอน 20.30
+          const n = Math.max(outs.length, ins.length);
+          for (let i = 0; i < n; i++) {
+            swaps.push({ partyId: p1.id, slot: i + 1, a: outs[i] ?? null, b: ins[i] ?? null });
           }
         }
-        return out;
+        return { moves, swaps };
       })()
-    : [];
+    : { moves: [], swaps: [] };
+  const swapRows = swapInfo.swaps;
+  const swapTotal = swapInfo.moves.length + swapInfo.swaps.length;
 
   const leaveCountForMap = useMemo(() => {
     return leaveByTime[warTime]?.size ?? 0;
@@ -3064,7 +3094,7 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
               {/* สลับรอบ 20.00 <-> 20.30 */}
               <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/40 overflow-hidden flex flex-col min-h-0">
                 <div className="bg-zinc-900 px-4 py-3 text-center text-sm font-extrabold text-white">
-                  สลับรอบ [{swapRows.length}]
+                  สลับรอบ [{swapTotal}]
                 </div>
                 <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-1.5 text-[11px] font-semibold text-zinc-500 dark:border-zinc-800">
                   <span>20.00 น.</span>
@@ -3072,13 +3102,40 @@ const { data, error } = await supabase.from("class").select("id,name,icon_url").
                   <span>20.30 น.</span>
                 </div>
                 <div className="flex-1 min-h-0 max-h-[50vh] xl:max-h-none overflow-y-auto p-2">
-                  {swapRows.length === 0 ? (
+                  {swapTotal === 0 ? (
                     <div className="py-6 text-center text-sm text-zinc-400">ไม่มีการสลับ</div>
                   ) : (
                     <div className="space-y-2">
+                      {swapInfo.moves.length > 0 ? (
+                        <div>
+                          <div className="mb-1 text-[11px] font-bold text-zinc-500">ย้ายตี้</div>
+                          <div className="space-y-1">
+                            {swapInfo.moves.map((mv) => {
+                              const mm = membersById.get(mv.memberId) ?? null;
+                              return (
+                                <div
+                                  key={`move-${mv.memberId}`}
+                                  className="flex items-center justify-between gap-2 rounded-lg border border-zinc-100 bg-white px-2 py-1.5 dark:border-zinc-900 dark:bg-zinc-950/30"
+                                >
+                                  <div
+                                    className="min-w-0 truncate text-[13px] font-bold"
+                                    style={mm?.color ? { color: mm.color } : undefined}
+                                  >
+                                    {mm?.name ?? `#${mv.memberId}`}
+                                  </div>
+                                  <div className="shrink-0 whitespace-nowrap text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                                    ตี้ {mv.from} → ตี้ {mv.to}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+
                       {Array.from(new Set(swapRows.map((r) => r.partyId))).map((pid) => (
                         <div key={`swap-p-${pid}`}>
-                          <div className="mb-1 text-[11px] font-bold text-zinc-500">ตี้ {pid}</div>
+                          <div className="mb-1 text-[11px] font-bold text-zinc-500">สลับในตี้ {pid}</div>
                           <div className="space-y-1">
                             {swapRows
                               .filter((r) => r.partyId === pid)

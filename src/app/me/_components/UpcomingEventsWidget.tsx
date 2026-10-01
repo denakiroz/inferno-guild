@@ -2,6 +2,16 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, Clock, CalendarDays } from "lucide-react";
+import { defineDict, useT, useLang } from "@/i18n";
+
+const dict = defineDict({
+  loadError: {
+    th: "ไม่สามารถโหลดกิจกรรมได้ ({err}) — กรุณาตรวจสอบว่าสร้างตาราง calendar_event ใน Supabase แล้ว",
+    en: "Unable to load events ({err}) — please check that the calendar_event table has been created in Supabase",
+  },
+  timeSuffix: { th: "น.", en: "" },
+  noEvents: { th: "ไม่มีกิจกรรมในวันนี้", en: "No events on this day" },
+});
 
 type CalEvent = {
   id: number;
@@ -48,6 +58,9 @@ const LEFT_BAR: Record<string, string> = {
 const MONTH_TH = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน",
                   "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
 const DAY_TH   = ["อา","จ","อ","พ","พฤ","ศ","ส"];
+const MONTH_EN = ["January","February","March","April","May","June",
+                  "July","August","September","October","November","December"];
+const DAY_EN   = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
 function toISO(y: number, m: number, d: number) {
   return `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
@@ -71,6 +84,11 @@ function buildGrid(year: number, month: number): Array<{ iso: string; day: numbe
 
 /* ─────────────────────────────────────────────────────── */
 export function UpcomingEventsWidget() {
+  const t = useT(dict);
+  const { lang } = useLang();
+  const isTh = lang === "th";
+  const months = isTh ? MONTH_TH : MONTH_EN;
+  const days = isTh ? DAY_TH : DAY_EN;
   const [events, setEvents]     = useState<CalEvent[]>([]);
   const [loading, setLoading]   = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -134,7 +152,7 @@ export function UpcomingEventsWidget() {
       {/* ── API error ── */}
       {apiError && (
         <div className="mb-3 text-xs text-rose-400 dark:text-rose-500">
-          ไม่สามารถโหลดกิจกรรมได้ ({apiError}) — กรุณาตรวจสอบว่าสร้างตาราง calendar_event ใน Supabase แล้ว
+          {t("loadError", { err: apiError })}
         </div>
       )}
 
@@ -143,7 +161,7 @@ export function UpcomingEventsWidget() {
         <div className="flex items-center gap-2">
           <CalendarDays size={14} className="text-zinc-400 dark:text-zinc-500" />
           <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-            {MONTH_TH[viewMonth]} {viewYear + 543}
+            {months[viewMonth]} {isTh ? viewYear + 543 : viewYear}
           </span>
         </div>
         <div className="flex gap-1">
@@ -166,7 +184,7 @@ export function UpcomingEventsWidget() {
 
       {/* ── Day-of-week headers ── */}
       <div className="grid grid-cols-7 mb-1">
-        {DAY_TH.map((d) => (
+        {days.map((d) => (
           <div
             key={d}
             className="text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500 py-1"
@@ -261,7 +279,7 @@ export function UpcomingEventsWidget() {
                     <div className="flex items-center gap-1 mt-0.5">
                       <Clock size={11} className="text-zinc-400" />
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${pill}`}>
-                        {fmtTime(ev.event_time)} น.
+                        {fmtTime(ev.event_time)}{isTh ? ` ${t("timeSuffix")}` : ""}
                       </span>
                     </div>
                   )}
@@ -281,7 +299,7 @@ export function UpcomingEventsWidget() {
       {/* ── Click a day with no events ── */}
       {selected && selectedEvents.length === 0 && (
         <div className="mt-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center">ไม่มีกิจกรรมในวันนี้</p>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center">{t("noEvents")}</p>
         </div>
       )}
     </div>

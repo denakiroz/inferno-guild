@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { TrendingUp, TrendingDown, Minus, BarChart2, Trophy } from "lucide-react";
+import { defineDict, useT } from "@/i18n";
 
 const CATEGORIES = [
   "kill", "assist", "supply", "damage_player",
@@ -9,11 +10,35 @@ const CATEGORIES = [
 ] as const;
 type Category = (typeof CATEGORIES)[number];
 
-const CAT_LABELS: Record<Category, string> = {
-  kill: "ฆ่า", assist: "ช่วย", supply: "เสบียง",
-  damage_player: "ดาเมจคน", damage_fort: "ดาเมจป้อม",
-  heal: "ฮีล", damage_taken: "รับดาเมจ", death: "ตาย", revive: "ชุบ",
-};
+const dict = defineDict({
+  cat_kill: { th: "ฆ่า", en: "Kills" },
+  cat_assist: { th: "ช่วย", en: "Assists" },
+  cat_supply: { th: "เสบียง", en: "Supply" },
+  cat_damage_player: { th: "ดาเมจคน", en: "Player DMG" },
+  cat_damage_fort: { th: "ดาเมจป้อม", en: "Tower DMG" },
+  cat_heal: { th: "ฮีล", en: "Heal" },
+  cat_damage_taken: { th: "รับดาเมจ", en: "DMG Taken" },
+  cat_death: { th: "ตาย", en: "Deaths" },
+  cat_revive: { th: "ชุบ", en: "Revives" },
+  invBetter: { th: "↓ดี", en: "↓better" },
+  teamN: { th: "ทีม {n}", en: "Team {n}" },
+  noTeamData: { th: "(ยังไม่มีข้อมูลทีมให้เปรียบเทียบ)", en: "(No team data to compare yet)" },
+  vsTeamAvg: { th: "เทียบกับค่าเฉลี่ยทีม ({n} คน)", en: "vs. team average ({n} members)" },
+  all: { th: "ทั้งหมด", en: "All" },
+  noDataCategory: { th: "ไม่มีข้อมูลในหมวดนี้", en: "No data in this category" },
+  me: { th: "ฉัน", en: "Me" },
+  myRank: { th: "อันดับของฉัน", en: "My rank" },
+  myStats: { th: "สถิติของฉัน", en: "My stats" },
+  sample: { th: "ตัวอย่าง", en: "Sample" },
+  seasonBatches: { th: "{season} · {n} batch", en: "{season} · {n} batch(es)" },
+  avgBatches: { th: "เฉลี่ย {n} batch", en: "Avg of {n} batch(es)" },
+  unchanged: { th: "เท่าเดิม", en: "No change" },
+  points: { th: "คะแนน", en: "Score" },
+  profileLabel: { th: "โปรไฟล์ · {label}", en: "Profile · {label}" },
+  profileAvg: { th: "โปรไฟล์เฉลี่ย {n} batch", en: "Average profile of {n} batch(es)" },
+  teamAvg: { th: "เฉลี่ยทีม", en: "Team avg" },
+  clear: { th: "✕ ล้าง", en: "✕ Clear" },
+});
 
 type BatchData = {
   label: string;
@@ -434,6 +459,7 @@ function StatsGrid({
   myAvgs: Record<Category, number>;
   teamAvgs: Record<Category, number> | null;
 }) {
+  const t = useT(dict);
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mt-2">
       {CATEGORIES.map((c) => {
@@ -455,10 +481,10 @@ function StatsGrid({
           >
             <div className="flex items-center justify-between gap-1 mb-0.5">
               <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 truncate">
-                {CAT_LABELS[c]}
+                {t(`cat_${c}`)}
               </span>
               {isInv && (
-                <span className="text-[8px] font-bold text-emerald-500 shrink-0">↓ดี</span>
+                <span className="text-[8px] font-bold text-emerald-500 shrink-0">{t("invBetter")}</span>
               )}
             </div>
             <div className="flex items-baseline justify-between gap-1">
@@ -475,7 +501,7 @@ function StatsGrid({
                         ? "text-red-500 dark:text-red-400"
                         : "text-zinc-400",
                   ].join(" ")}
-                  title={`ทีม ${fmtNum(tm as number)}`}
+                  title={t("teamN", { n: fmtNum(tm as number) })}
                 >
                   {deltaSign}{fmtNum(deltaAbs)}
                 </span>
@@ -483,7 +509,7 @@ function StatsGrid({
             </div>
             {hasTeam && (
               <div className="text-[9px] text-zinc-400 dark:text-zinc-500 tabular-nums mt-0.5">
-                ทีม {fmtNum(tm as number)}
+                {t("teamN", { n: fmtNum(tm as number) })}
               </div>
             )}
           </div>
@@ -502,6 +528,7 @@ function RadarChart({
   teamAvgs: Record<Category, number> | null;
   teamSize: number;
 }) {
+  const t = useT(dict);
   const W = 320;
   const H = 230;
   const cx = W / 2;
@@ -630,7 +657,7 @@ function RadarChart({
               fill="#6b7280"
               className="dark:fill-zinc-400"
             >
-              {CAT_LABELS[c]}
+              {t(`cat_${c}`)}
             </text>
           </g>
         );
@@ -641,7 +668,7 @@ function RadarChart({
         <text x={cx} y={H - 6} textAnchor="middle"
           fontSize={9} fill="#9ca3af" fontStyle="italic"
         >
-          (ยังไม่มีข้อมูลทีมให้เปรียบเทียบ)
+          {t("noTeamData")}
         </text>
       )}
 
@@ -650,7 +677,7 @@ function RadarChart({
         <text x={cx} y={H - 6} textAnchor="middle"
           fontSize={9} fill="#9ca3af"
         >
-          เทียบกับค่าเฉลี่ยทีม ({teamSize} คน)
+          {t("vsTeamAvg", { n: teamSize })}
         </text>
       )}
     </svg>
@@ -661,6 +688,7 @@ type SeasonInfo = { name: string; start_date: string; end_date: string };
 
 // ── Main widget ────────────────────────────────────────────────────
 export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
+  const t = useT(dict);
   const [batches, setBatches] = useState<BatchData[]>([]);
   const [classId, setClassId] = useState<number | null>(null);
   const [lbItems, setLbItems] = useState<RankedRow[]>([]);
@@ -873,7 +901,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             <Trophy className="h-3.5 w-3.5 text-amber-500" />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Top 3 · {tabLabel(roleTab)} · {myGuild ? `Inferno-${myGuild}` : "ทั้งหมด"}
+              Top 3 · {tabLabel(roleTab)} · {myGuild ? `Inferno-${myGuild}` : t("all")}
             </span>
             {season && (
               <span className="ml-auto rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-2 py-px text-[10px] font-semibold text-amber-700 dark:text-amber-400">
@@ -955,7 +983,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
 
           {roleItems.length === 0 && (
             <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-4 text-center text-[11px] text-zinc-400">
-              ไม่มีข้อมูลในหมวดนี้
+              {t("noDataCategory")}
             </div>
           )}
           <div className="space-y-1.5">
@@ -994,7 +1022,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
                       </span>
                       {isMe && (
                         <span className="shrink-0 rounded-full bg-red-100 dark:bg-red-900/40 px-1.5 py-px text-[9px] font-bold text-red-600 dark:text-red-300">
-                          ฉัน
+                          {t("me")}
                         </span>
                       )}
                     </div>
@@ -1025,7 +1053,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
                 <>
                   <div className="flex items-center gap-1 py-0.5">
                     <div className="flex-1 border-t border-dashed border-zinc-200 dark:border-zinc-700" />
-                    <span className="text-[10px] text-zinc-400 px-1">อันดับของฉัน</span>
+                    <span className="text-[10px] text-zinc-400 px-1">{t("myRank")}</span>
                     <div className="flex-1 border-t border-dashed border-zinc-200 dark:border-zinc-700" />
                   </div>
                   <div className="flex items-center gap-2.5 rounded-xl px-3 py-2 bg-red-50 dark:bg-red-950/20 ring-1 ring-red-200 dark:ring-red-900/40">
@@ -1039,7 +1067,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1">
                         <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">{myRow.name}</span>
-                        <span className="shrink-0 rounded-full bg-red-100 dark:bg-red-900/40 px-1.5 py-px text-[9px] font-bold text-red-600 dark:text-red-300">ฉัน</span>
+                        <span className="shrink-0 rounded-full bg-red-100 dark:bg-red-900/40 px-1.5 py-px text-[9px] font-bold text-red-600 dark:text-red-300">{t("me")}</span>
                       </div>
                       <div className="h-1 w-full rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
                         <div className="h-1 rounded-full bg-red-500" style={{ width: `${pct.toFixed(1)}%` }} />
@@ -1064,15 +1092,15 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/40">
             <BarChart2 className="h-3.5 w-3.5 text-red-500" />
           </div>
-          <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">สถิติของฉัน</span>
+          <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{t("myStats")}</span>
           <span className="text-xs text-zinc-400 dark:text-zinc-500">
             {isMock
-              ? "ตัวอย่าง"
+              ? t("sample")
               : selectedIdx !== null
               ? fullLabels[selectedIdx] ?? ""
               : season
-              ? `${season.name} · ${displayBatches.length} batch`
-              : `เฉลี่ย ${displayBatches.length} batch`}
+              ? t("seasonBatches", { season: season.name, n: displayBatches.length })
+              : t("avgBatches", { n: displayBatches.length })}
           </span>
 
           {trend && (
@@ -1089,7 +1117,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
               )}
               {trend === "flat" && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-500">
-                  <Minus className="h-3 w-3" />เท่าเดิม
+                  <Minus className="h-3 w-3" />{t("unchanged")}
                 </span>
               )}
             </div>
@@ -1101,7 +1129,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
           <span className="text-2xl font-black tabular-nums text-red-600 dark:text-red-400">
             {fmtNum(displayScore)}
           </span>
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">คะแนน</span>
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">{t("points")}</span>
         </div>
       </div>
 
@@ -1124,18 +1152,18 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-1">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
             {selectedIdx !== null
-              ? `โปรไฟล์ · ${fullLabels[selectedIdx] ?? ""}`
-              : `โปรไฟล์เฉลี่ย ${displayBatches.length} batch`}
+              ? t("profileLabel", { label: fullLabels[selectedIdx] ?? "" })
+              : t("profileAvg", { n: displayBatches.length })}
           </div>
           <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1">
               <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
-              <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300">ฉัน</span>
+              <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300">{t("me")}</span>
             </div>
             {teamAvgs && (
               <div className="flex items-center gap-1">
                 <span className="inline-block h-[2px] w-3 bg-zinc-400" style={{ borderTop: "2px dashed #9ca3af", background: "transparent" }} />
-                <span className="text-[10px] text-zinc-400">เฉลี่ยทีม</span>
+                <span className="text-[10px] text-zinc-400">{t("teamAvg")}</span>
               </div>
             )}
             {selectedIdx !== null && (
@@ -1144,7 +1172,7 @@ export function PotentialLeaderboardWidget({ myDiscordId, myGuild }: Props) {
                 onClick={() => setSelectedIdx(null)}
                 className="text-[10px] text-zinc-400 hover:text-red-500 transition-colors"
               >
-                ✕ ล้าง
+                {t("clear")}
               </button>
             )}
           </div>

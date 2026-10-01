@@ -5,13 +5,41 @@ import { Trash2, Plus, Save, Upload } from "lucide-react";
 import { Button, Card } from "@/app/components/UI";
 import type { EquipmentSetRow, ElementKey } from "../_lib/internalPowerTypes";
 import { defaultLevels, sumLevels, validateLevels } from "../_lib/internalPowerTypes";
+import { defineDict, useT } from "@/i18n";
 
-const ELEMENTS: Array<{ key: ElementKey; label: string }> = [
-  { key: "gold", label: "ทอง" },
-  { key: "wood", label: "ไม้" },
-  { key: "water", label: "น้ำ" },
-  { key: "fire", label: "ไฟ" },
-  { key: "earth", label: "ดิน" },
+const dict = defineDict({
+  gold: { th: "ทอง", en: "Gold" },
+  wood: { th: "ไม้", en: "Wood" },
+  water: { th: "น้ำ", en: "Water" },
+  fire: { th: "ไฟ", en: "Fire" },
+  earth: { th: "ดิน", en: "Earth" },
+  changeImage: { th: "เปลี่ยนรูป", en: "Change image" },
+  uploadImage: { th: "อัปโหลดรูป", en: "Upload image" },
+  clearImage: { th: "ล้างรูป", en: "Clear image" },
+  title: { th: "กำลังภายใน", en: "Internal Power" },
+  hint: {
+    th: "เพิ่มได้สูงสุด 2 เซ็ต • แต่ละเซ็ตเลือกธาตุ (0–3 ขั้น) รวมกันต้องไม่เกิน 7 ขั้น • อัปโหลดรูปได้ 2 รูปต่อเซ็ต",
+    en: "Up to 2 sets • Each set picks element levels (0–3), total must not exceed 7 • Up to 2 images per set",
+  },
+  addSet: { th: "เพิ่มเซ็ต", en: "Add set" },
+  empty: { th: "ยังไม่มีเซ็ตกำลังภายใน", en: "No internal power sets yet" },
+  setN: { th: "เซ็ต {n}", en: "Set {n}" },
+  delete: { th: "ลบ", en: "Delete" },
+  image1: { th: "รูปที่ 1", en: "Image 1" },
+  image2: { th: "รูปที่ 2", en: "Image 2" },
+  element: { th: "ธาตุ", en: "Element" },
+  totalLevels: { th: "รวมขั้น:", en: "Total levels:" },
+  overMsg: { th: "รวมขั้นเกิน 7 ขั้น กรุณาลดระดับธาตุในเซ็ตนี้", en: "Total exceeds 7 levels. Please lower the element levels in this set." },
+  saving: { th: "กำลังบันทึก...", en: "Saving..." },
+  saveSet: { th: "บันทึกเซ็ต", en: "Save set" },
+});
+
+const ELEMENTS: Array<{ key: ElementKey; labelKey: "gold" | "wood" | "water" | "fire" | "earth" }> = [
+  { key: "gold", labelKey: "gold" },
+  { key: "wood", labelKey: "wood" },
+  { key: "water", labelKey: "water" },
+  { key: "fire", labelKey: "fire" },
+  { key: "earth", labelKey: "earth" },
 ];
 
 type DraftSet = EquipmentSetRow & {
@@ -67,6 +95,7 @@ function ImageBox(props: {
   onPick: (file: File | null) => void;
 }) {
   const { label, preview, disabled, onPick } = props;
+  const t = useT(dict);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   return (
@@ -102,7 +131,7 @@ function ImageBox(props: {
           onClick={() => inputRef.current?.click()}
         >
           <Upload className="w-4 h-4" />
-          {preview ? "เปลี่ยนรูป" : "อัปโหลดรูป"}
+          {preview ? t("changeImage") : t("uploadImage")}
         </Button>
 
         {preview ? (
@@ -111,7 +140,7 @@ function ImageBox(props: {
             disabled={disabled}
             onClick={() => onPick(null)}
           >
-            ล้างรูป
+            {t("clearImage")}
           </Button>
         ) : null}
       </div>
@@ -120,6 +149,7 @@ function ImageBox(props: {
 }
 
 export function InternalPowerTab() {
+  const t = useT(dict);
   const [loading, setLoading] = useState(true);
   const [sets, setSets] = useState<DraftSet[]>([]);
   const [globalErr, setGlobalErr] = useState<string | null>(null);
@@ -267,15 +297,15 @@ export function InternalPowerTab() {
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 basis-48">
-          <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">กำลังภายใน</div>
+          <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t("title")}</div>
           <div className="mt-1 text-xs text-zinc-500">
-            เพิ่มได้สูงสุด 2 เซ็ต • แต่ละเซ็ตเลือกธาตุ (0–3 ขั้น) รวมกันต้องไม่เกิน 7 ขั้น • อัปโหลดรูปได้ 2 รูปต่อเซ็ต
+            {t("hint")}
           </div>
         </div>
 
         <Button variant="outline" onClick={addSet} disabled={!canAdd || loading} className="w-full sm:w-auto">
           <Plus className="w-4 h-4" />
-          เพิ่มเซ็ต
+          {t("addSet")}
         </Button>
       </div>
 
@@ -284,7 +314,7 @@ export function InternalPowerTab() {
       {loading ? (
         <div className="mt-4 text-sm text-zinc-500">Loading...</div>
       ) : sets.length === 0 ? (
-        <div className="mt-4 text-sm text-zinc-500">ยังไม่มีเซ็ตกำลังภายใน</div>
+        <div className="mt-4 text-sm text-zinc-500">{t("empty")}</div>
       ) : (
         <div className="mt-4 space-y-4">
           {sets.map((s, idx) => {
@@ -300,18 +330,18 @@ export function InternalPowerTab() {
                 className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-950/40 p-3 sm:p-4"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <div className="font-semibold text-zinc-900 dark:text-zinc-100">เซ็ต {idx + 1}</div>
+                  <div className="font-semibold text-zinc-900 dark:text-zinc-100">{t("setN", { n: idx + 1 })}</div>
 
                   <div className="flex items-center gap-2">
                     {s.id ? (
                       <Button variant="outline" onClick={() => deleteSet(s.id as number)} disabled={s.saving}>
                         <Trash2 className="w-4 h-4 text-rose-600" />
-                        ลบ
+                        {t("delete")}
                       </Button>
                     ) : (
                       <Button variant="outline" onClick={() => removeDraftAt(idx)} disabled={s.saving}>
                         <Trash2 className="w-4 h-4 text-rose-600" />
-                        ลบ
+                        {t("delete")}
                       </Button>
                     )}
                   </div>
@@ -321,13 +351,13 @@ export function InternalPowerTab() {
                   {/* ✅ Images (ซ้าย-ขวา) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <ImageBox
-                      label="รูปที่ 1"
+                      label={t("image1")}
                       preview={preview1}
                       disabled={s.saving}
                       onPick={(f) => onPickFile(idx, 1, f)}
                     />
                     <ImageBox
-                      label="รูปที่ 2"
+                      label={t("image2")}
                       preview={preview2}
                       disabled={s.saving}
                       onPick={(f) => onPickFile(idx, 2, f)}
@@ -337,9 +367,9 @@ export function InternalPowerTab() {
                   {/* ✅ Elements (ชิดกับปุ่ม) */}
                   <div className="min-w-0">
                     <div className="flex items-center justify-between">
-                      <div className="text-xs text-zinc-500">ธาตุ</div>
+                      <div className="text-xs text-zinc-500">{t("element")}</div>
                       <div className={`text-xs ${over ? "text-rose-600" : "text-zinc-500"}`}>
-                        รวมขั้น: <span className="font-semibold">{total}</span>/7
+                        {t("totalLevels")} <span className="font-semibold">{total}</span>/7
                       </div>
                     </div>
 
@@ -350,7 +380,7 @@ export function InternalPowerTab() {
                         return (
                           <div key={el.key} className="grid grid-cols-[70px_1fr] items-center gap-3">
                             <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                              {el.label}
+                              {t(el.labelKey)}
                             </div>
 
                             <div className="flex items-center gap-2 justify-start">
@@ -381,7 +411,7 @@ export function InternalPowerTab() {
                     </div>
 
                     {over ? (
-                      <div className="mt-3 text-sm text-rose-600">รวมขั้นเกิน 7 ขั้น กรุณาลดระดับธาตุในเซ็ตนี้</div>
+                      <div className="mt-3 text-sm text-rose-600">{t("overMsg")}</div>
                     ) : null}
 
                     {s.err ? <div className="mt-3 text-sm text-rose-600">Error: {s.err}</div> : null}
@@ -389,7 +419,7 @@ export function InternalPowerTab() {
                     <div className="mt-5 flex items-center justify-end">
                       <Button onClick={() => saveSet(idx)} disabled={s.saving || over} className="w-full sm:w-auto">
                         <Save className="w-4 h-4" />
-                        {s.saving ? "กำลังบันทึก..." : "บันทึกเซ็ต"}
+                        {s.saving ? t("saving") : t("saveSet")}
                       </Button>
                     </div>
                   </div>

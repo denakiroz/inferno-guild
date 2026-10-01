@@ -47,3 +47,8 @@ ON CONFLICT (member_id, round) DO NOTHING;
 --           (SELECT 1 FROM war_party_member w WHERE w.member_id = m.id AND w.round = 1 AND w.party = m.party))
 --     OR (m.party_2 BETWEEN 1 AND 10 AND NOT EXISTS
 --           (SELECT 1 FROM war_party_member w WHERE w.member_id = m.id AND w.round = 2 AND w.party = m.party_2));
+
+-- ── Realtime ────────────────────────────────────────────────────────────────
+-- ให้หน้า War Builder ของแอดมินคนอื่น sync ทันทีเมื่อมีการจัดปาร์ตี้
+-- (ถ้า table อยู่ใน publication แล้ว คำสั่งนี้จะ error "already member" ให้ข้ามได้)
+ALTER PUBLICATION supabase_realtime ADD TABLE war_party_member;
